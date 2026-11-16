@@ -5,9 +5,10 @@ local pieces = {}
 
 local PieceController = {}
 
-function PieceController.Add(id, pieceType, team, column, row)
+function PieceController.Add(id, pieceType, team, column, row, health, maxHealth)
     local rig = PieceRigClass.new(board, pieceType, team)
     rig:SetTile(column, row)
+    rig:SetHealth(health, maxHealth)
     rig.Sprite:Play("Hop")
 
     pieces[id] = {
@@ -29,8 +30,12 @@ function PieceController.ApplyDamage(id, health)
     local piece = pieces[id]
     if not piece then return end
 
+    piece.Rig:SetHealth(health)
+
     if health > 0 then
         piece.Rig.Sprite:Play("Hit")
+        piece.Rig:ShowHealth()
+        piece.Rig:HideHealth()
         return
     end
 

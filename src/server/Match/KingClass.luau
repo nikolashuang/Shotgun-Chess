@@ -32,6 +32,12 @@ end
 
 function KingClass:Fire(targetX, targetY, isBlocking)
     local originX, originY = ShotgunRules.GetKingOrigin(self.Column, self.Row)
+
+    local pointBlankColumn, pointBlankRow = ShotgunRules.GetPointBlankTarget(self.Column, self.Row, targetX, targetY, isBlocking)
+    if pointBlankColumn then
+        return ShotgunRules.GetPointBlankShot(originX, originY, pointBlankColumn, pointBlankRow)
+    end
+
     local angle, radius = ShotgunRules.GetAim(originX, originY, targetX, targetY)
 
     if not angle then return nil end

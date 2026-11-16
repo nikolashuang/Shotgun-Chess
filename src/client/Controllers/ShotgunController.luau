@@ -28,7 +28,7 @@ local PREVIEW_TRANSPARENCY = 0.8
 
 -- Gun pivot is a square this many tiles wide, centered on the King's hand
 local GUN_PIVOT_TILES = 2
-local GUN_HOLD = Vector2.new(0.66, 0.62)
+local GUN_HOLD = Vector2.new(0.7, 0.53)
 local GUN_KICK = 0.12
 local GUN_KICK_TIME = 0.15
 
@@ -44,6 +44,7 @@ local lastAngle = nil
 local lastRadius = nil
 local lastColumn = nil
 local lastRow = nil
+local lastPointBlank = nil
 
 local ShotgunController = {}
 
@@ -134,18 +135,26 @@ local function ClearPreviewTiles()
     lastAngle = nil
 end
 
-local function UpdatePreviewTiles(originX, originY, angle, radius, column, row)
+local function UpdatePreviewTiles(originX, originY, angle, radius, column, row, pointBlankColumn, pointBlankRow)
+    local pointBlank = pointBlankColumn and pointBlankColumn * 100 + pointBlankRow or nil
     local unchanged = lastAngle
         and math.abs(angle - lastAngle) < 0.005
         and math.abs(radius - lastRadius) < 0.01
         and column == lastColumn and row == lastRow
+        and pointBlank == lastPointBlank
 
     if unchanged then return end
 
     ClearPreviewTiles()
-    lastAngle, lastRadius, lastColumn, lastRow = angle, radius, column, row
+    lastAngle, lastRadius, lastColumn, lastRow, lastPointBlank = angle, radius, column, row, pointBlank
 
-    local _, hitTiles = ShotgunRules.GetShot(originX, originY, angle, radius, isBlockingTile)
+    local hitTiles = nil
+
+    if pointBlankColumn then
+        hitTiles = {{Column = pointBlankColumn, Row = pointBlankRow}}
+    else
+        hitTiles = select(2, ShotgunRules.GetShot(originX, originY, angle, radius, isBlockingTile))
+    end
 
     for _, target in pairs(hitTiles) do
         local tile = GetTile(target.Column, target.Row)
@@ -183,6 +192,17 @@ local function DrawArc()
     if not angle then
         HideDots(1)
         ClearPreviewTiles()
+        return
+    end
+
+    local pointBlankColumn, pointBlankRow = ShotgunRules.GetPointBlankTarget(column, row, targetX, targetY, isBlockingTile)
+
+    if pointBlankColumn then
+        local pointBlankAngle = math.atan2(pointBlankRow - 0.5 - originY, pointBlankColumn - 0.5 - originX)
+
+        UpdatePreviewTiles(originX, originY, angle, radius, column, row, pointBlankColumn, pointBlankRow)
+        AimGun(pointBlankAngle)
+        HideDots(1)
         return
     end
 

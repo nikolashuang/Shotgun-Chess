@@ -10,6 +10,9 @@ local ShotgunConfig = {
     MAX_DAMAGE = 5,
     MIN_DAMAGE = 2,
 
+    -- Sideways gap between pellets landing in a point blank tile
+    POINT_BLANK_SPREAD = 0.12,
+
     TRACE_STEP = 0.05,
     COVERAGE_SPACING = 0.1,
 }

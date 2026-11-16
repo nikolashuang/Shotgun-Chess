@@ -86,7 +86,7 @@ function MatchClass:AddPiece(pieceType, team, column, row)
     self.NextPieceId += 1
     self.Pieces[piece.Id] = piece
 
-    self:Send("PieceAdded", piece.Id, piece.Type, piece.Team, piece.Column, piece.Row)
+    self:Send("PieceAdded", piece.Id, piece.Type, piece.Team, piece.Column, piece.Row, piece.Health, piece.MaxHealth)
 
     return piece
 end

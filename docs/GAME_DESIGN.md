@@ -61,6 +61,7 @@ Aiming follows the Shotgun King style: a curved arc centered on the king.
 - The shot is deterministic: the same aim always gives the same result, and the hit tiles are previewed while aiming.
 - Every tile inside the cone between the king and the arc is hit.
 - 5 pellets are spread evenly across the arc. They keep travelling past the arc along their line out to max range (3), hitting every tile they pass through. They stop at the board edge.
+- **Point blank:** if an enemy is on the adjacent tile the shot points into (aim snapped to the nearest of 8 directions, or the cursor directly on an adjacent enemy), only that tile is hit and every pellet lands in it. Otherwise the normal cone fires.
 - Shots don't pierce: each pellet, and each line of the cone, stops at the first enemy piece it hits, so enemies shield what's behind them. Friendly pieces don't block.
 - Range, arc angle, and pellet count are tuning values in `ShotgunConfig`. *64° and 5 pellets are placeholders — confirm.*
 - Damage depends on the enemy's tile distance from the king: 5 at 1 tile, 3.5 at 2, 2 at 3. That's a linear falloff from `MAX_DAMAGE` to `MIN_DAMAGE`; decimal damage is allowed. Each enemy takes damage once per shot.

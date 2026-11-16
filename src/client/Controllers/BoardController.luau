@@ -5,6 +5,7 @@ local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
+local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local PieceRigClass = require(script.Parent.Parent.UI.PieceRigClass)
 local PieceController = require(script.Parent.PieceController)
 local ShotgunController = require(script.Parent.ShotgunController)
@@ -15,6 +16,11 @@ local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Boar
 local MOVE_COLOR = Color3.fromHex("354867")
 local SUMMON_COLOR = Color3.fromHex("E6C47C")
 local SELECT_COLOR = Color3.fromHex("E6C47C")
+local MOVE_OUTLINE_COLOR = Color3.fromHex("E6C47C")
+
+-- In pixels
+local MOVE_OUTLINE_THICKNESS = 2
+local MOVE_OUTLINE_INSET = 3
 
 local board = nil
 local actionPanel = nil
@@ -25,6 +31,8 @@ local previewTiles = {}
 
 local turnState = nil
 local commandPieceId = nil
+local hoveredRig = nil
+local hoveredTile = nil
 
 local BoardController = {}
 
@@ -62,17 +70,45 @@ local function SetOverlay(tile, color, transparency)
     end
 end
 
-local function HighlightTile(column, row, color, transparency)
+local function GetMoveOutline(tile)
+    local outline = tile:FindFirstChild("MoveOutline")
+
+    if not outline then
+        local inset = MOVE_OUTLINE_INSET
+
+        outline = Instance.new("Frame")
+        outline.Name = "MoveOutline"
+        outline.BackgroundTransparency = 1
+        outline.Position = UDim2.fromOffset(inset, inset)
+        outline.Size = UDim2.new(1, -inset * 2, 1, -inset * 2)
+        outline.ZIndex = 2
+        outline.Interactable = false
+        outline.Visible = false
+        outline.Parent = tile
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = MOVE_OUTLINE_COLOR
+        stroke.Thickness = MOVE_OUTLINE_THICKNESS
+        stroke.LineJoinMode = Enum.LineJoinMode.Miter
+        stroke.Parent = outline
+    end
+
+    return outline
+end
+
+local function HighlightTile(column, row, color, transparency, isOutlined)
     local tile = GetTile(column, row)
     if not tile then return end
 
     SetOverlay(tile, color, transparency)
+    GetMoveOutline(tile).Visible = isOutlined == true
     table.insert(previewTiles, tile)
 end
 
 local function ClearPreview()
     for _, tile in pairs(previewTiles) do
         SetOverlay(tile, nil)
+        GetMoveOutline(tile).Visible = false
     end
 
     previewTiles = {}
@@ -116,7 +152,7 @@ function BoardController.RefreshPreview()
                 local row = kingRow + rowOffset
 
                 if BoardRules.IsValidKingMove(kingColumn, kingRow, column, row) and not IsOccupied(column, row) then
-                    HighlightTile(column, row, MOVE_COLOR, 0.45)
+                    HighlightTile(column, row, MOVE_COLOR, 0.45, true)
                 end
             end
         end
@@ -211,10 +247,43 @@ local function OnTileClicked(column, row)
     end
 end
 
+local function GetRigAt(column, row)
+    if column == kingColumn and row == kingRow then return kingRig end
+
+    local piece = PieceController.GetAt(column, row)
+    return piece and piece.Rig
+end
+
+local function SetHoveredRig(rig)
+    if hoveredRig == rig then return end
+
+    if hoveredRig then
+        hoveredRig:SetHovered(false)
+    end
+
+    hoveredRig = rig
+
+    if rig then
+        rig:SetHovered(true)
+    end
+end
+
 local function BindTile(tile)
     local column = tile:GetAttribute("Column")
     local row = tile:GetAttribute("Row")
     if not column or not row then return end
+
+    tile.MouseEnter:Connect(function()
+        hoveredTile = tile
+        SetHoveredRig(GetRigAt(column, row))
+    end)
+
+    tile.MouseLeave:Connect(function()
+        if hoveredTile ~= tile then return end
+
+        hoveredTile = nil
+        SetHoveredRig(nil)
+    end)
 
     tile.InputBegan:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
@@ -229,6 +298,7 @@ local function PlaceKing(column, row)
 
     if not kingRig then
         kingRig = PieceRigClass.new(board, "King", "White")
+        kingRig:SetHealth(PieceConfig.Health.King, PieceConfig.Health.King)
         ShotgunController.AttachGun(kingRig.Rig)
     end
 

@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
+local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 
 local ShotgunRules = {}
@@ -108,6 +109,55 @@ function ShotgunRules.GetShot(originX, originY, angle, radius, isBlocking)
     end
 
     return pellets, hitTiles
+end
+
+--POINT BLANK--
+
+-- Returns the adjacent enemy tile the shot is pointed into, if any
+function ShotgunRules.GetPointBlankTarget(kingColumn, kingRow, targetX, targetY, isBlocking)
+    if not isBlocking then return nil end
+
+    -- Cursor directly on an adjacent enemy
+    local column = math.floor(targetX) + 1
+    local row = math.floor(targetY) + 1
+    local isAdjacent = math.max(math.abs(column - kingColumn), math.abs(row - kingRow)) == 1
+
+    if isAdjacent and isBlocking(column, row) then
+        return column, row
+    end
+
+    -- Otherwise the neighbor in the aim direction, snapped to the nearest of 8 directions
+    local originX, originY = ShotgunRules.GetKingOrigin(kingColumn, kingRow)
+    local angle = math.atan2(targetY - originY, targetX - originX)
+    local direction = math.round(angle / (math.pi / 4)) * (math.pi / 4)
+
+    column = kingColumn + math.round(math.cos(direction))
+    row = kingRow + math.round(math.sin(direction))
+
+    if not BoardRules.IsOnBoard(column, row) then return nil end
+    if not isBlocking(column, row) then return nil end
+
+    return column, row
+end
+
+-- Every pellet lands inside the one target tile
+function ShotgunRules.GetPointBlankShot(originX, originY, column, row)
+    local centerX = column - 0.5
+    local centerY = row - 0.5
+    local angle = math.atan2(centerY - originY, centerX - originX)
+
+    local count = ShotgunConfig.PELLET_COUNT
+    local pellets = {}
+
+    for i = 1, count do
+        local spread = (i - (count + 1) / 2) * ShotgunConfig.POINT_BLANK_SPREAD
+        table.insert(pellets, {
+            X = centerX - math.sin(angle) * spread,
+            Y = centerY + math.cos(angle) * spread,
+        })
+    end
+
+    return pellets, {{Column = column, Row = row}}
 end
 
 return ShotgunRules

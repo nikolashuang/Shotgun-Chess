@@ -39,7 +39,7 @@ end
 
 function AnimatedSpriteClass:SetFrame(frame)
     self.Frame = frame
-    self.Image.ImageRectOffset = Vector2.new(self.TeamOffset + (frame - 1) * SpriteConfig.CELL, self.Rows[self.Anim])
+    self.Image.ImageRectOffset = Vector2.new(self.TeamOffset + (frame - 1) * SpriteConfig.STRIDE, self.Rows[self.Anim])
 end
 
 function AnimatedSpriteClass:Play(anim, onFinished)
