@@ -43,6 +43,34 @@ function PieceController.ApplyDamage(id, health)
     piece.Rig:Die()
 end
 
+-- The attacker lunges at the target and returns to its tile
+-- Survivors flash like any hit, killed pieces are knocked over and crumble
+function PieceController.Attack(attackerId, targetId, health)
+    local attacker = pieces[attackerId]
+    local target = pieces[targetId]
+
+    if not attacker or not target then
+        PieceController.ApplyDamage(targetId, health)
+        return
+    end
+
+    if health > 0 then
+        attacker.Rig:Lunge(target.Rig.Column, target.Rig.Row, function()
+            PieceController.ApplyDamage(targetId, health)
+        end)
+        return
+    end
+
+    pieces[targetId] = nil
+
+    local direction = target.Rig.Column < attacker.Rig.Column and -1 or 1
+
+    attacker.Rig:Lunge(target.Rig.Column, target.Rig.Row, function()
+        target.Rig:SetHealth(health)
+        target.Rig:KnockOver(direction)
+    end)
+end
+
 function PieceController.Get(id)
     return pieces[id]
 end

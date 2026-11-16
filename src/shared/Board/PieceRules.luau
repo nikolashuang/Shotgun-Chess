@@ -51,6 +51,52 @@ function PieceRules.GetMoves(pieceType, team, column, row, isBlocked)
     return moves
 end
 
+-- Enemy tiles a piece can attack, using chess capture rules
+-- isEnemy(column, row) returns true for tiles holding an enemy piece
+function PieceRules.GetAttacks(pieceType, team, column, row, isBlocked, isEnemy)
+    local attacks = {}
+
+    local function TryAttack(toColumn, toRow)
+        if not BoardRules.IsOnBoard(toColumn, toRow) then return end
+        if not isEnemy(toColumn, toRow) then return end
+
+        table.insert(attacks, {Column = toColumn, Row = toRow})
+    end
+
+    if pieceType == "Pawn" then
+        local forward = PieceRules.GetForward(team)
+        TryAttack(column - 1, row + forward)
+        TryAttack(column + 1, row + forward)
+    elseif pieceType == "Knight" then
+        for _, offset in pairs(KNIGHT) do
+            TryAttack(column + offset[1], row + offset[2])
+        end
+    elseif SLIDES[pieceType] then
+        -- Sliding pieces can only hit the first piece in each direction
+        for _, direction in pairs(SLIDES[pieceType]) do
+            local toColumn = column + direction[1]
+            local toRow = row + direction[2]
+
+            while BoardRules.IsOnBoard(toColumn, toRow) and not isBlocked(toColumn, toRow) do
+                toColumn += direction[1]
+                toRow += direction[2]
+            end
+
+            TryAttack(toColumn, toRow)
+        end
+    end
+
+    return attacks
+end
+
+function PieceRules.IsValidAttack(pieceType, team, column, row, toColumn, toRow, isBlocked, isEnemy)
+    for _, attack in pairs(PieceRules.GetAttacks(pieceType, team, column, row, isBlocked, isEnemy)) do
+        if attack.Column == toColumn and attack.Row == toRow then return true end
+    end
+
+    return false
+end
+
 function PieceRules.IsValidMove(pieceType, team, column, row, toColumn, toRow, isBlocked)
     for _, move in pairs(PieceRules.GetMoves(pieceType, team, column, row, isBlocked)) do
         if move.Column == toColumn and move.Row == toRow then return true end

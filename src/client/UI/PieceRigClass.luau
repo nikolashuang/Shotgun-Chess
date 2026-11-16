@@ -12,6 +12,13 @@ local BODY_BOTTOM = 0.95
 
 local DEATH_FADE_TIME = 0.3
 
+-- Attacks stop this many tiles short of the target's center
+local LUNGE_STOP = 0.45
+local LUNGE_PAUSE = 0.2
+
+-- Seconds for a killed piece to fall over before it crumbles
+local TOPPLE_TIME = 0.16
+
 -- Health bar sizes in tiles, times in seconds
 local PIXEL = SpriteConfig.CELL_TILES / SpriteConfig.CELL
 local BAR_WIDTH = 0.8
@@ -82,6 +89,7 @@ function PieceRigClass.new(board, pieceType, team)
     self.Column = nil
     self.Row = nil
     self.HopConnection = nil
+    self.TiltConnection = nil
 
     self.MaxHealth = nil
     self.Health = nil
@@ -162,20 +170,11 @@ function PieceRigClass:SetTile(column, row)
     self.Rig.Position = ToBoardPosition(column, row)
 end
 
-function PieceRigClass:HopTo(column, row)
-    if not self.Column then
-        self:SetTile(column, row)
-        return
-    end
-
+-- Animates a hop between two board positions without changing the rig's tile
+function PieceRigClass:Hop(fromColumn, fromRow, toColumn, toRow, onLanded)
     if self.HopConnection then
         self.HopConnection:Disconnect()
     end
-
-    local fromColumn = self.Column
-    local fromRow = self.Row
-    self.Column = column
-    self.Row = row
 
     local hopAnim = SpriteConfig.Anims.Hop
     local duration = hopAnim.Frames * hopAnim.FrameTime
@@ -185,8 +184,8 @@ function PieceRigClass:HopTo(column, row)
 
     self.HopConnection = RunService.RenderStepped:Connect(function()
         local alpha = math.min((time() - startTime) / duration, 1)
-        local hopColumn = fromColumn + (column - fromColumn) * alpha
-        local hopRow = fromRow + (row - fromRow) * alpha + math.sin(alpha * math.pi) * HOP_HEIGHT
+        local hopColumn = fromColumn + (toColumn - fromColumn) * alpha
+        local hopRow = fromRow + (toRow - fromRow) * alpha + math.sin(alpha * math.pi) * HOP_HEIGHT
 
         self.Rig.Position = ToBoardPosition(hopColumn, hopRow)
 
@@ -194,6 +193,88 @@ function PieceRigClass:HopTo(column, row)
 
         self.HopConnection:Disconnect()
         self.HopConnection = nil
+
+        if onLanded then
+            onLanded()
+        end
+    end)
+end
+
+function PieceRigClass:HopTo(column, row)
+    if not self.Column then
+        self:SetTile(column, row)
+        return
+    end
+
+    local fromColumn = self.Column
+    local fromRow = self.Row
+    self.Column = column
+    self.Row = row
+
+    self:Hop(fromColumn, fromRow, column, row)
+end
+
+-- Hops up to a target, calls onHit, then hops back to its own tile
+function PieceRigClass:Lunge(column, row, onHit)
+    local homeColumn = self.Column
+    local homeRow = self.Row
+    local deltaColumn = column - homeColumn
+    local deltaRow = row - homeRow
+    local length = math.sqrt(deltaColumn * deltaColumn + deltaRow * deltaRow)
+    local reach = math.max(length - LUNGE_STOP, 0) / length
+
+    local strikeColumn = homeColumn + deltaColumn * reach
+    local strikeRow = homeRow + deltaRow * reach
+
+    self:Hop(homeColumn, homeRow, strikeColumn, strikeRow, function()
+        onHit()
+
+        task.delay(LUNGE_PAUSE, function()
+            if not self.Rig.Parent then return end
+
+            self:Hop(strikeColumn, strikeRow, self.Column, self.Row)
+        end)
+    end)
+end
+
+-- Rotates the sprite around its base, positive degrees tip it to the right
+function PieceRigClass:SetTilt(degrees)
+    local image = self.Sprite.Image
+    local angle = math.rad(degrees)
+    local halfHeight = SpriteConfig.CELL_TILES / 2
+
+    image.Rotation = degrees
+    image.Position = UDim2.fromScale(0.5 + halfHeight * math.sin(angle), BODY_BOTTOM + halfHeight - halfHeight * math.cos(angle))
+end
+
+function PieceRigClass:Tilt(fromDegrees, toDegrees, duration, easingStyle, easingDirection, onFinished)
+    if self.TiltConnection then
+        self.TiltConnection:Disconnect()
+    end
+
+    local startTime = time()
+
+    self.TiltConnection = RunService.RenderStepped:Connect(function()
+        local alpha = math.min((time() - startTime) / duration, 1)
+        local eased = TweenService:GetValue(alpha, easingStyle, easingDirection)
+
+        self:SetTilt(fromDegrees + (toDegrees - fromDegrees) * eased)
+
+        if alpha < 1 then return end
+
+        self.TiltConnection:Disconnect()
+        self.TiltConnection = nil
+
+        if onFinished then
+            onFinished()
+        end
+    end)
+end
+
+-- Classic chess knock over for a killed piece: falls away from the attacker, then crumbles
+function PieceRigClass:KnockOver(direction)
+    self:Tilt(0, 90 * direction, TOPPLE_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In, function()
+        self:Die()
     end)
 end
 
@@ -207,24 +288,35 @@ function PieceRigClass:SetHovered(hovered)
     end
 end
 
+function PieceRigClass:FadeOut()
+    self.HideToken += 1
+    TweenService:Create(self.HealthBar, TweenInfo.new(BAR_HIDE_TIME), {GroupTransparency = 1}):Play()
+
+    local fade = TweenService:Create(self.Sprite.Image, TweenInfo.new(DEATH_FADE_TIME), {ImageTransparency = 1})
+
+    fade.Completed:Connect(function()
+        self:Destroy()
+    end)
+
+    fade:Play()
+end
+
 function PieceRigClass:Die()
     self.HideToken += 1
     TweenService:Create(self.HealthBar, TweenInfo.new(BAR_HIDE_TIME), {GroupTransparency = 1}):Play()
 
     self.Sprite:Play("Death", function()
-        local fade = TweenService:Create(self.Sprite.Image, TweenInfo.new(DEATH_FADE_TIME), {ImageTransparency = 1})
-
-        fade.Completed:Connect(function()
-            self:Destroy()
-        end)
-
-        fade:Play()
+        self:FadeOut()
     end)
 end
 
 function PieceRigClass:Destroy()
     if self.HopConnection then
         self.HopConnection:Disconnect()
+    end
+
+    if self.TiltConnection then
+        self.TiltConnection:Disconnect()
     end
 
     self.Sprite:Destroy()

@@ -1,6 +1,7 @@
 local ShotgunConfig = {
     STARTER = "Pump",
-    ORDER = {"Pump", "DoubleBarrel", "BuckBarrel", "LongBarrel", "KnifeShotty"},
+    -- Sorted by price for the shop and armory
+    ORDER = {"Pump", "DoubleBarrel", "BuckBarrel", "KnifeShotty", "LongBarrel"},
 
     -- Distances are in tiles, measured from the center of the king's tile
     MIN_RANGE = 1,

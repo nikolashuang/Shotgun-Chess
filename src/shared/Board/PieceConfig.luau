@@ -8,6 +8,15 @@ local PieceConfig = {
         Queen = 9,
     },
 
+    -- Damage a summoned piece deals when commanded onto an enemy
+    Damage = {
+        Pawn = 1,
+        Knight = 2,
+        Bishop = 2,
+        Rook = 2,
+        Queen = 4,
+    },
+
     -- Energy cost to summon
     Cost = {
         Pawn = 1,

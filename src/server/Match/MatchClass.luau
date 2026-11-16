@@ -248,6 +248,26 @@ function MatchClass:Command(pieceId, column, row)
         return self:IsOccupied(blockColumn, blockRow)
     end
 
+    -- Commanding onto an enemy attacks it; the attacker stays on its own square
+    local target = self:GetPieceAt(column, row)
+    if target then
+        if target.Team == piece.Team then return end
+
+        local function IsEnemy(enemyColumn, enemyRow)
+            local enemy = self:GetPieceAt(enemyColumn, enemyRow)
+            return enemy ~= nil and enemy.Team ~= piece.Team
+        end
+
+        if not PieceRules.IsValidAttack(piece.Type, piece.Team, piece.Column, piece.Row, column, row, IsBlocked, IsEnemy) then return end
+
+        self:DamagePiece(target, PieceConfig.Damage[piece.Type])
+
+        self.HasActed = true
+        self:Send("PieceAttacked", piece.Id, target.Id, target.Health)
+        self:FinishEvent()
+        return
+    end
+
     if not PieceRules.IsValidMove(piece.Type, piece.Team, piece.Column, piece.Row, column, row, IsBlocked) then return end
 
     piece.Column = column

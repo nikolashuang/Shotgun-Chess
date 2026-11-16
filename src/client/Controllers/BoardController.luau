@@ -16,6 +16,7 @@ local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Boar
 local MOVE_COLOR = Color3.fromHex("354867")
 local SUMMON_COLOR = Color3.fromHex("E6C47C")
 local SELECT_COLOR = Color3.fromHex("E6C47C")
+local ATTACK_COLOR = Color3.fromHex("D9544D")
 local MOVE_OUTLINE_COLOR = Color3.fromHex("E6C47C")
 
 -- In pixels
@@ -131,6 +132,17 @@ local function GetCommandMoves(piece)
     return PieceRules.GetMoves(piece.Type, piece.Team, piece.Rig.Column, piece.Rig.Row, IsOccupied)
 end
 
+-- Moves and attacks share the Command action; attacks target enemy tiles
+local function GetCommandTargets(piece)
+    local targets = GetCommandMoves(piece)
+
+    for _, attack in pairs(PieceRules.GetAttacks(piece.Type, piece.Team, piece.Rig.Column, piece.Rig.Row, IsOccupied, IsEnemyTile)) do
+        table.insert(targets, attack)
+    end
+
+    return targets
+end
+
 function BoardController.RefreshPreview()
     ClearPreview()
 
@@ -195,6 +207,10 @@ function BoardController.RefreshPreview()
         for _, move in pairs(GetCommandMoves(selectedPiece)) do
             HighlightTile(move.Column, move.Row, MOVE_COLOR, 0.45)
         end
+
+        for _, attack in pairs(PieceRules.GetAttacks(selectedPiece.Type, selectedPiece.Team, selectedPiece.Rig.Column, selectedPiece.Rig.Row, IsOccupied, IsEnemyTile)) do
+            HighlightTile(attack.Column, attack.Row, ATTACK_COLOR, 0.45, true)
+        end
     end
 end
 
@@ -253,8 +269,8 @@ local function OnTileClicked(column, row)
         local selectedPiece = commandPieceId and PieceController.Get(commandPieceId)
         if not selectedPiece then return end
 
-        for _, move in pairs(GetCommandMoves(selectedPiece)) do
-            if move.Column == column and move.Row == row then
+        for _, target in pairs(GetCommandTargets(selectedPiece)) do
+            if target.Column == column and target.Row == row then
                 BoardRemote:FireServer("Command", selectedPiece.Id, column, row)
                 actionPanel.ClearSelection()
                 return
@@ -401,6 +417,9 @@ function BoardController.Init(actionPanelController)
             OnShotFired(...)
         elseif action == "PieceDamaged" then
             PieceController.ApplyDamage(...)
+        elseif action == "PieceAttacked" then
+            PieceController.Attack(...)
+            BoardController.RefreshPreview()
         elseif action == "TurnState" then
             turnState = ...
             ShotgunController.SetWeapon(turnState.Shotgun)

@@ -38,7 +38,8 @@ The turn ends automatically once both events are used, or early with **End Turn*
 
 - Pieces move with normal chess movement and can't move onto an occupied tile. Sliding pieces are blocked by any piece.
 - Pawns move one tile forward (toward the enemy side).
-- Undecided: whether commanded pieces can capture or attack.
+- **Attacking:** commanding a piece onto an enemy attacks it instead of moving. Targets follow chess capture rules: pawns attack diagonally forward, knights jump, sliding pieces hit the first piece in each line (friendly pieces block). The attacker hops to the enemy and returns to its own square. Survivors flash white like any hit; killed pieces fall over and crumble.
+- Summon damage builds ultimate charge like any other damage to enemy pieces.
 
 ### Energy
 
@@ -115,14 +116,14 @@ Chosen in the Armory alongside the shotgun. Replaces the old Necro/Spark/WindCha
 
 ## Pieces
 
-| Piece  | Health |
-|--------|--------|
-| King   | 15     |
-| Pawn   | 3      |
-| Bishop | 5      |
-| Knight | 5      |
-| Rook   | 7      |
-| Queen  | 9      |
+| Piece  | Health | Attack Damage |
+|--------|--------|---------------|
+| King   | 15     | —             |
+| Pawn   | 3      | 1             |
+| Bishop | 5      | 2             |
+| Knight | 5      | 2             |
+| Rook   | 7      | 2             |
+| Queen  | 9      | 4             |
 
 ## Controls
 
