@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
+local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
 
 local KingClass = {}
 
@@ -29,8 +30,13 @@ function KingClass:MoveTo(column, row)
     return true
 end
 
-function KingClass:Fire(column, row)
-    return BoardRules.GetShotgunArea(self.Column, self.Row, column, row)
+function KingClass:Fire(targetX, targetY, isBlocking)
+    local originX, originY = ShotgunRules.GetKingOrigin(self.Column, self.Row)
+    local angle, radius = ShotgunRules.GetAim(originX, originY, targetX, targetY)
+
+    if not angle then return nil end
+
+    return ShotgunRules.GetShot(originX, originY, angle, radius, isBlocking)
 end
 
 return KingClass

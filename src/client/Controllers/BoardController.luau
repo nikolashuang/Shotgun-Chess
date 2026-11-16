@@ -1,30 +1,30 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
+local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
-local PieceSprites = require(ReplicatedStorage.Shared.Board.PieceSprites)
-local PixelSprite = require(script.Parent.Parent.UI.PixelSprite)
+local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
+local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
+local PieceRigClass = require(script.Parent.Parent.UI.PieceRigClass)
+local PieceController = require(script.Parent.PieceController)
+local ShotgunController = require(script.Parent.ShotgunController)
+local SummonPanelController = require(script.Parent.SummonPanelController)
 
 local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BoardRemote")
 
 local MOVE_COLOR = Color3.fromHex("354867")
-local AIM_COLOR = Color3.fromHex("E6C47C")
-local SHOT_COLOR = Color3.fromHex("D9544D")
-
-local KING_PALETTE = {
-    o = Color3.fromHex("171D32"),
-    x = Color3.fromHex("F0E9D8"),
-    g = Color3.fromHex("E6C47C"),
-}
+local SUMMON_COLOR = Color3.fromHex("E6C47C")
+local SELECT_COLOR = Color3.fromHex("E6C47C")
 
 local board = nil
 local actionPanel = nil
-local kingSprite = nil
+local kingRig = nil
 local kingColumn = nil
 local kingRow = nil
-local hoveredColumn = nil
-local hoveredRow = nil
 local previewTiles = {}
+
+local turnState = nil
+local commandPieceId = nil
 
 local BoardController = {}
 
@@ -32,8 +32,26 @@ local function GetTile(column, row)
     return board:FindFirstChild(BoardRules.GetTileName(column, row))
 end
 
+local function IsOccupied(column, row)
+    if column == kingColumn and row == kingRow then return true end
+
+    return PieceController.GetAt(column, row) ~= nil
+end
+
+local function IsMyTurn()
+    return turnState ~= nil and turnState.Phase == "PlayerTurn"
+end
+
+local function CanAct()
+    return IsMyTurn() and not turnState.HasActed
+end
+
+local function CanMove()
+    return IsMyTurn() and not turnState.HasMoved
+end
+
 local function SetOverlay(tile, color, transparency)
-    local overlay = tile:FindFirstChild("Overlay")
+    local overlay = tile and tile:FindFirstChild("Overlay")
     if not overlay then return end
 
     overlay.Visible = color ~= nil
@@ -44,6 +62,14 @@ local function SetOverlay(tile, color, transparency)
     end
 end
 
+local function HighlightTile(column, row, color, transparency)
+    local tile = GetTile(column, row)
+    if not tile then return end
+
+    SetOverlay(tile, color, transparency)
+    table.insert(previewTiles, tile)
+end
+
 local function ClearPreview()
     for _, tile in pairs(previewTiles) do
         SetOverlay(tile, nil)
@@ -52,55 +78,134 @@ local function ClearPreview()
     previewTiles = {}
 end
 
-local function MarkPreview(column, row, color, transparency)
-    local tile = GetTile(column, row)
-    if not tile then return end
+local function IsSummonTile(column, row)
+    if not BoardRules.IsOnBoard(column, row) then return false end
+    if BoardRules.GetDistance(kingColumn, kingRow, column, row) > BoardConfig.SUMMON_RANGE then return false end
+    if IsOccupied(column, row) then return false end
 
-    SetOverlay(tile, color, transparency)
-    table.insert(previewTiles, tile)
+    return true
+end
+
+local function GetCommandMoves(piece)
+    return PieceRules.GetMoves(piece.Type, piece.Team, piece.Rig.Column, piece.Rig.Row, IsOccupied)
 end
 
 function BoardController.RefreshPreview()
     ClearPreview()
-    if not kingColumn then return end
 
     local selectedAction = actionPanel.SelectedAction
 
-    if selectedAction == "Fire" then
-        if not hoveredColumn then return end
+    if selectedAction ~= "Summon" then
+        SummonPanelController.ClearSelection()
+    end
 
-        local tiles = BoardRules.GetShotgunArea(kingColumn, kingRow, hoveredColumn, hoveredRow)
-        if not tiles then return end
+    if selectedAction ~= "Command" then
+        commandPieceId = nil
+    end
 
-        for _, target in pairs(tiles) do
-            MarkPreview(target.Column, target.Row, AIM_COLOR, 0.35)
-        end
-    elseif selectedAction == nil then
+    ShotgunController.SetActive(selectedAction == "Fire" and CanAct())
+
+    if not kingColumn then return end
+
+    if selectedAction == nil then
+        if not CanMove() then return end
+
         for columnOffset = -1, 1 do
             for rowOffset = -1, 1 do
                 local column = kingColumn + columnOffset
                 local row = kingRow + rowOffset
 
-                if BoardRules.IsValidKingMove(kingColumn, kingRow, column, row) then
-                    MarkPreview(column, row, MOVE_COLOR, 0.45)
+                if BoardRules.IsValidKingMove(kingColumn, kingRow, column, row) and not IsOccupied(column, row) then
+                    HighlightTile(column, row, MOVE_COLOR, 0.45)
                 end
             end
+        end
+    elseif selectedAction == "Summon" then
+        if not CanAct() then return end
+        if not SummonPanelController.SelectedPiece then return end
+
+        local range = BoardConfig.SUMMON_RANGE
+
+        for columnOffset = -range, range do
+            for rowOffset = -range, range do
+                local column = kingColumn + columnOffset
+                local row = kingRow + rowOffset
+
+                if IsSummonTile(column, row) then
+                    HighlightTile(column, row, SUMMON_COLOR, 0.5)
+                end
+            end
+        end
+    elseif selectedAction == "Command" then
+        if not CanAct() then return end
+
+        local selectedPiece = commandPieceId and PieceController.Get(commandPieceId)
+
+        if not selectedPiece then
+            for _, piece in pairs(PieceController.GetTeamPieces("White")) do
+                HighlightTile(piece.Rig.Column, piece.Rig.Row, SELECT_COLOR, 0.65)
+            end
+            return
+        end
+
+        HighlightTile(selectedPiece.Rig.Column, selectedPiece.Rig.Row, SELECT_COLOR, 0.35)
+
+        for _, move in pairs(GetCommandMoves(selectedPiece)) do
+            HighlightTile(move.Column, move.Row, MOVE_COLOR, 0.45)
         end
     end
 end
 
 local function OnTileClicked(column, row)
     if not kingColumn then return end
+    if not IsMyTurn() then return end
 
     local selectedAction = actionPanel.SelectedAction
 
     if selectedAction == "Fire" then
-        if not BoardRules.GetShotgunArea(kingColumn, kingRow, column, row) then return end
+        if not CanAct() then return end
 
-        BoardRemote:FireServer("Fire", column, row)
+        local originX, originY = ShotgunRules.GetKingOrigin(kingColumn, kingRow)
+        local targetX, targetY = ShotgunController.GetMouseBoardPosition()
+
+        if not ShotgunRules.GetAim(originX, originY, targetX, targetY) then return end
+
+        BoardRemote:FireServer("Fire", targetX, targetY)
         actionPanel.ClearSelection()
+    elseif selectedAction == "Summon" then
+        local pieceType = SummonPanelController.SelectedPiece
+
+        if not pieceType then return end
+        if not CanAct() then return end
+        if not IsSummonTile(column, row) then return end
+
+        BoardRemote:FireServer("Summon", pieceType, column, row)
+        actionPanel.ClearSelection()
+    elseif selectedAction == "Command" then
+        if not CanAct() then return end
+
+        local clickedPiece = PieceController.GetAt(column, row)
+
+        if clickedPiece and clickedPiece.Team == "White" then
+            commandPieceId = clickedPiece.Id
+            BoardController.RefreshPreview()
+            return
+        end
+
+        local selectedPiece = commandPieceId and PieceController.Get(commandPieceId)
+        if not selectedPiece then return end
+
+        for _, move in pairs(GetCommandMoves(selectedPiece)) do
+            if move.Column == column and move.Row == row then
+                BoardRemote:FireServer("Command", selectedPiece.Id, column, row)
+                actionPanel.ClearSelection()
+                return
+            end
+        end
     elseif selectedAction == nil then
+        if not CanMove() then return end
         if not BoardRules.IsValidKingMove(kingColumn, kingRow, column, row) then return end
+        if IsOccupied(column, row) then return end
 
         BoardRemote:FireServer("Move", column, row)
     end
@@ -110,20 +215,6 @@ local function BindTile(tile)
     local column = tile:GetAttribute("Column")
     local row = tile:GetAttribute("Row")
     if not column or not row then return end
-
-    tile.MouseEnter:Connect(function()
-        hoveredColumn = column
-        hoveredRow = row
-        BoardController.RefreshPreview()
-    end)
-
-    tile.MouseLeave:Connect(function()
-        if hoveredColumn ~= column or hoveredRow ~= row then return end
-
-        hoveredColumn = nil
-        hoveredRow = nil
-        BoardController.RefreshPreview()
-    end)
 
     tile.InputBegan:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
@@ -136,39 +227,33 @@ local function PlaceKing(column, row)
     kingColumn = column
     kingRow = row
 
-    if not kingSprite then
-        kingSprite = Instance.new("Frame")
-        kingSprite.Name = "KingSprite"
-        kingSprite.BackgroundTransparency = 1
-        kingSprite.AnchorPoint = Vector2.new(0.5, 0.5)
-        kingSprite.Position = UDim2.fromScale(0.5, 0.5)
-        kingSprite.Size = UDim2.fromScale(0.85, 0.85)
-        kingSprite.ZIndex = 3
-        PixelSprite.Draw(kingSprite, PieceSprites.KingShotgun, KING_PALETTE)
+    if not kingRig then
+        kingRig = PieceRigClass.new(board, "King", "White")
+        ShotgunController.AttachGun(kingRig.Rig)
     end
 
-    kingSprite.Parent = GetTile(column, row)
+    kingRig:HopTo(column, row)
     BoardController.RefreshPreview()
 end
 
-local function ShowShot(tiles)
-    ClearPreview()
+local function OnShotFired(pellets, hitTiles, damaged)
+    kingRig.Sprite:Play("Recoil")
 
-    local hitTiles = {}
-    for _, target in pairs(tiles) do
-        local tile = GetTile(target.Column, target.Row)
-        if tile then
-            SetOverlay(tile, SHOT_COLOR, 0.2)
-            table.insert(hitTiles, tile)
+    local damageByTile = {}
+
+    for _, result in pairs(damaged) do
+        local piece = PieceController.Get(result.Id)
+
+        if piece then
+            damageByTile[BoardRules.GetTileName(piece.Rig.Column, piece.Rig.Row)] = result
         end
     end
 
-    task.delay(0.3, function()
-        for _, tile in pairs(hitTiles) do
-            SetOverlay(tile, nil)
-        end
+    ShotgunController.PlayShot(pellets, hitTiles, function(column, row)
+        local result = damageByTile[BoardRules.GetTileName(column, row)]
+        if not result then return end
 
-        BoardController.RefreshPreview()
+        PieceController.ApplyDamage(result.Id, result.Health)
     end)
 end
 
@@ -180,18 +265,47 @@ function BoardController.Init(actionPanelController)
     actionPanel = actionPanelController
     actionPanel.OnSelectionChanged = BoardController.RefreshPreview
 
+    SummonPanelController.OnCardSelected = function()
+        actionPanel.SelectAction("Summon")
+        BoardController.RefreshPreview()
+    end
+
     local hud = Players.LocalPlayer.PlayerGui:WaitForChild("GameHUD")
     board = hud:WaitForChild("Root"):WaitForChild("BoardFrame"):WaitForChild("Board")
+
+    PieceController.Init(board)
+    ShotgunController.Init(board, function()
+        return kingColumn, kingRow
+    end, function(column, row)
+        local piece = PieceController.GetAt(column, row)
+        return piece ~= nil and piece.Team ~= "White"
+    end)
 
     for _, tile in pairs(board:GetChildren()) do
         BindTile(tile)
     end
 
     BoardRemote.OnClientEvent:Connect(function(action, ...)
-        if action == "KingMoved" then
+        if action == "MatchStarted" then
+            PieceController.Clear()
+        elseif action == "KingMoved" then
             PlaceKing(...)
+        elseif action == "PieceAdded" then
+            PieceController.Add(...)
+            BoardController.RefreshPreview()
+        elseif action == "PieceMoved" then
+            PieceController.Move(...)
+            BoardController.RefreshPreview()
         elseif action == "ShotFired" then
-            ShowShot(...)
+            OnShotFired(...)
+        elseif action == "TurnState" then
+            turnState = ...
+
+            if not IsMyTurn() then
+                actionPanel.ClearSelection()
+            end
+
+            BoardController.RefreshPreview()
         end
     end)
 end

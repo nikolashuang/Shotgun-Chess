@@ -23,10 +23,24 @@ Each player turn has two events:
 2. **Action Event** — one of:
    - **Fire shotgun**
    - **Use special** (costs energy)
-   - **Summon a piece** — placed up to two tiles from the king (costs energy)
+   - **Summon a piece** — placed on an empty tile within one tile of the king (costs energy)
    - **Command a piece** — move one of your pieces using its normal chess movement
    - **Appoint an Interrupt Card** to one of your pieces
    - **Use ultimate**
+
+The turn ends automatically once both events are used, or early with **End Turn**.
+
+### Enemy Turn
+
+- Interrupt Cards can only be played during the enemy's turn. Playable cards glow yellow and are played by clicking them.
+- One interrupt per enemy turn.
+- *Prototype:* test dummies don't act, so the enemy turn is a fixed 5-second window (`MatchConfig.ENEMY_TURN_TIME`).
+
+### Commanding Pieces
+
+- Pieces move with normal chess movement and can't move onto an occupied tile. Sliding pieces are blocked by any piece.
+- Pawns move one tile forward (toward the enemy side).
+- Undecided: whether commanded pieces can capture or attack.
 
 ### Energy
 
@@ -40,11 +54,18 @@ Each player turn has two events:
 
 ## Shotgun (Fire Action)
 
-- Range: up to 3 tiles from the king (Chebyshev distance, so diagonals count as 1).
-- Spread grows with aim distance: 1 tile away = 1x1, 2 away = 2x2, 3 away = 3x3.
-- 3x3 is centered on the aimed tile. 2x2 includes the aimed tile and extends away from the king (when aiming straight along a row or column, it extends toward the higher column/row). *Assumption — confirm.*
-- The king's own tile is never hit.
-- Damage per pellet/tile is still undecided.
+Aiming follows the Shotgun King style: a curved arc centered on the king.
+
+- The arc sits at the cursor's distance from the center of the king's tile, clamped between 1 and 3 tiles.
+- The arc's angle is fixed (64°), so aiming closer draws a narrow arc and aiming farther draws a wide one.
+- The shot is deterministic: the same aim always gives the same result, and the hit tiles are previewed while aiming.
+- Every tile inside the cone between the king and the arc is hit.
+- 5 pellets are spread evenly across the arc. They keep travelling past the arc along their line out to max range (3), hitting every tile they pass through. They stop at the board edge.
+- Shots don't pierce: each pellet, and each line of the cone, stops at the first enemy piece it hits, so enemies shield what's behind them. Friendly pieces don't block.
+- Range, arc angle, and pellet count are tuning values in `ShotgunConfig`. *64° and 5 pellets are placeholders — confirm.*
+- Damage depends on the enemy's tile distance from the king: 5 at 1 tile, 3.5 at 2, 2 at 3. That's a linear falloff from `MAX_DAMAGE` to `MIN_DAMAGE`; decimal damage is allowed. Each enemy takes damage once per shot.
+- Friendly pieces aren't damaged. Undecided: friendly fire, and whether friendly pieces should block shots.
+- Open question: because pellets always continue to max range, close and far aims currently cover nearly the same tiles.
 
 ## Pieces
 
@@ -96,7 +117,11 @@ Each player turn has two events:
 Not yet specified in the design doc. Do not implement guesses without confirming.
 
 - Charge gained per point of damage
-- Shotgun damage
 - Energy costs for summoning, fusion, and specials; starting energy and cap
 - Fusion rules
-- Interrupt Card effects (idea in progress)
+- Interrupt Card effects (idea in progress). The prototype uses three no-effect "Test Card" placeholders, one use each per match.
+- Whether summons are limited (energy, piece count)
+
+## Prototype Test Setup
+
+- Five black dummy pieces (Pawn E3, Knight G3, Bishop C4, Rook I4, Queen F5) with their normal health. They don't act. Configured in `MatchConfig.TEST_DUMMIES`.

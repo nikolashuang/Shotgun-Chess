@@ -4,6 +4,7 @@ local SELECTED_COLOR = Color3.fromHex("E6C47C")
 local DEFAULT_COLOR = Color3.fromHex("354867")
 
 local buttonsByKeybind = {}
+local buttonsByAction = {}
 local selectedButton = nil
 
 local ActionPanelController = {}
@@ -28,6 +29,8 @@ function ActionPanelController.Init()
 
     for _, button in pairs(actionPanel:GetChildren()) do
         if not button:IsA("TextButton") then continue end
+
+        buttonsByAction[button:GetAttribute("Action")] = button
 
         local keybind = button:GetAttribute("Keybind")
         if keybind then
@@ -63,6 +66,15 @@ function ActionPanelController.ClearSelection()
     if not selectedButton then return end
 
     ActionPanelController.Select(selectedButton)
+end
+
+-- Selects without toggling off an action that is already selected
+function ActionPanelController.SelectAction(action)
+    local button = buttonsByAction[action]
+    if not button then return end
+    if selectedButton == button then return end
+
+    ActionPanelController.Select(button)
 end
 
 function ActionPanelController.SelectByKeybind(keybind)
