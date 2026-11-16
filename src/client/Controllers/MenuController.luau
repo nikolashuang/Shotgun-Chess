@@ -10,6 +10,8 @@ local HOVER_TIME = 0.12
 local HOVER_STROKE = Color3.fromHex("E6C47C")
 local DEFAULT_STROKE = Color3.fromHex("354867")
 
+local hoverResets = {}
+
 local MenuController = {}
 
 local function BindHover(button)
@@ -17,16 +19,44 @@ local function BindHover(button)
     local hoverPosition = restPosition + UDim2.fromScale(HOVER_OFFSET, 0)
     local stroke = button:FindFirstChildOfClass("UIStroke")
     local tweenInfo = TweenInfo.new(HOVER_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = nil
+
+    local function TweenTo(position)
+        if tween then
+            tween:Cancel()
+        end
+
+        tween = TweenService:Create(button, tweenInfo, {Position = position})
+        tween:Play()
+    end
 
     button.MouseEnter:Connect(function()
-        TweenService:Create(button, tweenInfo, {Position = hoverPosition}):Play()
+        TweenTo(hoverPosition)
         stroke.Color = HOVER_STROKE
     end)
 
     button.MouseLeave:Connect(function()
-        TweenService:Create(button, tweenInfo, {Position = restPosition}):Play()
+        TweenTo(restPosition)
         stroke.Color = DEFAULT_STROKE
     end)
+
+    -- MouseLeave never fires when the menu hides under the cursor, so this snaps the button back
+    table.insert(hoverResets, function()
+        if tween then
+            tween:Cancel()
+        end
+
+        button.Position = restPosition
+        stroke.Color = DEFAULT_STROKE
+    end)
+end
+
+local function CloseAllPanels(root)
+    for _, child in pairs(root:GetChildren()) do
+        if child:IsA("GuiObject") and child.Name:sub(-5) == "Panel" then
+            child.Visible = false
+        end
+    end
 end
 
 -- Level and Exp are read from player attributes once a progression system sets them
@@ -92,15 +122,21 @@ function MenuController.Init(startMatch)
 
             local isOpen = panel.Visible
 
-            for _, child in pairs(root:GetChildren()) do
-                if child:IsA("GuiObject") and child.Name:sub(-5) == "Panel" then
-                    child.Visible = false
-                end
-            end
-
+            CloseAllPanels(root)
             panel.Visible = not isOpen
         end)
     end
+
+    -- Returning from a match shows the menu fresh
+    menu:GetPropertyChangedSignal("Enabled"):Connect(function()
+        if not menu.Enabled then return end
+
+        for _, reset in pairs(hoverResets) do
+            reset()
+        end
+
+        CloseAllPanels(root)
+    end)
 end
 
 return MenuController
