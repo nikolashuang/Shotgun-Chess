@@ -19,15 +19,38 @@ function PieceClass.new(id, pieceType, team, column, row)
     self.MaxHealth = PieceConfig.Health[pieceType]
     self.Health = self.MaxHealth
 
+    self.BleedDamage = 0
+    self.BleedTurns = 0
+
     return self
 end
 
+-- Returns the health actually lost
 function PieceClass:TakeDamage(amount)
-    self.Health = math.max(self.Health - amount, 0)
+    local dealt = math.min(amount, self.Health)
+    self.Health -= dealt
+
+    return dealt
 end
 
 function PieceClass:IsAlive()
     return self.Health > 0
+end
+
+-- Reapplying refreshes the bleed instead of stacking it
+function PieceClass:ApplyBleed(damage, turns)
+    self.BleedDamage = damage
+    self.BleedTurns = turns
+end
+
+function PieceClass:IsBleeding()
+    return self.BleedTurns > 0
+end
+
+function PieceClass:TickBleed()
+    self.BleedTurns -= 1
+
+    return self.BleedDamage
 end
 
 return PieceClass

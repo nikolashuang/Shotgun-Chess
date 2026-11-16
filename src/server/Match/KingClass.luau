@@ -7,7 +7,7 @@ local KingClass = {}
 
 KingClass.__index = KingClass
 
-function KingClass.new(player, column, row)
+function KingClass.new(player, column, row, shotgunName)
     local self = setmetatable({}, KingClass)
 
     self.Player = player
@@ -17,6 +17,10 @@ function KingClass.new(player, column, row)
 
     self.MaxHealth = 15
     self.Health = 15
+
+    self.ShotgunName = shotgunName
+    self.Shotgun = ShotgunRules.GetWeapon(shotgunName)
+    self.Ammo = self.Shotgun.MaxAmmo
 
     return self
 end
@@ -30,19 +34,28 @@ function KingClass:MoveTo(column, row)
     return true
 end
 
-function KingClass:Fire(targetX, targetY, isBlocking)
-    local originX, originY = ShotgunRules.GetKingOrigin(self.Column, self.Row)
+function KingClass:CanFire(mode)
+    if mode == "Alt" and not self.Shotgun.AltMode then return false end
+    if self.Ammo < ShotgunRules.GetAmmoCost(self.Shotgun, mode) then return false end
 
-    local pointBlankColumn, pointBlankRow = ShotgunRules.GetPointBlankTarget(self.Column, self.Row, targetX, targetY, isBlocking)
-    if pointBlankColumn then
-        return ShotgunRules.GetPointBlankShot(originX, originY, pointBlankColumn, pointBlankRow)
-    end
+    return true
+end
 
-    local angle, radius = ShotgunRules.GetAim(originX, originY, targetX, targetY)
+-- Returns pellets, hitTiles and shot type without spending ammo
+function KingClass:GetShot(targetX, targetY, mode, isBlocking)
+    return ShotgunRules.GetFireResult(self.Column, self.Row, targetX, targetY, self.Shotgun, mode, isBlocking)
+end
 
-    if not angle then return nil end
+function KingClass:SpendAmmo(mode)
+    self.Ammo -= ShotgunRules.GetAmmoCost(self.Shotgun, mode)
+end
 
-    return ShotgunRules.GetShot(originX, originY, angle, radius, isBlocking)
+function KingClass:Reload()
+    if self.Ammo >= self.Shotgun.MaxAmmo then return false end
+
+    self.Ammo = self.Shotgun.MaxAmmo
+
+    return true
 end
 
 return KingClass

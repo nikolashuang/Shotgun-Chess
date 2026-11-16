@@ -1,20 +1,113 @@
 local ShotgunConfig = {
+    STARTER = "Pump",
+    ORDER = {"Pump", "DoubleBarrel", "BuckBarrel", "LongBarrel", "KnifeShotty"},
+
     -- Distances are in tiles, measured from the center of the king's tile
     MIN_RANGE = 1,
-    MAX_RANGE = 3,
-
-    ARC_DEGREES = 64,
-    PELLET_COUNT = 5,
-
-    -- Damage at MIN_RANGE falls off linearly to MIN_DAMAGE at MAX_RANGE (tile distance)
-    MAX_DAMAGE = 5,
-    MIN_DAMAGE = 2,
 
     -- Sideways gap between pellets landing in a point blank tile
     POINT_BLANK_SPREAD = 0.12,
 
     TRACE_STEP = 0.05,
     COVERAGE_SPACING = 0.1,
+
+    -- Damage falls off linearly from MaxDamage at MIN_RANGE to MinDamage at MaxRange (tile distance)
+    -- Blasts multiplies the damage of every hit, AmmoPerShot is spent per normal shot
+    -- Ranges, arcs and damage are placeholders until the design doc gives numbers
+    Shotguns = {
+        Pump = {
+            DisplayName = "PUMP",
+            Description = "Starter shotgun. Medium range, medium damage.",
+            Price = 0,
+
+            MaxAmmo = 5,
+            AmmoPerShot = 1,
+            Blasts = 1,
+
+            MaxRange = 3,
+            ArcDegrees = 64,
+            PelletCount = 5,
+            MaxDamage = 5,
+            MinDamage = 2,
+        },
+
+        DoubleBarrel = {
+            DisplayName = "DOUBLE BARREL",
+            Description = "Fires both barrels: double damage, uses 2 shells. Shorter range.",
+            Price = 2000,
+
+            MaxAmmo = 4,
+            AmmoPerShot = 2,
+            Blasts = 2,
+
+            MaxRange = 2,
+            ArcDegrees = 64,
+            PelletCount = 5,
+            MaxDamage = 5,
+            MinDamage = 3.5,
+        },
+
+        BuckBarrel = {
+            DisplayName = "BUCK BARREL",
+            Description = "Right click for a precise shot: 3 tile line that pierces for max damage. Needs all 3 shells.",
+            Price = 2100,
+
+            MaxAmmo = 3,
+            AmmoPerShot = 1,
+            Blasts = 1,
+
+            MaxRange = 3,
+            ArcDegrees = 64,
+            PelletCount = 5,
+            MaxDamage = 5,
+            MinDamage = 2,
+
+            AltMode = "Precise",
+            Precise = {
+                Range = 3,
+                AmmoCost = 3,
+            },
+        },
+
+        LongBarrel = {
+            DisplayName = "LONG BARREL",
+            Description = "5 tile range with a very tight spread.",
+            Price = 3500,
+
+            MaxAmmo = 4,
+            AmmoPerShot = 1,
+            Blasts = 1,
+
+            MaxRange = 5,
+            ArcDegrees = 24,
+            PelletCount = 5,
+            MaxDamage = 5,
+            MinDamage = 2,
+        },
+
+        KnifeShotty = {
+            DisplayName = "KNIFE SHOTTY",
+            Description = "Right click to swing at adjacent enemies: 6 damage and bleed. Works with no ammo.",
+            Price = 2400,
+
+            MaxAmmo = 5,
+            AmmoPerShot = 1,
+            Blasts = 1,
+
+            MaxRange = 3,
+            ArcDegrees = 64,
+            PelletCount = 5,
+            MaxDamage = 5,
+            MinDamage = 2,
+
+            AltMode = "Knife",
+            Knife = {
+                Damage = 6,
+                BleedDamage = 1,
+                BleedTurns = 2,
+            },
+        },
+    },
 }
 
 return ShotgunConfig

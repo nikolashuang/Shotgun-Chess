@@ -46,6 +46,11 @@ local function IsOccupied(column, row)
     return PieceController.GetAt(column, row) ~= nil
 end
 
+local function IsEnemyTile(column, row)
+    local piece = PieceController.GetAt(column, row)
+    return piece ~= nil and piece.Team ~= "White"
+end
+
 local function IsMyTurn()
     return turnState ~= nil and turnState.Phase == "PlayerTurn"
 end
@@ -159,6 +164,7 @@ function BoardController.RefreshPreview()
     elseif selectedAction == "Summon" then
         if not CanAct() then return end
         if not SummonPanelController.SelectedPiece then return end
+        if turnState.Energy < PieceConfig.Cost[SummonPanelController.SelectedPiece] then return end
 
         local range = BoardConfig.SUMMON_RANGE
 
@@ -201,12 +207,28 @@ local function OnTileClicked(column, row)
     if selectedAction == "Fire" then
         if not CanAct() then return end
 
-        local originX, originY = ShotgunRules.GetKingOrigin(kingColumn, kingRow)
+        local weapon = ShotgunController.GetWeapon()
+        local mode = ShotgunController.GetMode()
         local targetX, targetY = ShotgunController.GetMouseBoardPosition()
 
-        if not ShotgunRules.GetAim(originX, originY, targetX, targetY) then return end
+        if turnState.Ammo < ShotgunRules.GetAmmoCost(weapon, mode) then return end
 
-        BoardRemote:FireServer("Fire", targetX, targetY)
+        local _, hitTiles, shotType = ShotgunRules.GetFireResult(kingColumn, kingRow, targetX, targetY, weapon, mode, IsEnemyTile)
+        if not hitTiles then return end
+
+        if shotType == "Knife" then
+            local hasEnemy = false
+
+            for _, tile in pairs(hitTiles) do
+                if IsEnemyTile(tile.Column, tile.Row) then
+                    hasEnemy = true
+                end
+            end
+
+            if not hasEnemy then return end
+        end
+
+        BoardRemote:FireServer("Fire", targetX, targetY, mode)
         actionPanel.ClearSelection()
     elseif selectedAction == "Summon" then
         local pieceType = SummonPanelController.SelectedPiece
@@ -333,7 +355,19 @@ function BoardController.Init(actionPanelController)
     init = true
 
     actionPanel = actionPanelController
-    actionPanel.OnSelectionChanged = BoardController.RefreshPreview
+    actionPanel.OnSelectionChanged = function()
+        -- Reload happens on select instead of waiting for a tile click
+        if actionPanel.SelectedAction == "Reload" then
+            if CanAct() and turnState.Ammo < turnState.MaxAmmo then
+                BoardRemote:FireServer("Reload")
+            end
+
+            actionPanel.ClearSelection()
+            return
+        end
+
+        BoardController.RefreshPreview()
+    end
 
     SummonPanelController.OnCardSelected = function()
         actionPanel.SelectAction("Summon")
@@ -346,10 +380,7 @@ function BoardController.Init(actionPanelController)
     PieceController.Init(board)
     ShotgunController.Init(board, function()
         return kingColumn, kingRow
-    end, function(column, row)
-        local piece = PieceController.GetAt(column, row)
-        return piece ~= nil and piece.Team ~= "White"
-    end)
+    end, IsEnemyTile)
 
     for _, tile in pairs(board:GetChildren()) do
         BindTile(tile)
@@ -368,8 +399,11 @@ function BoardController.Init(actionPanelController)
             BoardController.RefreshPreview()
         elseif action == "ShotFired" then
             OnShotFired(...)
+        elseif action == "PieceDamaged" then
+            PieceController.ApplyDamage(...)
         elseif action == "TurnState" then
             turnState = ...
+            ShotgunController.SetWeapon(turnState.Shotgun)
 
             if not IsMyTurn() then
                 actionPanel.ClearSelection()

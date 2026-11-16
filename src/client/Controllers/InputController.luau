@@ -7,6 +7,7 @@ local Keybinds = {
     [Enum.KeyCode.Four] = 4,
     [Enum.KeyCode.Five] = 5,
     [Enum.KeyCode.Six] = 6,
+    [Enum.KeyCode.Seven] = 7,
 }
 
 local InputController = {}

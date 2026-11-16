@@ -5,21 +5,26 @@ local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
+local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
 local MatchConfig = require(script.Parent.MatchConfig)
 local KingClass = require(script.Parent.KingClass)
 local PieceClass = require(script.Parent.PieceClass)
 
 local BoardRemote = ReplicatedStorage.Remotes.BoardRemote
 
+local EnergyConfig = CombatConfig.Energy
+local UltimateConfig = CombatConfig.Ultimate
+
 local MatchClass = {}
 
 MatchClass.__index = MatchClass
 
-function MatchClass.new(player)
+function MatchClass.new(player, shotgunName, className)
     local self = setmetatable({}, MatchClass)
 
     self.Player = player
-    self.King = KingClass.new(player, BoardConfig.KING_START_COLUMN, BoardConfig.KING_START_ROW)
+    self.King = KingClass.new(player, BoardConfig.KING_START_COLUMN, BoardConfig.KING_START_ROW, shotgunName)
+    self.ClassName = className
 
     self.Pieces = {}
     self.NextPieceId = 1
@@ -31,6 +36,9 @@ function MatchClass.new(player)
 
     self.InterruptCards = table.clone(MatchConfig.INTERRUPT_CARDS)
     self.InterruptUsed = false
+
+    self.Energy = EnergyConfig.START_ENERGY
+    self.UltimateCharge = 0
 
     self.isActive = true
 
@@ -49,6 +57,14 @@ function MatchClass:SendTurnState()
         HasActed = self.HasActed,
         InterruptCards = self.InterruptCards,
         CanInterrupt = self.Phase == "EnemyTurn" and not self.InterruptUsed,
+
+        Shotgun = self.King.ShotgunName,
+        Ammo = self.King.Ammo,
+        MaxAmmo = self.King.Shotgun.MaxAmmo,
+        Energy = self.Energy,
+        MaxEnergy = EnergyConfig.MAX_ENERGY,
+        UltimateCharge = self.UltimateCharge,
+        MaxUltimateCharge = UltimateConfig.MAX_CHARGE,
     })
 end
 
@@ -60,6 +76,7 @@ function MatchClass:Start()
         self:AddPiece(dummy.Type, "Black", dummy.Column, dummy.Row)
     end
 
+    self:GainEnergy()
     self:SendTurnState()
 end
 
@@ -89,6 +106,37 @@ function MatchClass:AddPiece(pieceType, team, column, row)
     self:Send("PieceAdded", piece.Id, piece.Type, piece.Team, piece.Column, piece.Row, piece.Health, piece.MaxHealth)
 
     return piece
+end
+
+function MatchClass:CountPieces(pieceType, team)
+    local count = 0
+
+    for _, piece in pairs(self.Pieces) do
+        if piece.Type == pieceType and piece.Team == team then
+            count += 1
+        end
+    end
+
+    return count
+end
+
+function MatchClass:GainEnergy()
+    self.Energy = math.min(self.Energy + EnergyConfig.ENERGY_PER_TURN, EnergyConfig.MAX_ENERGY)
+end
+
+-- Damage to enemy pieces builds ultimate charge; returns true when the piece dies
+function MatchClass:DamagePiece(piece, amount)
+    local dealt = piece:TakeDamage(amount)
+
+    if piece.Team ~= "White" then
+        self.UltimateCharge = math.min(self.UltimateCharge + dealt * UltimateConfig.CHARGE_PER_DAMAGE, UltimateConfig.MAX_CHARGE)
+    end
+
+    if piece:IsAlive() then return false end
+
+    self.Pieces[piece.Id] = nil
+
+    return true
 end
 
 function MatchClass:CanAct()
@@ -122,35 +170,56 @@ end
 
 --ACTION EVENTS--
 
-function MatchClass:Fire(targetX, targetY)
+function MatchClass:Fire(targetX, targetY, mode)
     if not self:CanAct() then return end
+    if not self.King:CanFire(mode) then return end
 
     local function IsEnemyTile(column, row)
         local piece = self:GetPieceAt(column, row)
         return piece ~= nil and piece.Team ~= "White"
     end
 
-    local pellets, hitTiles = self.King:Fire(targetX, targetY, IsEnemyTile)
+    local pellets, hitTiles, shotType = self.King:GetShot(targetX, targetY, mode, IsEnemyTile)
     if not pellets then return end
 
-    local damaged = {}
+    local targets = {}
 
     for _, tile in pairs(hitTiles) do
-        local piece = self:GetPieceAt(tile.Column, tile.Row)
-
-        if piece and piece.Team ~= "White" then
-            local distance = BoardRules.GetDistance(self.King.Column, self.King.Row, piece.Column, piece.Row)
-            piece:TakeDamage(ShotgunRules.GetDamage(distance))
-            table.insert(damaged, {Id = piece.Id, Health = piece.Health})
-
-            if not piece:IsAlive() then
-                self.Pieces[piece.Id] = nil
-            end
+        if IsEnemyTile(tile.Column, tile.Row) then
+            table.insert(targets, self:GetPieceAt(tile.Column, tile.Row))
         end
     end
 
+    -- The knife can only be swung at an adjacent enemy
+    if shotType == "Knife" and #targets == 0 then return end
+
+    local weapon = self.King.Shotgun
+    local damaged = {}
+
+    for _, piece in pairs(targets) do
+        local distance = BoardRules.GetDistance(self.King.Column, self.King.Row, piece.Column, piece.Row)
+        self:DamagePiece(piece, ShotgunRules.GetHitDamage(weapon, shotType, distance))
+
+        if shotType == "Knife" and piece:IsAlive() then
+            piece:ApplyBleed(weapon.Knife.BleedDamage, weapon.Knife.BleedTurns)
+        end
+
+        table.insert(damaged, {Id = piece.Id, Health = piece.Health})
+    end
+
+    self.King:SpendAmmo(mode)
+
     self.HasActed = true
-    self:Send("ShotFired", pellets, hitTiles, damaged)
+    self:Send("ShotFired", pellets, hitTiles, damaged, shotType)
+    self:FinishEvent()
+end
+
+function MatchClass:Reload()
+    if not self:CanAct() then return end
+    if not self.King:Reload() then return end
+
+    self.HasActed = true
+    self:Send("Reloaded")
     self:FinishEvent()
 end
 
@@ -161,6 +230,13 @@ function MatchClass:Summon(pieceType, column, row)
     if BoardRules.GetDistance(self.King.Column, self.King.Row, column, row) > BoardConfig.SUMMON_RANGE then return end
     if self:IsOccupied(column, row) then return end
 
+    local cost = PieceConfig.Cost[pieceType]
+    if self.Energy < cost then return end
+
+    local maxActive = PieceConfig.MaxActive[pieceType]
+    if maxActive and self:CountPieces(pieceType, "White") >= maxActive then return end
+
+    self.Energy -= cost
     self:AddPiece(pieceType, "White", column, row)
 
     self.HasActed = true
@@ -199,6 +275,8 @@ end
 function MatchClass:StartEnemyTurn()
     self.Phase = "EnemyTurn"
     self.InterruptUsed = false
+
+    self:TickBleed("Black")
     self:SendTurnState()
 
     -- Dummies don't act, so the enemy turn only opens the interrupt window
@@ -212,11 +290,24 @@ function MatchClass:StartEnemyTurn()
     end)
 end
 
+-- Bleeding pieces lose health at the start of their team's turn
+function MatchClass:TickBleed(team)
+    for _, piece in pairs(self.Pieces) do
+        if piece.Team == team and piece:IsBleeding() then
+            self:DamagePiece(piece, piece:TickBleed())
+            self:Send("PieceDamaged", piece.Id, piece.Health)
+        end
+    end
+end
+
 function MatchClass:StartPlayerTurn()
     self.Phase = "PlayerTurn"
     self.Turn += 1
     self.HasMoved = false
     self.HasActed = false
+
+    self:GainEnergy()
+    self:TickBleed("White")
     self:SendTurnState()
 end
 

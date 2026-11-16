@@ -6,7 +6,6 @@ local RunService = game:GetService("RunService")
 
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
-local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 
@@ -40,13 +39,14 @@ local isBlockingTile = nil
 local active = false
 local arcDots = {}
 local previewTiles = {}
-local lastAngle = nil
-local lastRadius = nil
-local lastColumn = nil
-local lastRow = nil
-local lastPointBlank = nil
+local lastPreviewKey = nil
+
+local weapon = nil
+local mode = "Normal"
 
 local ShotgunController = {}
+
+ShotgunController.OnModeChanged = nil
 
 local function ToBoardUDim(x, y)
     return UDim2.fromScale(x / BoardConfig.SIZE, 1 - y / BoardConfig.SIZE)
@@ -132,31 +132,17 @@ local function ClearPreviewTiles()
     end
 
     previewTiles = {}
-    lastAngle = nil
+    lastPreviewKey = nil
 end
 
-local function UpdatePreviewTiles(originX, originY, angle, radius, column, row, pointBlankColumn, pointBlankRow)
-    local pointBlank = pointBlankColumn and pointBlankColumn * 100 + pointBlankRow or nil
-    local unchanged = lastAngle
-        and math.abs(angle - lastAngle) < 0.005
-        and math.abs(radius - lastRadius) < 0.01
-        and column == lastColumn and row == lastRow
-        and pointBlank == lastPointBlank
-
-    if unchanged then return end
+-- Hit tiles are only recalculated when the preview key changes
+local function UpdatePreviewTiles(previewKey, getHitTiles)
+    if previewKey == lastPreviewKey then return end
 
     ClearPreviewTiles()
-    lastAngle, lastRadius, lastColumn, lastRow, lastPointBlank = angle, radius, column, row, pointBlank
+    lastPreviewKey = previewKey
 
-    local hitTiles = nil
-
-    if pointBlankColumn then
-        hitTiles = {{Column = pointBlankColumn, Row = pointBlankRow}}
-    else
-        hitTiles = select(2, ShotgunRules.GetShot(originX, originY, angle, radius, isBlockingTile))
-    end
-
-    for _, target in pairs(hitTiles) do
+    for _, target in pairs(getHitTiles()) do
         local tile = GetTile(target.Column, target.Row)
 
         if tile then
@@ -187,11 +173,33 @@ local function DrawArc()
 
     local originX, originY = ShotgunRules.GetKingOrigin(column, row)
     local targetX, targetY = ShotgunController.GetMouseBoardPosition()
-    local angle, radius = ShotgunRules.GetAim(originX, originY, targetX, targetY)
+    local angle, radius = ShotgunRules.GetAim(originX, originY, targetX, targetY, weapon)
 
     if not angle then
         HideDots(1)
         ClearPreviewTiles()
+        return
+    end
+
+    -- Precise shots and knife swings only preview their tiles
+    if mode == "Alt" then
+        local _, hitTiles = ShotgunRules.GetFireResult(column, row, targetX, targetY, weapon, mode, isBlockingTile)
+        hitTiles = hitTiles or {}
+
+        local tileNames = {}
+        for _, target in pairs(hitTiles) do
+            table.insert(tileNames, BoardRules.GetTileName(target.Column, target.Row))
+        end
+
+        UpdatePreviewTiles(table.concat(tileNames, ","), function()
+            return hitTiles
+        end)
+
+        if hitTiles[1] then
+            AimGun(math.atan2(hitTiles[1].Row - 0.5 - originY, hitTiles[1].Column - 0.5 - originX))
+        end
+
+        HideDots(1)
         return
     end
 
@@ -200,16 +208,22 @@ local function DrawArc()
     if pointBlankColumn then
         local pointBlankAngle = math.atan2(pointBlankRow - 0.5 - originY, pointBlankColumn - 0.5 - originX)
 
-        UpdatePreviewTiles(originX, originY, angle, radius, column, row, pointBlankColumn, pointBlankRow)
+        UpdatePreviewTiles("PointBlank" .. BoardRules.GetTileName(pointBlankColumn, pointBlankRow), function()
+            return {{Column = pointBlankColumn, Row = pointBlankRow}}
+        end)
         AimGun(pointBlankAngle)
         HideDots(1)
         return
     end
 
-    UpdatePreviewTiles(originX, originY, angle, radius, column, row)
+    local previewKey = string.format("%d,%d,%.3f,%.2f", column, row, angle, radius)
+
+    UpdatePreviewTiles(previewKey, function()
+        return select(2, ShotgunRules.GetShot(originX, originY, angle, radius, isBlockingTile, weapon))
+    end)
     AimGun(angle)
 
-    local halfArc = math.rad(ShotgunConfig.ARC_DEGREES) / 2
+    local halfArc = math.rad(weapon.ArcDegrees) / 2
     local count = math.max(2, math.ceil(radius * halfArc * 2 / DOT_SPACING))
     local index = 0
 
@@ -254,12 +268,47 @@ local function FlashTile(column, row)
     end)
 end
 
-function ShotgunController.SetActive(enabled)
-    active = enabled
+local function SetMode(newMode)
+    if mode == newMode then return end
 
-    if not enabled then
+    mode = newMode
+    ClearPreviewTiles()
+
+    if ShotgunController.OnModeChanged then
+        ShotgunController.OnModeChanged(mode)
+    end
+end
+
+function ShotgunController.GetMode()
+    return mode
+end
+
+function ShotgunController.GetWeapon()
+    return weapon
+end
+
+function ShotgunController.SetWeapon(shotgunName)
+    local newWeapon = ShotgunRules.GetWeapon(shotgunName)
+    if newWeapon == weapon then return end
+
+    weapon = newWeapon
+    ClearPreviewTiles()
+end
+
+-- Right click switches to the shotgun's alt mode, if it has one
+function ShotgunController.ToggleMode()
+    if not weapon or not weapon.AltMode then return end
+
+    SetMode(mode == "Normal" and "Alt" or "Normal")
+end
+
+function ShotgunController.SetActive(enabled)
+    active = enabled and weapon ~= nil
+
+    if not active then
         HideDots(1)
         ClearPreviewTiles()
+        SetMode("Normal")
     end
 end
 
@@ -402,6 +451,14 @@ function ShotgunController.Init(boardFrame, kingPositionGetter, blockingTileChec
         if active then
             DrawArc()
         end
+    end)
+
+    -- Board tiles sink mouse input, so processed isn't checked here
+    UserInputService.InputBegan:Connect(function(input)
+        if not active then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton2 then return end
+
+        ShotgunController.ToggleMode()
     end)
 end
 

@@ -3,10 +3,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
 local MatchClass = require(ServerScriptService.Match.MatchClass)
+local LoadoutService = require(ServerScriptService.Player.LoadoutService)
 
 local BoardRemote = ReplicatedStorage.Remotes.BoardRemote
 
 local Matches = {}
+
+LoadoutService.Init()
 
 local function IsFiniteNumber(value)
     return typeof(value) == "number" and value == value and math.abs(value) < 1e6
@@ -25,7 +28,7 @@ BoardRemote.OnServerEvent:Connect(function(player, action, first, second, third)
             Matches[player]:Destroy()
         end
 
-        local match = MatchClass.new(player)
+        local match = MatchClass.new(player, LoadoutService.GetLoadout(player))
         Matches[player] = match
         match:Start()
         return
@@ -40,8 +43,11 @@ BoardRemote.OnServerEvent:Connect(function(player, action, first, second, third)
         match:Move(first, second)
     elseif action == "Fire" then
         if not IsFiniteNumber(first) or not IsFiniteNumber(second) then return end
+        if third ~= "Normal" and third ~= "Alt" then return end
 
-        match:Fire(first, second)
+        match:Fire(first, second, third)
+    elseif action == "Reload" then
+        match:Reload()
     elseif action == "Summon" then
         if typeof(first) ~= "string" then return end
         if not IsTileArgument(second, third) then return end

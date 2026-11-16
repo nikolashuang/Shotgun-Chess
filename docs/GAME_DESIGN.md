@@ -10,8 +10,8 @@ Kill the enemy king.
 
 ## Board
 
-- 12x12 board (columns A–L, rows 1–12).
-- The player's king starts at F1.
+- Design doc: normal size chess board (8x8).
+- *Prototype:* still 12x12 (columns A–L), king starts at F1. Resizing deferred.
 
 ## Turn System
 
@@ -27,6 +27,7 @@ Each player turn has two events:
    - **Command a piece** — move one of your pieces using its normal chess movement
    - **Appoint an Interrupt Card** to one of your pieces
    - **Use ultimate**
+   - **Reload** — refills the shotgun's magazine
 
 The turn ends automatically once both events are used, or early with **End Turn**.
 
@@ -44,15 +45,20 @@ The turn ends automatically once both events are used, or early with **End Turn*
 
 ### Energy
 
-- Each player gains 1 energy per turn.
-- Energy is spent to summon pieces, fuse pieces, and use specials.
+- Each player gains 1 energy at the start of every turn (including the first), up to 8.
+- Starting energy is 0. *(Assumption — confirm.)*
+- Costs: Pawn 1, Knight 3, Bishop 3, Rook 5, Queen 7, Special 1.
+- Only one active Queen per king.
+- Energy is also spent on fusion (cost undecided).
 
 ### Ultimate Charge
 
-- Built by damaging enemy pieces.
+- Built by damaging enemy pieces: 10 charge per point of damage actually dealt (overkill doesn't count), including bleed.
 - 100 charge required to use an ultimate.
 
 ## Shotgun (Fire Action)
+
+Every shotgun has a magazine. Firing spends ammo; you can't fire without enough. **Reload** uses the Action event and refills the magazine.
 
 Aiming follows the Shotgun King style: a curved arc centered on the king.
 
@@ -63,10 +69,52 @@ Aiming follows the Shotgun King style: a curved arc centered on the king.
 - 5 pellets are spread evenly across the arc. They keep travelling past the arc along their line out to max range (3), hitting every tile they pass through. They stop at the board edge.
 - **Point blank:** if an enemy is on the adjacent tile the shot points into (aim snapped to the nearest of 8 directions, or the cursor directly on an adjacent enemy), only that tile is hit and every pellet lands in it. Otherwise the normal cone fires.
 - Shots don't pierce: each pellet, and each line of the cone, stops at the first enemy piece it hits, so enemies shield what's behind them. Friendly pieces don't block.
-- Range, arc angle, and pellet count are tuning values in `ShotgunConfig`. *64° and 5 pellets are placeholders — confirm.*
-- Damage depends on the enemy's tile distance from the king: 5 at 1 tile, 3.5 at 2, 2 at 3. That's a linear falloff from `MAX_DAMAGE` to `MIN_DAMAGE`; decimal damage is allowed. Each enemy takes damage once per shot.
+- Range, arc angle, pellet count and damage are per-shotgun tuning values in `ShotgunConfig.Shotguns`.
+- Damage depends on the enemy's tile distance from the king, falling off linearly from `MaxDamage` at 1 tile to `MinDamage` at the shotgun's max range. Decimal damage is allowed. Each enemy takes damage once per shot.
 - Friendly pieces aren't damaged. Undecided: friendly fire, and whether friendly pieces should block shots.
 - Open question: because pellets always continue to max range, close and far aims currently cover nearly the same tiles.
+
+## Shotguns
+
+Shotguns are chosen in the Armory and bought in the Shop (everything is unlocked until gold exists). Numbers marked *placeholder* are not in the design doc.
+
+| Shotgun | Price | Ammo | Range | Arc | Damage | Notes |
+|---|---|---|---|---|---|---|
+| Pump (starter) | — | 5 | 3 | 64° | 5→2 | Basic shotgun |
+| Double Barrel | 2000 | 4 | 2 *(placeholder)* | 64° | 5→3.5, x2 | Every shot fires both barrels: 2 shells, double damage |
+| Buck Barrel | 2100 | 3 | 3 | 64° | 5→2 | Alt mode: precise shot |
+| Long Barrel | 3500 | 4 | 5 | 24° *(placeholder)* | 5→2 | Very tight cone |
+| Knife Shotty | 2400 | 5 | 3 | 64° | 5→2 | Alt mode: knife swing |
+
+**Alt modes** — right click while aiming switches between normal and alt; left click fires.
+
+- **Precise shot (Buck Barrel):** a 3-tile straight line snapped to the nearest of the 8 chess directions. Pierces every enemy in the line for max damage. Uses the Action and needs all 3 shells.
+- **Knife swing (Knife Shotty):** hits 2 adjacent tiles — the tile it points at plus its neighbor on the cursor's side. Needs an enemy in one of them. 6 damage and bleed (1 damage per turn for 2 turns, ticking at the start of the bleeding piece's turn; reapplying refreshes it). Uses the Action, costs no ammo, so it works at 0 ammo.
+- Point blank applies to normal shots of every shotgun.
+
+## Classes
+
+Chosen in the Armory alongside the shotgun. Replaces the old Necro/Spark/WindCharge/Forge shotgun classes. *Selectable but not implemented yet.*
+
+### Reaper
+- **Passive [Reap]:** Dead enemies become souls. Queens don't drop souls.
+- **Special [Assimilate]:** Harvest dead souls and use their abilities for one turn, or turn them into energy stacks.
+- **Ultimate [Unbound]:** Move like a Queen for one turn.
+
+### Hunter
+- **Passive [Collector]:** Dead enemies drop scrap on the field.
+- **Special [Trap Layout]:** Lay invisible bear traps that enemies can't see.
+- **Ultimate [Hunting Strike]:** Throw bolas in a 5-tile radius, stunning enemies for 3 turns.
+
+### Gunslinger
+- **Passive [Deadeye]:** All shotgun cones shrink and shoot slightly further.
+- **Special [Quickdraw]:** Fire a weaker shot without using the Action event (once per turn).
+- **Ultimate [High Noon's Bounty]:** Mark 2 enemies; gain energy for killing both.
+
+### Outlaw
+- **Passive [Opportunist]:** +1 damage to isolated pieces.
+- **Special [Conceal]:** Smoke bomb covering 3x3 for two turns; enemies can't attack or shoot into it.
+- **Ultimate [Ambush]:** Move to any square at least 1 tile from an enemy; +2 damage on the next shot.
 
 ## Pieces
 
@@ -87,41 +135,17 @@ Aiming follows the Shotgun King style: a curved arc centered on the king.
 - Short response timer (around 5 seconds).
 - Ordinary movement and summoning never trigger interrupts.
 
-## Shotgun Classes
-
-### Necro
-- **Primary:** Cursed Pellets
-- **Passive:** Successful kills drop souls on the field
-- **Special:** Harvest dead souls and use their abilities for one turn
-- **Ultimate:** Revive one dead soul on your team
-
-### Spark
-- **Primary:** Electrified Pellets
-- **Passive:** Successful shots build electric charge
-- **Special:** Chain lightning shot that stuns nearby enemies for one turn
-- **Ultimate:** Large electric discharge around you, stunning all enemies for one turn
-
-### WindCharge
-- **Primary:** Air-cannon shots
-- **Passive:** Shots can recoil the king for better positioning
-- **Special:** Wind blast that knocks nearby enemies back
-- **Ultimate:** Reposition anywhere, landing with a large wind knockback
-
-### Forge
-- **Primary:** Normal shotgun pellets
-- **Passive:** Dead enemies drop scrap on the field
-- **Special:** Craft a revolver (up to 6 bullets) — more accurate shots, slightly more range
-- **Ultimate:** Craft a railgun (2 bullets) — straight-line shots that pierce everything in the line
-
 ## Open Design Decisions
 
 Not yet specified in the design doc. Do not implement guesses without confirming.
 
-- Charge gained per point of damage
-- Energy costs for summoning, fusion, and specials; starting energy and cap
-- Fusion rules
+- Fusion rules and cost
+- Starting energy (prototype uses 0)
+- Starter class (prototype uses Reaper)
+- Class numbers: soul abilities, trap damage, Quickdraw damage, what counts as an "isolated" piece, bounty energy reward
+- Gold economy and how shotguns are purchased
+- Exact ranges/arcs for Double Barrel and Long Barrel
 - Interrupt Card effects (idea in progress). The prototype uses three no-effect "Test Card" placeholders, one use each per match.
-- Whether summons are limited (energy, piece count)
 
 ## Prototype Test Setup
 

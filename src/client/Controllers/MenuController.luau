@@ -83,7 +83,22 @@ function MenuController.Init(startMatch)
                 menu.Enabled = false
                 hud.Enabled = true
                 startMatch()
+                return
             end
+
+            -- Options with a matching panel toggle it and close the others
+            local panel = root:FindFirstChild(option .. "Panel")
+            if not panel then return end
+
+            local isOpen = panel.Visible
+
+            for _, child in pairs(root:GetChildren()) do
+                if child:IsA("GuiObject") and child.Name:sub(-5) == "Panel" then
+                    child.Visible = false
+                end
+            end
+
+            panel.Visible = not isOpen
         end)
     end
 end
