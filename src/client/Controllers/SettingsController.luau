@@ -7,14 +7,16 @@ local WAITING_COLOR = Color3.fromHex("E6C47C")
 local DEFAULT_COLOR = Color3.fromHex("354867")
 
 local input = nil
-local rowsByAction = {}
+local rows = {}
 local capturingAction = nil
 
 -- Keybinds only last for the session until settings are saved to a profile
+-- Every keybind panel (main menu and in-match) shows the same bindings
 local SettingsController = {}
 
 local function Refresh()
-    for action, row in pairs(rowsByAction) do
+    for _, row in pairs(rows) do
+        local action = row.Name
         local isCapturing = action == capturingAction
 
         row.Key.Text = isCapturing and "PRESS KEY" or input.GetKeyLabel(input.GetBinding(action))
@@ -42,14 +44,7 @@ local function StartCapture(action)
     end)
 end
 
-local init = false
-function SettingsController.Init(inputController)
-    if init then return end
-    init = true
-
-    input = inputController
-
-    local panel = Players.LocalPlayer.PlayerGui:WaitForChild("MainMenu"):WaitForChild("Root"):WaitForChild("SettingsPanel")
+local function BindPanel(panel)
     local template = panel:WaitForChild("Template")
 
     for i, action in ipairs(KeybindConfig.ORDER) do
@@ -68,7 +63,7 @@ function SettingsController.Init(inputController)
             end
         end)
 
-        rowsByAction[action] = row
+        table.insert(rows, row)
     end
 
     panel:WaitForChild("ResetButton").Activated:Connect(function()
@@ -82,6 +77,18 @@ function SettingsController.Init(inputController)
             StopCapture()
         end
     end)
+end
+
+local init = false
+function SettingsController.Init(inputController)
+    if init then return end
+    init = true
+
+    input = inputController
+
+    local playerGui = Players.LocalPlayer.PlayerGui
+    BindPanel(playerGui:WaitForChild("MainMenu"):WaitForChild("Root"):WaitForChild("SettingsPanel"))
+    BindPanel(playerGui:WaitForChild("GameHUD"):WaitForChild("PauseOverlay"):WaitForChild("KeybindsPanel"))
 
     input.OnBindingsChanged = Refresh
     Refresh()

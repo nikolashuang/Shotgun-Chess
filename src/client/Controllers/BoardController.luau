@@ -433,6 +433,17 @@ function BoardController.Init(actionPanelController)
     end)
 end
 
+-- Ends the match on the server and clears the board for the next one
+function BoardController.LeaveMatch()
+    BoardRemote:FireServer("LeaveMatch")
+
+    turnState = nil
+    commandPieceId = nil
+    actionPanel.ClearSelection()
+    PieceController.Clear()
+    BoardController.RefreshPreview()
+end
+
 function BoardController.StartMatch()
     BoardRemote:FireServer("StartMatch")
 end

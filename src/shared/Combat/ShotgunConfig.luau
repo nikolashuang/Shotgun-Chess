@@ -12,6 +12,9 @@ local ShotgunConfig = {
     TRACE_STEP = 0.05,
     COVERAGE_SPACING = 0.1,
 
+    -- Lines of sight that only touch an enemy tile's edge or corner within this many tiles aren't blocked
+    LINE_OF_SIGHT_MARGIN = 0.02,
+
     -- Damage falls off linearly from MaxDamage at MIN_RANGE to MinDamage at MaxRange (tile distance)
     -- Blasts multiplies the damage of every hit, AmmoPerShot is spent per normal shot
     -- Ranges, arcs and damage are placeholders until the design doc gives numbers

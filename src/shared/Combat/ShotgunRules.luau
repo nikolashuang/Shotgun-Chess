@@ -83,22 +83,59 @@ function ShotgunRules.GetDamage(tileDistance, weapon)
     return weapon.MaxDamage + (weapon.MinDamage - weapon.MaxDamage) * alpha
 end
 
+-- True when the line from the origin to the tile's center crosses no blocking tile on the way
+function ShotgunRules.HasLineOfSight(originX, originY, column, row, isBlocking)
+    local targetX = column - 0.5
+    local targetY = row - 0.5
+    local deltaX = targetX - originX
+    local deltaY = targetY - originY
+    local stepCount = math.ceil(math.sqrt(deltaX * deltaX + deltaY * deltaY) / ShotgunConfig.TRACE_STEP)
+    local margin = ShotgunConfig.LINE_OF_SIGHT_MARGIN
+
+    local startColumn = math.floor(originX) + 1
+    local startRow = math.floor(originY) + 1
+
+    for i = 1, stepCount - 1 do
+        local x = originX + deltaX * i / stepCount
+        local y = originY + deltaY * i / stepCount
+        local stepColumn = math.floor(x) + 1
+        local stepRow = math.floor(y) + 1
+
+        local isEndpoint = (stepColumn == column and stepRow == row) or (stepColumn == startColumn and stepRow == startRow)
+        local isInside = x % 1 > margin and x % 1 < 1 - margin and y % 1 > margin and y % 1 < 1 - margin
+
+        if not isEndpoint and isInside and isBlocking(stepColumn, stepRow) then return false end
+    end
+
+    return true
+end
+
 -- isBlocking(column, row) returns true for tiles that stop pellets
+-- Tiles shielded by an enemy are never hit, so nothing behind an enemy takes damage
 function ShotgunRules.GetShot(originX, originY, angle, radius, isBlocking, weapon)
     local kingColumn = math.floor(originX) + 1
     local kingRow = math.floor(originY) + 1
 
     local hitTiles = {}
     local marked = {}
+    local shielded = {}
 
     local function MarkTile(column, row)
         if column == kingColumn and row == kingRow then return false end
 
         local key = column * 100 + row
-        if not marked[key] then
-            marked[key] = true
-            table.insert(hitTiles, {Column = column, Row = row})
+
+        -- Shielded tiles are skipped but don't stop the ray, only enemy tiles do
+        if not marked[key] and not shielded[key] then
+            if isBlocking and not ShotgunRules.HasLineOfSight(originX, originY, column, row, isBlocking) then
+                shielded[key] = true
+            else
+                marked[key] = true
+                table.insert(hitTiles, {Column = column, Row = row})
+            end
         end
+
+        if shielded[key] then return false end
 
         return isBlocking ~= nil and isBlocking(column, row)
     end

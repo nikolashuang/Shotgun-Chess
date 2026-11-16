@@ -32,6 +32,13 @@ BoardRemote.OnServerEvent:Connect(function(player, action, first, second, third)
         Matches[player] = match
         match:Start()
         return
+    elseif action == "LeaveMatch" then
+        if Matches[player] then
+            Matches[player]:Destroy()
+        end
+
+        Matches[player] = nil
+        return
     end
 
     local match = Matches[player]
