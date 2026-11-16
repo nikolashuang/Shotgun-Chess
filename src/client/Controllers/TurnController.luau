@@ -32,6 +32,16 @@ local function Update(state)
     endTurnButton.Label.TextTransparency = isMyTurn and 0 or 0.6
 end
 
+function TurnController.SetKeyLabel(text)
+    endTurnButton.Label.Text = "END TURN [" .. text .. "]"
+end
+
+function TurnController.EndTurn()
+    if not isMyTurn then return end
+
+    BoardRemote:FireServer("EndTurn")
+end
+
 local init = false
 function TurnController.Init()
     if init then return end
@@ -43,11 +53,7 @@ function TurnController.Init()
     turnLabel = turnBar:WaitForChild("TurnLabel")
     endTurnButton = turnBar:WaitForChild("EndTurnButton")
 
-    endTurnButton.Activated:Connect(function()
-        if not isMyTurn then return end
-
-        BoardRemote:FireServer("EndTurn")
-    end)
+    endTurnButton.Activated:Connect(TurnController.EndTurn)
 
     BoardRemote.OnClientEvent:Connect(function(action, state)
         if action ~= "TurnState" then return end

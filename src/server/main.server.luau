@@ -60,10 +60,6 @@ BoardRemote.OnServerEvent:Connect(function(player, action, first, second, third)
         match:Command(first, second, third)
     elseif action == "EndTurn" then
         match:EndTurn()
-    elseif action == "Interrupt" then
-        if not IsFiniteNumber(first) then return end
-
-        match:UseInterrupt(first)
     end
 end)
 

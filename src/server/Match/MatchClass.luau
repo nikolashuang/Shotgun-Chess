@@ -34,9 +34,6 @@ function MatchClass.new(player, shotgunName, className)
     self.HasMoved = false
     self.HasActed = false
 
-    self.InterruptCards = table.clone(MatchConfig.INTERRUPT_CARDS)
-    self.InterruptUsed = false
-
     self.Energy = EnergyConfig.START_ENERGY
     self.UltimateCharge = 0
 
@@ -55,9 +52,6 @@ function MatchClass:SendTurnState()
         Turn = self.Turn,
         HasMoved = self.HasMoved,
         HasActed = self.HasActed,
-        InterruptCards = self.InterruptCards,
-        CanInterrupt = self.Phase == "EnemyTurn" and not self.InterruptUsed,
-
         Shotgun = self.King.ShotgunName,
         Ammo = self.King.Ammo,
         MaxAmmo = self.King.Shotgun.MaxAmmo,
@@ -274,12 +268,11 @@ end
 
 function MatchClass:StartEnemyTurn()
     self.Phase = "EnemyTurn"
-    self.InterruptUsed = false
 
     self:TickBleed("Black")
     self:SendTurnState()
 
-    -- Dummies don't act, so the enemy turn only opens the interrupt window
+    -- Dummies don't act, so the enemy turn is just a timed wait
     local turn = self.Turn
 
     task.delay(MatchConfig.ENEMY_TURN_TIME, function()
@@ -308,20 +301,6 @@ function MatchClass:StartPlayerTurn()
 
     self:GainEnergy()
     self:TickBleed("White")
-    self:SendTurnState()
-end
-
-function MatchClass:UseInterrupt(slot)
-    if self.Phase ~= "EnemyTurn" then return end
-    if self.InterruptUsed then return end
-
-    local card = self.InterruptCards[slot]
-    if not card then return end
-
-    self.InterruptCards[slot] = false
-    self.InterruptUsed = true
-
-    self:Send("InterruptUsed", slot, card)
     self:SendTurnState()
 end
 

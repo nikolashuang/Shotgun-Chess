@@ -3,6 +3,8 @@ local Players = game:GetService("Players")
 
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
+local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
+local AtlasImage = require(script.Parent.Parent.UI.AtlasImage)
 
 local LoadoutRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("LoadoutRemote")
 
@@ -58,6 +60,14 @@ local function NewRow(template, list, kind, name, displayName, order)
     row.LayoutOrder = order
     row.Visible = true
     row.Parent = list
+
+    -- Shotgun rows show the gun sprite in front of the name
+    if kind == "Shotgun" then
+        AtlasImage.SetRect(row.Icon, SpriteConfig.Guns[name].Rect)
+        row.Icon.Visible = true
+        row.Label.Position = UDim2.fromScale(0.36, row.Label.Position.Y.Scale)
+        row.Label.Size = UDim2.fromScale(0.36, row.Label.Size.Y.Scale)
+    end
 
     row.Activated:Connect(function()
         LoadoutRemote:FireServer("Equip", kind, name)

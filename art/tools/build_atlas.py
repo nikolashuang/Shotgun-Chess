@@ -1,11 +1,12 @@
 import os
+import json
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRAMES = os.path.join(ROOT, "frames")
 OUT_PNG = os.path.join(ROOT, "SpriteAtlas.png")
 OUT_LUAU = os.path.join(os.path.dirname(ROOT), "src", "shared", "Sprites", "SpriteConfig.luau")
-ASSET_ID = "rbxassetid://112132406240625"
+ASSET_ID = "rbxassetid://121161316106946"
 
 CELL = 32
 # Transparent gutter around every sprite so rotated or scaled sampling can't bleed into neighbors
@@ -15,7 +16,11 @@ OUTLINE = (0x17, 0x1D, 0x32, 255)
 FLASH = (0xFF, 0xFF, 0xFF, 255)
 RED = (0xD9, 0x54, 0x4D, 255)
 CREAM = (0xF0, 0xE9, 0xD8, 255)
-PALETTE = [(0xF0,0xE9,0xD8),(0xB3,0xA8,0x8F),(0xE6,0xC4,0x7C),(0xA8,0x84,0x4A),(0x8A,0x93,0xA6),(0x4E,0x56,0x6B)]
+DARK_RED = (0x9E, 0x3A, 0x3C, 255)
+GOLD = (0xE6, 0xC4, 0x7C, 255)
+BRASS = (0xA8, 0x84, 0x4A, 255)
+SLOT = (0x4E, 0x56, 0x6B, 255)
+PALETTE = [(0xF0,0xE9,0xD8),(0xB3,0xA8,0x8F),(0xE6,0xC4,0x7C),(0xA8,0x84,0x4A),(0x8A,0x93,0xA6),(0x4E,0x56,0x6B),(0xD9,0x54,0x4D),(0x9E,0x3A,0x3C)]
 
 # White sprites are recolored into the black team set
 BLACK_RECOLOR = {
@@ -100,8 +105,35 @@ for piece in PIECES:
         black = [f if i in flashes else recolor(f, BLACK_RECOLOR) for i, f in enumerate(frames)]
         rows.append((piece, anim, frames, black))
 
-gun = clean(Image.open(os.path.join(FRAMES, "Shotgun_0.png")))
-gun_flipped = gun.transpose(Image.FLIP_TOP_BOTTOM)
+# Gun sprites and grips come from art/tools/build_guns.py
+GUNS = json.load(open(os.path.join(FRAMES, "guns.json")))
+gun_images = {name: clean(Image.open(os.path.join(FRAMES, info["Frame"]))) for name, info in GUNS.items()}
+
+# Loaded shell and empty slot for the ammo bar
+shell_full = from_mask([
+    ".ooo.",
+    "occco",
+    "orrdo",
+    "orrdo",
+    "orrdo",
+    "orrdo",
+    "orrdo",
+    "oggbo",
+    "oggbo",
+    ".ooo.",
+], {"o": OUTLINE, "c": CREAM, "r": RED, "d": DARK_RED, "g": GOLD, "b": BRASS})
+shell_empty = from_mask([
+    ".sss.",
+    "s...s",
+    "s...s",
+    "s...s",
+    "s...s",
+    "s...s",
+    "s...s",
+    "s...s",
+    "s...s",
+    ".sss.",
+], {"s": SLOT})
 
 dot_mask = [".oo.", "oxxo", "oxxo", ".oo."]
 arc_dot = from_mask(dot_mask, {"o": OUTLINE, "x": RED})
@@ -112,7 +144,24 @@ mark = tile_mark()
 TEAM_WIDTH = STRIDE * 6
 width = TEAM_WIDTH * 2
 ui_y = len(rows) * STRIDE + PAD
-height = ui_y + CELL + PAD
+
+ui_images = [("TileMark", mark), ("ArcDot", arc_dot), ("ArcEdge", arc_edge), ("Pellet", pellet), ("ShellFull", shell_full), ("ShellEmpty", shell_empty)]
+for name, img in gun_images.items():
+    ui_images.append(("Gun" + name, img))
+    ui_images.append(("Gun" + name + "Flipped", img.transpose(Image.FLIP_TOP_BOTTOM)))
+
+# Shelf pack the UI sprites below the piece rows
+ui = {}
+x, y, row_height = PAD, ui_y, 0
+for name, img in ui_images:
+    w, h = img.size
+    if x + w + PAD > width:
+        x, y, row_height = PAD, y + row_height + PAD * 2, 0
+    ui[name] = (x, y, w, h)
+    x += w + PAD * 2
+    row_height = max(row_height, h)
+
+height = y + row_height + PAD
 atlas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
 
 anim_entries = {}
@@ -122,14 +171,9 @@ for r, (piece, anim, frames, black) in enumerate(rows):
         atlas.alpha_composite(black[i], (TEAM_WIDTH + PAD + i * STRIDE, PAD + r * STRIDE))
     anim_entries.setdefault(piece, {})[anim] = PAD + r * STRIDE
 
-ui = {}
-x = PAD
-for name, img in (("Shotgun", gun), ("ShotgunFlipped", gun_flipped), ("TileMark", mark), ("ArcDot", arc_dot), ("ArcEdge", arc_edge), ("Pellet", pellet)):
-    atlas.alpha_composite(img, (x, ui_y))
-    ui[name] = (x, ui_y, img.size[0], img.size[1])
-    x += img.size[0] + PAD * 2
+for name, img in ui_images:
+    atlas.alpha_composite(img, ui[name][:2])
 
-assert x <= width, x
 atlas.save(OUT_PNG)
 
 lines = []
@@ -171,8 +215,12 @@ for name, (rx, ry, rw, rh) in ui.items():
     lines.append(f"        {name} = {{{rx}, {ry}, {rw}, {rh}}},")
 lines.append("    },")
 lines.append("")
-lines.append("    -- Grip position inside the shotgun sprite, in pixels")
-lines.append("    SHOTGUN_GRIP = Vector2.new(13, 10),")
+lines.append("    -- Rect names and grip position (pixels inside the sprite) for each shotgun")
+lines.append("    Guns = {")
+for name, info in GUNS.items():
+    gx, gy = info["Grip"]
+    lines.append(f"        {name} = {{Rect = \"Gun{name}\", FlippedRect = \"Gun{name}Flipped\", Grip = Vector2.new({gx}, {gy})}},")
+lines.append("    },")
 lines.append("}")
 lines.append("")
 lines.append("return SpriteConfig")

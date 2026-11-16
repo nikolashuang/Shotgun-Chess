@@ -42,6 +42,8 @@ local previewTiles = {}
 local lastPreviewKey = nil
 
 local weapon = nil
+local gunSprite = SpriteConfig.Guns.Pump
+local aimAngle = 0
 local mode = "Normal"
 
 local ShotgunController = {}
@@ -101,11 +103,13 @@ end
 local function AimGun(angle)
     if not gunImage then return end
 
+    aimAngle = angle
+
     -- Use the flipped sprite when aiming left so the gun is never upside down
     local flipped = math.cos(angle) < 0
-    local rectName = flipped and "ShotgunFlipped" or "Shotgun"
+    local rectName = flipped and gunSprite.FlippedRect or gunSprite.Rect
     local rect = SpriteConfig.Rects[rectName]
-    local grip = SpriteConfig.SHOTGUN_GRIP
+    local grip = gunSprite.Grip
     local gripY = flipped and rect[4] - grip.Y or grip.Y
 
     SetRect(gunImage, rectName, GUN_PIVOT_TILES)
@@ -292,7 +296,9 @@ function ShotgunController.SetWeapon(shotgunName)
     if newWeapon == weapon then return end
 
     weapon = newWeapon
+    gunSprite = SpriteConfig.Guns[shotgunName]
     ClearPreviewTiles()
+    AimGun(aimAngle)
 end
 
 -- Right click switches to the shotgun's alt mode, if it has one
@@ -322,11 +328,11 @@ function ShotgunController.AttachGun(rig)
     gunPivot.Interactable = false
     gunPivot.Parent = rig
 
-    gunImage = NewSprite("Shotgun", "Shotgun", 4, GUN_PIVOT_TILES)
+    gunImage = NewSprite("Shotgun", gunSprite.Rect, 4, GUN_PIVOT_TILES)
     gunImage.Position = UDim2.fromScale(0.5, 0.5)
     gunImage.Parent = gunPivot
 
-    AimGun(0)
+    AimGun(aimAngle)
 end
 
 local function KickGun()

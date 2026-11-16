@@ -2,6 +2,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
+local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
+local AtlasImage = require(script.Parent.Parent.UI.AtlasImage)
 
 local ShopController = {}
 
@@ -23,6 +25,7 @@ function ShopController.Init()
         row.Price.Text = weapon.Price > 0 and weapon.Price .. " GOLD" or "STARTER"
         row.Tag.Text = "UNLOCKED"
         row.LayoutOrder = i
+        AtlasImage.SetRect(row.Icon, SpriteConfig.Guns[name].Rect)
         row.Visible = true
         row.Parent = panel.List
     end

@@ -10,8 +10,8 @@ Kill the enemy king.
 
 ## Board
 
-- Design doc: normal size chess board (8x8).
-- *Prototype:* still 12x12 (columns A–L), king starts at F1. Resizing deferred.
+- 12x12 board (columns A–L, rows 1–12). The player's king starts at F1.
+- Co-op matches use a 16x16 board (not implemented).
 
 ## Turn System
 
@@ -25,7 +25,6 @@ Each player turn has two events:
    - **Use special** (costs energy)
    - **Summon a piece** — placed on an empty tile within one tile of the king (costs energy)
    - **Command a piece** — move one of your pieces using its normal chess movement
-   - **Appoint an Interrupt Card** to one of your pieces
    - **Use ultimate**
    - **Reload** — refills the shotgun's magazine
 
@@ -33,8 +32,6 @@ The turn ends automatically once both events are used, or early with **End Turn*
 
 ### Enemy Turn
 
-- Interrupt Cards can only be played during the enemy's turn. Playable cards glow yellow and are played by clicking them.
-- One interrupt per enemy turn.
 - *Prototype:* test dummies don't act, so the enemy turn is a fixed 5-second window (`MatchConfig.ENEMY_TURN_TIME`).
 
 ### Commanding Pieces
@@ -127,13 +124,25 @@ Chosen in the Armory alongside the shotgun. Replaces the old Necro/Spark/WindCha
 | Rook   | 7      |
 | Queen  | 9      |
 
-## Defensive Interrupts *(idea in progress)*
+## Controls
 
-- An interrupt window opens when the enemy plays an attack and the defender has a valid card.
-- Only show the window when the defender has a valid card available.
-- One defensive interrupt per attack.
-- Short response timer (around 5 seconds).
-- Ordinary movement and summoning never trigger interrupts.
+Default keybinds, rebindable in **Settings** (session only until settings are saved to a profile):
+
+| Action | Key |
+|---|---|
+| Fire shotgun | 1 |
+| Special | E |
+| Ultimate | 3 |
+| Summon | 4 |
+| Command | 5 |
+| Reload | R |
+| End turn | X |
+
+Right click toggles a shotgun's alt mode while aiming.
+
+## Removed Mechanics
+
+- **Interrupt Cards / defensive interrupts** — discarded entirely (Nov 2026).
 
 ## Open Design Decisions
 
@@ -145,7 +154,6 @@ Not yet specified in the design doc. Do not implement guesses without confirming
 - Class numbers: soul abilities, trap damage, Quickdraw damage, what counts as an "isolated" piece, bounty energy reward
 - Gold economy and how shotguns are purchased
 - Exact ranges/arcs for Double Barrel and Long Barrel
-- Interrupt Card effects (idea in progress). The prototype uses three no-effect "Test Card" placeholders, one use each per match.
 
 ## Prototype Test Setup
 

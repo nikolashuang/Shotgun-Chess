@@ -3,7 +3,6 @@ local Players = game:GetService("Players")
 local SELECTED_COLOR = Color3.fromHex("E6C47C")
 local DEFAULT_COLOR = Color3.fromHex("354867")
 
-local buttonsByKeybind = {}
 local buttonsByAction = {}
 local selectedButton = nil
 
@@ -31,11 +30,6 @@ function ActionPanelController.Init()
         if not button:IsA("TextButton") then continue end
 
         buttonsByAction[button:GetAttribute("Action")] = button
-
-        local keybind = button:GetAttribute("Keybind")
-        if keybind then
-            buttonsByKeybind[keybind] = button
-        end
 
         button.Activated:Connect(function()
             ActionPanelController.Select(button)
@@ -77,11 +71,18 @@ function ActionPanelController.SelectAction(action)
     ActionPanelController.Select(button)
 end
 
-function ActionPanelController.SelectByKeybind(keybind)
-    local button = buttonsByKeybind[keybind]
+function ActionPanelController.ToggleAction(action)
+    local button = buttonsByAction[action]
     if not button then return end
 
     ActionPanelController.Select(button)
+end
+
+function ActionPanelController.SetKeyLabel(action, text)
+    local button = buttonsByAction[action]
+    if not button then return end
+
+    button.KeybindBadge.Text = text
 end
 
 return ActionPanelController
