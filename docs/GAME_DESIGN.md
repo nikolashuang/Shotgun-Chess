@@ -124,9 +124,9 @@ World map, bottom to top: **King's Training** (tutorial) → **Hunter Forest** (
 - The Campaign button opens its own screen. The world map scrolls vertically: King's Training at the bottom, Gravehollow at the top. It opens scrolled to the newest unlocked region.
 - Each region is a floating pixel-art island that bobs gently, joined by dotted paths. Locked islands are gray, wrapped in two chains with a padlock.
 - When a region unlocks, the map scrolls to it, the padlock shakes and drops, the chains slide off, the island fades into color and the path to it lights up.
-- Clicking a region opens its area map: the region's painting behind a branching route of 11–13 nodes to the King. Nodes have no names; a legend of the five node icons sits in the info bar.
+- Clicking a region opens its area map: a branching route of 11–13 nodes to the King, inked on a torn parchment sheet. Nodes have no names; a legend of the five node icons sits in the info bar.
 - All map data lives in `CampaignConfig`; art asset ids live in `CampaignArt`.
-- Art pipeline: `art/tools/build_islands.py` (run inside Blender with the sprite file open) builds the islands, chains and padlock from primitives and renders them to `art/campaign/islands/`, saving the scene as `art/CampaignIslands.blend`. `art/tools/build_campaign_art.py` then outlines them, makes the gray versions and packs `Islands.png`, plus the node icons, area backgrounds and logo cut from `art/reference/`.
+- Art pipeline: `art/tools/build_islands.py` (run inside Blender with the sprite file open) builds the islands, chains and padlock from primitives and renders them to `art/campaign/islands/`, saving the scene as `art/CampaignIslands.blend`. `art/tools/build_campaign_art.py` then outlines them, makes the gray versions and packs `Islands.png`, draws the parchment (`Paper.png`), and cuts the node icons and logo from `art/reference/`.
 - Node types (from the reference legend): **Battle**, **Rest Site**, **Treasure Hunt**, **Queen Fight** (the elite), **Boss Fight** (King).
 - A node opens once any node linking to it is cleared. Taking one branch doesn't lock the others.
 - Every region ends Queen → King, and nothing else links to the King. `CampaignRules.Validate` errors at server start if this is broken.

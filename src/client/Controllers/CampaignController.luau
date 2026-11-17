@@ -14,7 +14,9 @@ local HIGHLIGHT_COLOR = Color3.fromHex("F1D4AC")
 local MUTED_COLOR = Color3.fromHex("D49A77")
 local ACCENT_COLOR = Color3.fromHex("9C574B")
 local LOCKED_COLOR = Color3.fromHex("7A6E73")
-local DARK_LINE_COLOR = Color3.fromHex("271F29")
+local INK_COLOR = Color3.fromHex("332A35")
+-- Routes not walked yet are drawn faint on the paper
+local FAINT_INK_TRANSPARENCY = 0.6
 
 local LEGEND_ORDER = {"Combat", "Rest", "Treasure", "Queen", "King"}
 
@@ -22,6 +24,9 @@ local LEGEND_ORDER = {"Combat", "Rest", "Treasure", "Queen", "King"}
 local WORLD_CANVAS_HEIGHT = 2.8
 local ISLAND_WIDTH = 0.34
 local ISLAND_COLUMNS = {0.32, 0.68}
+-- Canvas heights of the top and bottom islands, leaving room for the art above and the names below
+local ISLAND_TOP = 0.12
+local ISLAND_BOTTOM = 0.86
 -- Paths leave from the middle of the island art, which sits a little above the holder's center
 local ISLAND_CENTER_Y = -0.02
 
@@ -172,9 +177,9 @@ end
 
 -- Islands climb from the bottom of the canvas, alternating sides
 local function GetIslandPosition(index)
-    local count = #CampaignConfig.ORDER
+    local t = (index - 1) / (#CampaignConfig.ORDER - 1)
 
-    return {ISLAND_COLUMNS[(index - 1) % 2 + 1], 1 - (index - 0.5) / count}
+    return {ISLAND_COLUMNS[(index - 1) % 2 + 1], ISLAND_BOTTOM + (ISLAND_TOP - ISLAND_BOTTOM) * t}
 end
 
 local function GetPathPoint(index)
@@ -469,17 +474,12 @@ function CampaignController.ShowRegion(regionId)
     currentRegion = regionId
 
     local region = CampaignConfig.Regions[regionId]
-    local art = CampaignArt.Regions[regionId]
     local cleared = GetCleared()
 
     header.Text = region.DisplayName
     info.Text = region.Subtitle .. "\nSelect a node"
     playButton.Visible = false
     ShowView(false)
-
-    scene.Image = art.Image
-    scene.ImageRectOffset = Vector2.new(art.Scene[1], art.Scene[2])
-    scene.ImageRectSize = Vector2.new(art.Scene[3], art.Scene[4])
 
     ClearChildren(map)
     nodeButtons = {}
@@ -488,7 +488,8 @@ function CampaignController.ShowRegion(regionId)
         local isOpen = CampaignRules.IsCleared(cleared, regionId, nodeId)
 
         for _, link in ipairs(node.Links) do
-            DrawLine(map, node.Position, region.Nodes[link].Position, isOpen and HIGHLIGHT_COLOR or DARK_LINE_COLOR, AREA_LINE_WIDTH)
+            local line = DrawLine(map, node.Position, region.Nodes[link].Position, isOpen and ACCENT_COLOR or INK_COLOR, AREA_LINE_WIDTH)
+            line.BackgroundTransparency = isOpen and 0 or FAINT_INK_TRANSPARENCY
         end
     end
 
@@ -644,6 +645,7 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
 
     areaView = root:WaitForChild("AreaView")
     scene = areaView:WaitForChild("Scene")
+    scene.Image = CampaignArt.PAPER
     map = areaView:WaitForChild("Map")
 
     local infoBar = areaView:WaitForChild("InfoBar")

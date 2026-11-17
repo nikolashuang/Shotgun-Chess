@@ -14,14 +14,8 @@ local CampaignArt = {
     IslandColumn = {Training = 0, Forest = 1, Cliffside = 2, Outskirts = 3, Gravehollow = 4},
     LockColumn = {ChainA = 0, ChainB = 1, Lock = 2},
 
-    -- Area map backgrounds: Size is the full painted panel; Scene is the part without the title banner and badge, used behind area maps
-    Regions = {
-        Training = {Image = "rbxassetid://109861305585942", Size = {480, 326}, Scene = {0, 52, 480, 236}},
-        Forest = {Image = "rbxassetid://71484457402117", Size = {494, 326}, Scene = {0, 52, 494, 236}},
-        Cliffside = {Image = "rbxassetid://70595856593672", Size = {490, 324}, Scene = {0, 52, 490, 234}},
-        Outskirts = {Image = "rbxassetid://111929062853601", Size = {524, 296}, Scene = {0, 50, 524, 208}},
-        Gravehollow = {Image = "rbxassetid://98556437228024", Size = {530, 296}, Scene = {0, 50, 530, 208}},
-    },
+    -- Parchment behind every area map
+    PAPER = "rbxassetid://96902313749636",
 }
 
 return CampaignArt

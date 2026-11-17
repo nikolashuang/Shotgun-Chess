@@ -1,5 +1,5 @@
-# Builds the campaign and menu images from the reference art in art/reference
-# and the island renders made by build_islands.py in art/campaign/islands.
+# Builds the campaign and menu images: node icons and logo from art/reference,
+# islands from the build_islands.py renders in art/campaign/islands, and the area map parchment.
 # Run from the repo root: python art/tools/build_campaign_art.py
 # Outputs go to art/campaign/. Upload them to Roblox and put the asset ids in CampaignArt.luau.
 import math, os, sys
@@ -10,15 +10,6 @@ ROOT = sys.argv[1] if len(sys.argv) > 1 else "."
 REFERENCE = os.path.join(ROOT, "art", "reference", "campaign_reference.png")
 LOGO = os.path.join(ROOT, "art", "reference", "logo_source.png")
 OUT = os.path.join(ROOT, "art", "campaign")
-
-# Painted region panels in the reference sheet: left, top, right, bottom
-REGIONS = {
-    "Training": (16, 112, 496, 438),
-    "Forest": (516, 112, 1010, 438),
-    "Cliffside": (1032, 114, 1522, 438),
-    "Outskirts": (14, 474, 538, 770),
-    "Gravehollow": (556, 474, 1086, 770),
-}
 
 # Node badges from the route strip: (type, center x, center y, shape, radius)
 # Octagons are measured by apothem, hexagons by corner radius
@@ -39,6 +30,12 @@ LOCK_LAYERS = ["ChainA", "ChainB", "Lock"]
 ISLAND_SIZE = 160
 OUTLINE = (0x1E, 0x18, 0x20, 255)
 
+# Parchment behind the area maps, in pixels; shown about 4x larger in game
+PAPER_SIZE = (300, 120)
+PAPER_SEED = 7
+# Lightest to darkest paper tones, the last two only appear near the burnt edges
+PAPER_TONES = [(0xF4, 0xE6, 0xCC), (0xF1, 0xD4, 0xAC), (0xE4, 0xBE, 0x92), (0xD4, 0x9A, 0x77), (0x9C, 0x57, 0x4B)]
+
 
 def polygon(cx, cy, shape, radius):
     if shape == "octagon":
@@ -49,12 +46,6 @@ def polygon(cx, cy, shape, radius):
         angles = [90 + 60 * i for i in range(6)]
 
     return [(cx + corner * math.cos(math.radians(a)), cy + corner * math.sin(math.radians(a))) for a in angles]
-
-
-def build_regions(ref):
-    for name, box in REGIONS.items():
-        ref.crop(box).save(os.path.join(OUT, f"Region_{name}.png"))
-        print(name, box[2] - box[0], box[3] - box[1])
 
 
 def build_nodes(ref):
@@ -109,6 +100,49 @@ def build_logo():
     print("Logo", size)
 
 
+def smooth_noise(rng, width, height, cell):
+    grid = rng.random((height // cell + 2, width // cell + 2))
+    image = Image.fromarray((grid * 255).astype(np.uint8), "L")
+    return np.array(image.resize((width + cell, height + cell), Image.BICUBIC))[:height, :width] / 255
+
+
+# Pixel parchment with ragged edges, stains, two fold creases and darkened edges
+def build_paper():
+    rng = np.random.default_rng(PAPER_SEED)
+    width, height = PAPER_SIZE
+    inset = 5
+
+    # Ragged edges: each side wanders in and out by a few pixels
+    def edge(length):
+        walk = np.cumsum(rng.integers(-1, 2, length))
+        return np.clip(inset + walk - walk.mean(), 1, inset * 2).astype(int)
+
+    top, bottom, left, right = edge(width), edge(width), edge(height), edge(height)
+    ys, xs = np.mgrid[0:height, 0:width]
+    inside = (ys >= top[xs]) & (ys < height - bottom[xs]) & (xs >= left[ys]) & (xs < width - right[ys])
+
+    # Distance to the nearest edge, for the burnt rim
+    distance = np.minimum.reduce([ys - top[xs], height - 1 - bottom[xs] - ys, xs - left[ys], width - 1 - right[ys] - xs])
+
+    stains = smooth_noise(rng, width, height, 18) * 0.7 + smooth_noise(rng, width, height, 6) * 0.3
+    tone = np.digitize(stains, [0.3, 0.72, 0.9])
+    tone[distance < 6] = np.maximum(tone[distance < 6], 2)
+    tone[distance < 3] = 3
+    tone[distance < 1] = 4
+
+    # Fold creases a third of the way in from each side
+    for x in (width // 3, width * 2 // 3):
+        tone[:, x] = np.maximum(tone[:, x], 2)
+
+    pixels = np.zeros((height, width, 4), np.uint8)
+    for i, color in enumerate(PAPER_TONES):
+        pixels[(tone == i) & inside] = color + (255,)
+
+    paper = outline(Image.fromarray(pixels, "RGBA"))
+    paper.save(os.path.join(OUT, "Paper.png"))
+    print("Paper", paper.size)
+
+
 # 1px dark outline around every opaque pixel, like the piece sprites
 def outline(image):
     pixels = np.array(image)
@@ -154,7 +188,7 @@ def build_islands():
 
 os.makedirs(OUT, exist_ok=True)
 reference = Image.open(REFERENCE).convert("RGB")
-build_regions(reference)
 build_nodes(reference)
 build_logo()
 build_islands()
+build_paper()

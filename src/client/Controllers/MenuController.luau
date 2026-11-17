@@ -8,18 +8,19 @@ local ProgressionRules = require(ReplicatedStorage.Shared.Player.ProgressionRule
 local HOVER_OFFSET = 0.02
 local HOVER_TIME = 0.12
 
-local HOVER_STROKE = Color3.fromHex("F1D4AC")
-local DEFAULT_STROKE = Color3.fromHex("9C574B")
+local HOVER_COLOR = Color3.fromHex("F1D4AC")
 
 local hoverResets = {}
 local root = nil
 
 local MenuController = {}
 
+-- Menu buttons are plain text: hovering slides the label right and brightens it
 local function BindHover(button)
     local restPosition = button.Position
     local hoverPosition = restPosition + UDim2.fromScale(HOVER_OFFSET, 0)
-    local stroke = button:FindFirstChildOfClass("UIStroke")
+    local label = button.Label
+    local restColor = label.TextColor3
     local tweenInfo = TweenInfo.new(HOVER_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     local tween = nil
 
@@ -34,12 +35,12 @@ local function BindHover(button)
 
     button.MouseEnter:Connect(function()
         TweenTo(hoverPosition)
-        stroke.Color = HOVER_STROKE
+        label.TextColor3 = HOVER_COLOR
     end)
 
     button.MouseLeave:Connect(function()
         TweenTo(restPosition)
-        stroke.Color = DEFAULT_STROKE
+        label.TextColor3 = restColor
     end)
 
     -- MouseLeave never fires when the menu hides under the cursor, so this snaps the button back
@@ -49,7 +50,7 @@ local function BindHover(button)
         end
 
         button.Position = restPosition
-        stroke.Color = DEFAULT_STROKE
+        label.TextColor3 = restColor
     end)
 end
 
