@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local CampaignConfig = require(ReplicatedStorage.Shared.Campaign.CampaignConfig)
 local CampaignRules = require(ReplicatedStorage.Shared.Campaign.CampaignRules)
 local MatchClass = require(ServerScriptService.Match.MatchClass)
@@ -63,6 +64,26 @@ function CampaignService.CompleteNode(player, regionId, nodeId)
     }
 end
 
+-- Shifts the whole formation up the board without letting its back piece go off the edge
+local function PlaceArmy(army)
+    local frontRow = math.huge
+    local backRow = 0
+
+    for _, enemy in ipairs(army) do
+        frontRow = math.min(frontRow, enemy.Row)
+        backRow = math.max(backRow, enemy.Row)
+    end
+
+    local offset = math.clamp(CampaignConfig.ARMY_FRONT_ROW - frontRow, 0, BoardConfig.SIZE - backRow)
+    local placed = {}
+
+    for _, enemy in ipairs(army) do
+        table.insert(placed, {Type = enemy.Type, Column = enemy.Column, Row = enemy.Row + offset})
+    end
+
+    return placed
+end
+
 function CampaignService.CreateMatch(player, regionId, nodeId)
     if not CanPlay(player, regionId, nodeId) then return nil end
 
@@ -70,7 +91,7 @@ function CampaignService.CreateMatch(player, regionId, nodeId)
     if not CampaignRules.IsBattle(node) then return nil end
 
     local shotgun, class = LoadoutService.GetLoadout(player)
-    local match = MatchClass.new(player, shotgun, class, CampaignConfig.Armies[node.Army])
+    local match = MatchClass.new(player, shotgun, class, PlaceArmy(CampaignConfig.Armies[node.Army]))
 
     match.OnEnd = function(result)
         local summary = {Victory = false, Region = regionId, Node = nodeId}

@@ -17,6 +17,9 @@ local MOVE_COLOR = Color3.fromHex("9C574B")
 local SUMMON_COLOR = Color3.fromHex("F1D4AC")
 local SELECT_COLOR = Color3.fromHex("F1D4AC")
 local ATTACK_COLOR = Color3.fromHex("C8644F")
+-- Light fill so commanded moves stand out on both tile colors
+local COMMAND_MOVE_COLOR = Color3.fromHex("E9E3D6")
+local COMMAND_OUTLINE_COLOR = Color3.fromHex("332A35")
 local MOVE_OUTLINE_COLOR = Color3.fromHex("F1D4AC")
 
 -- In pixels
@@ -102,12 +105,15 @@ local function GetMoveOutline(tile)
     return outline
 end
 
-local function HighlightTile(column, row, color, transparency, isOutlined)
+local function HighlightTile(column, row, color, transparency, isOutlined, outlineColor)
     local tile = GetTile(column, row)
     if not tile then return end
 
+    local outline = GetMoveOutline(tile)
+    outline.Visible = isOutlined == true
+    outline.UIStroke.Color = outlineColor or MOVE_OUTLINE_COLOR
+
     SetOverlay(tile, color, transparency)
-    GetMoveOutline(tile).Visible = isOutlined == true
     table.insert(previewTiles, tile)
 end
 
@@ -151,6 +157,8 @@ function BoardController.RefreshPreview()
     if selectedAction ~= "Summon" then
         SummonPanelController.ClearSelection()
     end
+
+    SummonPanelController.SetOpen(selectedAction == "Summon")
 
     if selectedAction ~= "Command" then
         commandPieceId = nil
@@ -205,11 +213,11 @@ function BoardController.RefreshPreview()
         HighlightTile(selectedPiece.Rig.Column, selectedPiece.Rig.Row, SELECT_COLOR, 0.35)
 
         for _, move in pairs(GetCommandMoves(selectedPiece)) do
-            HighlightTile(move.Column, move.Row, MOVE_COLOR, 0.45)
+            HighlightTile(move.Column, move.Row, COMMAND_MOVE_COLOR, 0.35, true, COMMAND_OUTLINE_COLOR)
         end
 
         for _, attack in pairs(PieceRules.GetAttacks(selectedPiece.Type, selectedPiece.Team, selectedPiece.Rig.Column, selectedPiece.Rig.Row, IsOccupied, IsEnemyTile)) do
-            HighlightTile(attack.Column, attack.Row, ATTACK_COLOR, 0.45, true)
+            HighlightTile(attack.Column, attack.Row, ATTACK_COLOR, 0.3, true)
         end
     end
 end

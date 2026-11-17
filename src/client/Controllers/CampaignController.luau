@@ -33,15 +33,14 @@ local ISLAND_CENTER_Y = -0.02
 -- In pixels
 local PATH_DOT_SIZE = 6
 local PATH_DOT_SPACING = 18
-local AREA_LINE_WIDTH = 4
 
 -- Islands drift up and down by this fraction of their height
 local BOB_HEIGHT = 0.025
 local BOB_TIME = 1.6
 
 -- Node badge size as a fraction of the map height
-local NODE_SIZE = 0.2
-local BOSS_NODE_SIZE = 0.25
+local NODE_SIZE = 0.15
+local BOSS_NODE_SIZE = 0.22
 local SELECTED_SCALE = 1.15
 local PULSE_SCALE = 1.08
 local PULSE_TIME = 0.6
@@ -101,23 +100,6 @@ local function Tween(instance, time, goal, style, direction)
     tween:Play()
 
     return tween
-end
-
--- Positions are scale coordinates inside container
-local function DrawLine(container, from, to, color, width)
-    local size = container.AbsoluteSize
-    local dx = (to[1] - from[1]) * size.X
-    local dy = (to[2] - from[2]) * size.Y
-
-    local line = lineTemplate:Clone()
-    line.Position = UDim2.fromScale((from[1] + to[1]) / 2, (from[2] + to[2]) / 2)
-    line.Size = UDim2.new(0, math.sqrt(dx * dx + dy * dy), 0, width)
-    line.Rotation = math.deg(math.atan2(dy, dx))
-    line.BackgroundColor3 = color
-    line.Visible = true
-    line.Parent = container
-
-    return line
 end
 
 -- A dotted pixel path, returns the dots so the unlock animation can light them up
@@ -488,8 +470,9 @@ function CampaignController.ShowRegion(regionId)
         local isOpen = CampaignRules.IsCleared(cleared, regionId, nodeId)
 
         for _, link in ipairs(node.Links) do
-            local line = DrawLine(map, node.Position, region.Nodes[link].Position, isOpen and ACCENT_COLOR or INK_COLOR, AREA_LINE_WIDTH)
-            line.BackgroundTransparency = isOpen and 0 or FAINT_INK_TRANSPARENCY
+            for _, dot in ipairs(DrawPath(map, node.Position, region.Nodes[link].Position, isOpen and ACCENT_COLOR or INK_COLOR)) do
+                dot.BackgroundTransparency = isOpen and 0 or FAINT_INK_TRANSPARENCY
+            end
         end
     end
 

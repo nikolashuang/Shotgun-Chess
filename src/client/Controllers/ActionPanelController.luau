@@ -8,6 +8,7 @@ local CLASS_ACTIONS = {"Special", "Ultimate"}
 
 local buttonsByAction = {}
 local selectedButton = nil
+local abilityPanel = nil
 
 local ActionPanelController = {}
 
@@ -26,17 +27,19 @@ function ActionPanelController.Init()
     if init then return end
     init = true
 
-    local hud = Players.LocalPlayer.PlayerGui:WaitForChild("GameHUD")
-    local actionPanel = hud:WaitForChild("Root"):WaitForChild("ActionPanel")
+    local root = Players.LocalPlayer.PlayerGui:WaitForChild("GameHUD"):WaitForChild("Root")
+    abilityPanel = root:WaitForChild("AbilityPanel")
 
-    for _, button in pairs(actionPanel:GetChildren()) do
-        if not button:IsA("TextButton") then continue end
+    for _, panel in ipairs({root:WaitForChild("ActionPanel"), abilityPanel}) do
+        for _, button in pairs(panel:GetChildren()) do
+            if not button:IsA("TextButton") then continue end
 
-        buttonsByAction[button:GetAttribute("Action")] = button
+            buttonsByAction[button:GetAttribute("Action")] = button
 
-        button.Activated:Connect(function()
-            ActionPanelController.Select(button)
-        end)
+            button.Activated:Connect(function()
+                ActionPanelController.Select(button)
+            end)
+        end
     end
 end
 
@@ -94,6 +97,8 @@ function ActionPanelController.SetClassActionsVisible(isVisible)
             button.Visible = isVisible
         end
     end
+
+    abilityPanel.Visible = isVisible
 end
 
 function ActionPanelController.SetKeyLabel(action, text)

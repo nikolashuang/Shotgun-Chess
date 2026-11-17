@@ -28,13 +28,12 @@ function GameMenuController.Init(leaveMatch, onReturn)
     local playerGui = Players.LocalPlayer.PlayerGui
     local menu = playerGui:WaitForChild("MainMenu")
     local hud = playerGui:WaitForChild("GameHUD")
-    local root = hud:WaitForChild("Root")
 
     overlay = hud:WaitForChild("PauseOverlay")
     pausePanel = overlay:WaitForChild("PausePanel")
     keybindsPanel = overlay:WaitForChild("KeybindsPanel")
 
-    root:WaitForChild("SettingsButton").Activated:Connect(function()
+    hud:WaitForChild("SettingsButton").Activated:Connect(function()
         if overlay.Visible then
             Close()
         else

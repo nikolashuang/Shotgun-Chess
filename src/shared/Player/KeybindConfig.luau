@@ -13,11 +13,11 @@ local KeybindConfig = {
 
     -- Enum.KeyCode names
     Defaults = {
-        Fire = "One",
+        Fire = "Q",
         Special = "E",
-        Ultimate = "Three",
-        Summon = "Four",
-        Command = "Five",
+        Ultimate = "F",
+        Summon = "W",
+        Command = "A",
         Reload = "R",
         EndTurn = "X",
     },

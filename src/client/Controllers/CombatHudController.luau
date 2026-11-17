@@ -113,18 +113,18 @@ function CombatHudController.Init()
     local hud = Players.LocalPlayer.PlayerGui:WaitForChild("GameHUD")
     local root = hud:WaitForChild("Root")
     local actionPanel = root:WaitForChild("ActionPanel")
-    local ultimateButton = actionPanel:WaitForChild("UltimateButton")
+    local ultimateButton = root:WaitForChild("AbilityPanel"):WaitForChild("UltimateButton")
     local ammoBar = root:WaitForChild("AmmoBar")
-    local rightPanel = root:WaitForChild("RightPanel")
+    local energyPanel = root:WaitForChild("EnergyPanel")
 
     fireLabel = actionPanel:WaitForChild("FireButton"):WaitForChild("Label")
     gunIcon = ammoBar:WaitForChild("GunIcon")
     slugFrame = ammoBar:WaitForChild("Slugs")
     chargeFill = ultimateButton:WaitForChild("ChargeBar"):WaitForChild("ChargeFill")
     chargeText = ultimateButton:WaitForChild("ChargeText")
-    energyBar = rightPanel:WaitForChild("EnergyBar")
+    energyBar = energyPanel:WaitForChild("EnergyBar")
     energyFill = energyBar:WaitForChild("Fill")
-    energyCount = rightPanel:WaitForChild("EnergyCount")
+    energyCount = energyPanel:WaitForChild("EnergyCount")
 
     ShotgunController.OnModeChanged = UpdateFireLabel
 

@@ -1,4 +1,5 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 
 local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
@@ -17,7 +18,14 @@ local CARD_PIECES = {
     QueenCard = "Queen",
 }
 
+local SLIDE_INFO = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
 local cardsByPiece = {}
+local hud = nil
+local root = nil
+local summonPanel = nil
+local openPosition = nil
+local isOpen = false
 
 local SummonPanelController = {}
 
@@ -55,16 +63,39 @@ function SummonPanelController.SelectPiece(pieceType)
     end
 end
 
+-- Offset that pushes the panel just past the right edge of the screen
+local function GetClosedPosition()
+    if hud.AbsoluteSize.X == 0 then
+        return openPosition + UDim2.fromScale(1, 0)
+    end
+
+    local openRight = root.AbsolutePosition.X + openPosition.X.Scale * root.AbsoluteSize.X
+    local offset = hud.AbsoluteSize.X - openRight + 10
+
+    return openPosition + UDim2.fromOffset(offset, 0)
+end
+
+-- Cards stay off screen until Summon is selected, so they can't be picked first
+function SummonPanelController.SetOpen(open)
+    if open == isOpen then return end
+    isOpen = open
+
+    local goal = open and openPosition or GetClosedPosition()
+    TweenService:Create(summonPanel, SLIDE_INFO, {Position = goal}):Play()
+end
+
 local init = false
 function SummonPanelController.Init()
     if init then return end
     init = true
 
-    local hud = Players.LocalPlayer.PlayerGui:WaitForChild("GameHUD")
-    local rightPanel = hud:WaitForChild("Root"):WaitForChild("RightPanel")
+    hud = Players.LocalPlayer.PlayerGui:WaitForChild("GameHUD")
+    root = hud:WaitForChild("Root")
+    summonPanel = root:WaitForChild("RightPanel")
+    openPosition = summonPanel.Position
 
     for cardName, pieceType in pairs(CARD_PIECES) do
-        local card = rightPanel:WaitForChild(cardName)
+        local card = summonPanel:WaitForChild(cardName)
         cardsByPiece[pieceType] = card
         card:WaitForChild("Cost").Text = PieceConfig.Cost[pieceType] .. " Energy"
 
@@ -75,6 +106,14 @@ function SummonPanelController.Init()
             SummonPanelController.SelectPiece(pieceType)
         end)
     end
+
+    summonPanel.Position = GetClosedPosition()
+
+    hud:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+        if isOpen then return end
+
+        summonPanel.Position = GetClosedPosition()
+    end)
 end
 
 return SummonPanelController

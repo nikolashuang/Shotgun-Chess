@@ -44,6 +44,29 @@ local function ToBoardPosition(column, row)
     return UDim2.fromScale((column - 0.5) / BoardConfig.SIZE, 1 - (row - 0.5) / BoardConfig.SIZE)
 end
 
+-- Lower rows draw on top so a piece never covers the one in front of it
+local function PlaceRig(rig, column, row, lift)
+    rig.Position = ToBoardPosition(column, row + (lift or 0))
+    rig.ZIndex = BoardConfig.SIZE - math.round(row) + 1
+end
+
+-- Rigs share one layer so their row ordering doesn't mix with tiles, tracers or health bars
+local function GetPieceLayer(board)
+    local layer = board:FindFirstChild("Pieces")
+
+    if not layer then
+        layer = Instance.new("Frame")
+        layer.Name = "Pieces"
+        layer.BackgroundTransparency = 1
+        layer.Size = UDim2.fromScale(1, 1)
+        layer.ZIndex = 3
+        layer.Interactable = false
+        layer.Parent = board
+    end
+
+    return layer
+end
+
 local function GetBarLayer(board)
     local layer = board:FindFirstChild("HealthBars")
 
@@ -78,7 +101,7 @@ function PieceRigClass.new(board, pieceType, team)
     self.Rig.Size = UDim2.fromScale(1 / BoardConfig.SIZE, 1 / BoardConfig.SIZE)
     self.Rig.ZIndex = 3
     self.Rig.Interactable = false
-    self.Rig.Parent = board
+    self.Rig.Parent = GetPieceLayer(board)
 
     self.Sprite = AnimatedSpriteClass.new(pieceType, self.Rig, team)
     self.Sprite.Image.AnchorPoint = Vector2.new(0.5, 1)
@@ -167,7 +190,7 @@ end
 function PieceRigClass:SetTile(column, row)
     self.Column = column
     self.Row = row
-    self.Rig.Position = ToBoardPosition(column, row)
+    PlaceRig(self.Rig, column, row)
 end
 
 -- Animates a hop between two board positions without changing the rig's tile
@@ -185,9 +208,9 @@ function PieceRigClass:Hop(fromColumn, fromRow, toColumn, toRow, onLanded)
     self.HopConnection = RunService.RenderStepped:Connect(function()
         local alpha = math.min((time() - startTime) / duration, 1)
         local hopColumn = fromColumn + (toColumn - fromColumn) * alpha
-        local hopRow = fromRow + (toRow - fromRow) * alpha + math.sin(alpha * math.pi) * HOP_HEIGHT
+        local hopRow = fromRow + (toRow - fromRow) * alpha
 
-        self.Rig.Position = ToBoardPosition(hopColumn, hopRow)
+        PlaceRig(self.Rig, hopColumn, hopRow, math.sin(alpha * math.pi) * HOP_HEIGHT)
 
         if alpha < 1 then return end
 
