@@ -20,7 +20,7 @@ local ShotgunConfig = {
     -- Ranges, arcs and damage are placeholders until the design doc gives numbers
     Shotguns = {
         Pump = {
-            DisplayName = "PUMP",
+            DisplayName = "Pump",
             Description = "Starter shotgun. Medium range, medium damage.",
             Price = 0,
 
@@ -36,7 +36,7 @@ local ShotgunConfig = {
         },
 
         DoubleBarrel = {
-            DisplayName = "DOUBLE BARREL",
+            DisplayName = "Double Barrel",
             Description = "Fires both barrels: double damage, uses 2 shells. Shorter range.",
             Price = 2000,
 
@@ -52,7 +52,7 @@ local ShotgunConfig = {
         },
 
         BuckBarrel = {
-            DisplayName = "BUCK BARREL",
+            DisplayName = "Buck Barrel",
             Description = "Right click for a precise shot: 3 tile line that pierces for max damage. Needs all 3 shells.",
             Price = 2100,
 
@@ -74,7 +74,7 @@ local ShotgunConfig = {
         },
 
         LongBarrel = {
-            DisplayName = "LONG BARREL",
+            DisplayName = "Long Barrel",
             Description = "5 tile range with a very tight spread.",
             Price = 3500,
 
@@ -90,7 +90,7 @@ local ShotgunConfig = {
         },
 
         KnifeShotty = {
-            DisplayName = "KNIFE SHOTTY",
+            DisplayName = "Knife Shotty",
             Description = "Right click to swing at adjacent enemies: 6 damage and bleed. Works with no ammo.",
             Price = 2400,
 

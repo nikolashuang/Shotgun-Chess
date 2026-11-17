@@ -4,10 +4,10 @@ local Players = game:GetService("Players")
 local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local AnimatedSpriteClass = require(script.Parent.Parent.UI.AnimatedSpriteClass)
 
-local SELECTED_COLOR = Color3.fromHex("E6C47C")
-local DEFAULT_COLOR = Color3.fromHex("354867")
-local AFFORDABLE_COLOR = Color3.fromHex("698FA9")
-local EXPENSIVE_COLOR = Color3.fromHex("D9544D")
+local SELECTED_COLOR = Color3.fromHex("F1D4AC")
+local DEFAULT_COLOR = Color3.fromHex("9C574B")
+local AFFORDABLE_COLOR = Color3.fromHex("D49A77")
+local EXPENSIVE_COLOR = Color3.fromHex("C8644F")
 
 local CARD_PIECES = {
     PawnCard = "Pawn",
@@ -66,7 +66,7 @@ function SummonPanelController.Init()
     for cardName, pieceType in pairs(CARD_PIECES) do
         local card = rightPanel:WaitForChild(cardName)
         cardsByPiece[pieceType] = card
-        card:WaitForChild("Cost").Text = PieceConfig.Cost[pieceType] .. " ENERGY"
+        card:WaitForChild("Cost").Text = PieceConfig.Cost[pieceType] .. " Energy"
 
         local sprite = AnimatedSpriteClass.new(pieceType, card:WaitForChild("Sprite"))
         sprite.Image.Size = UDim2.fromScale(1, 1)

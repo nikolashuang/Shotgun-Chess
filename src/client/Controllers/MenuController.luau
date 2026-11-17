@@ -3,14 +3,16 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
 local ProgressionConfig = require(ReplicatedStorage.Shared.Player.ProgressionConfig)
+local ProgressionRules = require(ReplicatedStorage.Shared.Player.ProgressionRules)
 
 local HOVER_OFFSET = 0.02
 local HOVER_TIME = 0.12
 
-local HOVER_STROKE = Color3.fromHex("E6C47C")
-local DEFAULT_STROKE = Color3.fromHex("354867")
+local HOVER_STROKE = Color3.fromHex("F1D4AC")
+local DEFAULT_STROKE = Color3.fromHex("9C574B")
 
 local hoverResets = {}
+local root = nil
 
 local MenuController = {}
 
@@ -59,11 +61,24 @@ local function CloseAllPanels(root)
     end
 end
 
--- Level and Exp are read from player attributes once a progression system sets them
+local function IsDuelsUnlocked()
+    local level = Players.LocalPlayer:GetAttribute("Level") or ProgressionConfig.START_LEVEL
+
+    return level >= ProgressionConfig.DUELS_UNLOCK_LEVEL
+end
+
+local function UpdateDuelsLock(button)
+    local isUnlocked = IsDuelsUnlocked()
+
+    button.Label.Text = isUnlocked and "Duels" or "Duels [Lv " .. ProgressionConfig.DUELS_UNLOCK_LEVEL .. "]"
+    button.Label.TextTransparency = isUnlocked and 0 or 0.5
+end
+
+-- Level, Exp and Gold are player attributes set by the server profile
 local function BindProfile(profile)
     local player = Players.LocalPlayer
 
-    profile.Username.Text = string.upper(player.Name)
+    profile.Username.Text = player.Name
 
     task.spawn(function()
         local ok, image = pcall(function()
@@ -78,28 +93,44 @@ local function BindProfile(profile)
     local function UpdateProgress()
         local level = player:GetAttribute("Level") or ProgressionConfig.START_LEVEL
         local exp = player:GetAttribute("Exp") or 0
+        local needed = ProgressionRules.GetExpToLevel(level)
 
-        profile.Level.Text = "LV " .. level
-        profile.Exp.Text = string.format("%d/%d XP", exp, ProgressionConfig.EXP_PER_LEVEL)
-        profile.ExpBar.Fill.Size = UDim2.fromScale(math.clamp(exp / ProgressionConfig.EXP_PER_LEVEL, 0, 1), 1)
+        profile.Level.Text = "Lv " .. level
+        profile.Exp.Text = string.format("%d/%d XP", exp, needed)
+        profile.ExpBar.Fill.Size = UDim2.fromScale(math.clamp(exp / needed, 0, 1), 1)
+    end
+
+    local function UpdateGold()
+        profile.Gold.Text = (player:GetAttribute("Gold") or 0) .. " Gold"
     end
 
     player:GetAttributeChangedSignal("Level"):Connect(UpdateProgress)
     player:GetAttributeChangedSignal("Exp"):Connect(UpdateProgress)
+    player:GetAttributeChangedSignal("Gold"):Connect(UpdateGold)
     UpdateProgress()
+    UpdateGold()
 end
+
 
 local init = false
 function MenuController.Init(startMatch)
     if init then return end
     init = true
 
-    local playerGui = Players.LocalPlayer.PlayerGui
+    local player = Players.LocalPlayer
+    local playerGui = player.PlayerGui
     local menu = playerGui:WaitForChild("MainMenu")
     local hud = playerGui:WaitForChild("GameHUD")
-    local root = menu:WaitForChild("Root")
+    local campaign = playerGui:WaitForChild("CampaignScreen")
+    root = menu:WaitForChild("Root")
 
     BindProfile(root:WaitForChild("Profile"))
+
+    local duelsButton = root:WaitForChild("DuelsButton")
+    player:GetAttributeChangedSignal("Level"):Connect(function()
+        UpdateDuelsLock(duelsButton)
+    end)
+    UpdateDuelsLock(duelsButton)
 
     for _, button in pairs(root:GetChildren()) do
         if not button:IsA("TextButton") then continue end
@@ -109,10 +140,17 @@ function MenuController.Init(startMatch)
         BindHover(button)
 
         button.Activated:Connect(function()
-            if option == "Campaign" or option == "Duels" then
+            -- Campaign has its own screen; Duels starts a match once unlocked
+            if option == "Campaign" then
+                menu.Enabled = false
+                campaign.Enabled = true
+                return
+            elseif option == "Duels" then
+                if not IsDuelsUnlocked() then return end
+
                 menu.Enabled = false
                 hud.Enabled = true
-                startMatch()
+                startMatch("Duel")
                 return
             end
 
@@ -127,9 +165,10 @@ function MenuController.Init(startMatch)
         end)
     end
 
-    -- Returning from a match shows the menu fresh
+    -- Leaving the menu resets it so returning from a match shows it fresh
+    -- (done on hide so a panel opened on return, like the campaign map, isn't closed by this deferred handler)
     menu:GetPropertyChangedSignal("Enabled"):Connect(function()
-        if not menu.Enabled then return end
+        if menu.Enabled then return end
 
         for _, reset in pairs(hoverResets) do
             reset()

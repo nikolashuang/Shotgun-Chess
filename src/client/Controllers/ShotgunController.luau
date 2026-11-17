@@ -9,9 +9,9 @@ local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 
-local HIT_COLOR = Color3.fromHex("D9544D")
-local TRACER_COLOR = Color3.fromHex("F0E9D8")
-local OUTLINE_COLOR = Color3.fromHex("171D32")
+local HIT_COLOR = Color3.fromHex("C8644F")
+local TRACER_COLOR = Color3.fromHex("E9E3D6")
+local OUTLINE_COLOR = Color3.fromHex("271F29")
 
 -- Sizes and speeds in tiles
 local PIXEL = SpriteConfig.CELL_TILES / SpriteConfig.CELL

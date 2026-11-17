@@ -13,7 +13,7 @@ local InputController = {}
 InputController.OnBindingsChanged = nil
 
 function InputController.GetKeyLabel(keyCode)
-    return KeybindConfig.KeyLabels[keyCode.Name] or string.upper(keyCode.Name)
+    return KeybindConfig.KeyLabels[keyCode.Name] or keyCode.Name
 end
 
 function InputController.GetBinding(action)

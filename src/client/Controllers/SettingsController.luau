@@ -3,8 +3,8 @@ local Players = game:GetService("Players")
 
 local KeybindConfig = require(ReplicatedStorage.Shared.Player.KeybindConfig)
 
-local WAITING_COLOR = Color3.fromHex("E6C47C")
-local DEFAULT_COLOR = Color3.fromHex("354867")
+local WAITING_COLOR = Color3.fromHex("F1D4AC")
+local DEFAULT_COLOR = Color3.fromHex("9C574B")
 
 local input = nil
 local rows = {}
@@ -19,7 +19,7 @@ local function Refresh()
         local action = row.Name
         local isCapturing = action == capturingAction
 
-        row.Key.Text = isCapturing and "PRESS KEY" or input.GetKeyLabel(input.GetBinding(action))
+        row.Key.Text = isCapturing and "Press a key" or input.GetKeyLabel(input.GetBinding(action))
         row.Key.UIStroke.Color = isCapturing and WAITING_COLOR or DEFAULT_COLOR
     end
 end

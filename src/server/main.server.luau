@@ -2,14 +2,21 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
+local ProgressionConfig = require(ReplicatedStorage.Shared.Player.ProgressionConfig)
 local MatchClass = require(ServerScriptService.Match.MatchClass)
+local ProfileService = require(ServerScriptService.Player.ProfileService)
 local LoadoutService = require(ServerScriptService.Player.LoadoutService)
+local CampaignService = require(ServerScriptService.Campaign.CampaignService)
+local DevService = require(ServerScriptService.Player.DevService)
 
 local BoardRemote = ReplicatedStorage.Remotes.BoardRemote
 
 local Matches = {}
 
+ProfileService.Init()
 LoadoutService.Init()
+CampaignService.Init()
+DevService.Init()
 
 local function IsFiniteNumber(value)
     return typeof(value) == "number" and value == value and math.abs(value) < 1e6
@@ -24,11 +31,22 @@ end
 
 BoardRemote.OnServerEvent:Connect(function(player, action, first, second, third)
     if action == "StartMatch" then
+        local match = nil
+
+        if first == "Campaign" then
+            match = CampaignService.CreateMatch(player, second, third)
+        elseif first == "Duel" then
+            if (player:GetAttribute("Level") or ProgressionConfig.START_LEVEL) < ProgressionConfig.DUELS_UNLOCK_LEVEL then return end
+
+            match = MatchClass.new(player, LoadoutService.GetLoadout(player))
+        end
+
+        if not match then return end
+
         if Matches[player] then
             Matches[player]:Destroy()
         end
 
-        local match = MatchClass.new(player, LoadoutService.GetLoadout(player))
         Matches[player] = match
         match:Start()
         return

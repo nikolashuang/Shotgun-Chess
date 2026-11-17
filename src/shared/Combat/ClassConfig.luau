@@ -1,35 +1,36 @@
 local ClassConfig = {
-    STARTER = "Reaper",
+    -- Kings start with no class; classes are unlocked by defeating regional Kings
+    STARTER = nil,
     ORDER = {"Reaper", "Hunter", "Gunslinger", "Outlaw"},
 
     -- Display only until class abilities are implemented
     Classes = {
         Reaper = {
-            DisplayName = "REAPER",
-            Passive = "REAP: Dead enemies become souls. Queens don't drop souls.",
-            Special = "ASSIMILATE: Harvest souls to use their abilities for one turn, or turn them into energy.",
-            Ultimate = "UNBOUND: Move like a Queen for one turn.",
+            DisplayName = "Reaper",
+            Passive = "Reap: Dead enemies become souls. Queens don't drop souls.",
+            Special = "Assimilate: Harvest souls to use their abilities for one turn, or turn them into energy.",
+            Ultimate = "Unbound: Move like a Queen for one turn.",
         },
 
         Hunter = {
-            DisplayName = "HUNTER",
-            Passive = "COLLECTOR: Dead enemies drop scrap on the field.",
-            Special = "TRAP LAYOUT: Lay invisible bear traps.",
-            Ultimate = "HUNTING STRIKE: Throw bolas in a 5 tile radius, stunning enemies for 3 turns.",
+            DisplayName = "Hunter",
+            Passive = "Collector: Dead enemies drop scrap on the field.",
+            Special = "Trap Layout: Lay invisible bear traps.",
+            Ultimate = "Hunting Strike: Throw bolas in a 5 tile radius, stunning enemies for 3 turns.",
         },
 
         Gunslinger = {
-            DisplayName = "GUNSLINGER",
-            Passive = "DEADEYE: Shotgun cones shrink and shoot slightly further.",
-            Special = "QUICKDRAW: Fire a weaker shot without using your action. Once per turn.",
-            Ultimate = "HIGH NOON'S BOUNTY: Mark 2 enemies, gain energy for killing both.",
+            DisplayName = "Gunslinger",
+            Passive = "Deadeye: Shotgun cones shrink and shoot slightly further.",
+            Special = "Quickdraw: Fire a weaker shot without using your action. Once per turn.",
+            Ultimate = "High Noon's Bounty: Mark 2 enemies, gain energy for killing both.",
         },
 
         Outlaw = {
-            DisplayName = "OUTLAW",
-            Passive = "OPPORTUNIST: +1 damage to isolated pieces.",
-            Special = "CONCEAL: 3x3 smoke for two turns. Enemies can't attack or shoot into it.",
-            Ultimate = "AMBUSH: Move to any square at least 1 tile from an enemy. +2 damage on your next shot.",
+            DisplayName = "Outlaw",
+            Passive = "Opportunist: +1 damage to isolated pieces.",
+            Special = "Conceal: 3x3 smoke for two turns. Enemies can't attack or shoot into it.",
+            Ultimate = "Ambush: Move to any square at least 1 tile from an enemy. +2 damage on your next shot.",
         },
     },
 }

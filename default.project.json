@@ -13,6 +13,15 @@
         },
         "LoadoutRemote": {
           "$className": "RemoteEvent"
+        },
+        "ProfileRemote": {
+          "$className": "RemoteEvent"
+        },
+        "CampaignRemote": {
+          "$className": "RemoteEvent"
+        },
+        "DevRemote": {
+          "$className": "RemoteEvent"
         }
       }
     },

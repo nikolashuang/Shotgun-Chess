@@ -1,7 +1,10 @@
 local Players = game:GetService("Players")
 
-local SELECTED_COLOR = Color3.fromHex("E6C47C")
-local DEFAULT_COLOR = Color3.fromHex("354867")
+local SELECTED_COLOR = Color3.fromHex("F1D4AC")
+local DEFAULT_COLOR = Color3.fromHex("9C574B")
+
+-- Only usable with a class equipped
+local CLASS_ACTIONS = {"Special", "Ultimate"}
 
 local buttonsByAction = {}
 local selectedButton = nil
@@ -65,7 +68,7 @@ end
 -- Selects without toggling off an action that is already selected
 function ActionPanelController.SelectAction(action)
     local button = buttonsByAction[action]
-    if not button then return end
+    if not button or not button.Visible then return end
     if selectedButton == button then return end
 
     ActionPanelController.Select(button)
@@ -73,9 +76,24 @@ end
 
 function ActionPanelController.ToggleAction(action)
     local button = buttonsByAction[action]
-    if not button then return end
+    if not button or not button.Visible then return end
 
     ActionPanelController.Select(button)
+end
+
+-- A king with no class only has normal turns and summons, so class actions are hidden
+function ActionPanelController.SetClassActionsVisible(isVisible)
+    for _, action in ipairs(CLASS_ACTIONS) do
+        local button = buttonsByAction[action]
+
+        if button then
+            if not isVisible and selectedButton == button then
+                ActionPanelController.Select(button)
+            end
+
+            button.Visible = isVisible
+        end
+    end
 end
 
 function ActionPanelController.SetKeyLabel(action, text)

@@ -29,11 +29,11 @@ local BAR_HIDE_TIME = 0.3
 local BAR_HIDE_DELAY = 1.5
 local BAR_DRAIN_TIME = 0.25
 
-local OUTLINE_COLOR = Color3.fromHex("171D32")
-local EMPTY_COLOR = Color3.fromHex("3B3F52")
+local OUTLINE_COLOR = Color3.fromHex("271F29")
+local EMPTY_COLOR = Color3.fromHex("4A3D48")
 local HEALTH_COLORS = {
-    White = Color3.fromHex("E6C47C"),
-    Black = Color3.fromHex("D9544D"),
+    White = Color3.fromHex("F1D4AC"),
+    Black = Color3.fromHex("C8644F"),
 }
 
 local PieceRigClass = {}

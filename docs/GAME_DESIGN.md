@@ -74,7 +74,7 @@ Aiming follows the Shotgun King style: a curved arc centered on the king.
 
 ## Shotguns
 
-Shotguns are chosen in the Armory and bought in the Shop (everything is unlocked until gold exists). Numbers marked *placeholder* are not in the design doc.
+Shotguns are bought in the Shop with gold and equipped in the Armory. Only the Pump is owned at the start; unowned shotguns show as LOCKED. Numbers marked *placeholder* are not in the design doc.
 
 | Shotgun | Price | Ammo | Range | Arc | Damage | Notes |
 |---|---|---|---|---|---|---|
@@ -92,7 +92,10 @@ Shotguns are chosen in the Armory and bought in the Shop (everything is unlocked
 
 ## Classes
 
-Chosen in the Armory alongside the shotgun. Replaces the old Necro/Spark/WindCharge/Forge shotgun classes. *Selectable but not implemented yet.*
+Chosen in the Armory alongside the shotgun. Replaces the old Necro/Spark/WindCharge/Forge shotgun classes. *Abilities not implemented yet.*
+
+- The king starts with **no class**: normal turns and normal summons only. Special and Ultimate are hidden in the HUD while no class is equipped.
+- Each class is unlocked by defeating the regional King who uses it (see Campaign). Clicking the equipped class in the Armory unequips it.
 
 ### Reaper
 - **Passive [Reap]:** Dead enemies become souls. Queens don't drop souls.
@@ -113,6 +116,52 @@ Chosen in the Armory alongside the shotgun. Replaces the old Necro/Spark/WindCha
 - **Passive [Opportunist]:** +1 damage to isolated pieces.
 - **Special [Conceal]:** Smoke bomb covering 3x3 for two turns; enemies can't attack or shoot into it.
 - **Ultimate [Ambush]:** Move to any square at least 1 tile from an enemy; +2 damage on the next shot.
+
+## Campaign
+
+World map, bottom to top: **King's Training** (tutorial) → **Hunter Forest** (Hunter King) → **Cliffside** (Outlaw King) → **Outskirts** (Gunslinger King) → **Gravehollow** (Reaper King). Each region needs the one before it.
+
+- The Campaign button opens its own screen. The world map scrolls vertically: King's Training at the bottom, Gravehollow at the top. It opens scrolled to the newest unlocked region.
+- Each region is a floating pixel-art island that bobs gently, joined by dotted paths. Locked islands are gray, wrapped in two chains with a padlock.
+- When a region unlocks, the map scrolls to it, the padlock shakes and drops, the chains slide off, the island fades into color and the path to it lights up.
+- Clicking a region opens its area map: the region's painting behind a branching route of 11–13 nodes to the King. Nodes have no names; a legend of the five node icons sits in the info bar.
+- All map data lives in `CampaignConfig`; art asset ids live in `CampaignArt`.
+- Art pipeline: `art/tools/build_islands.py` (run inside Blender with the sprite file open) builds the islands, chains and padlock from primitives and renders them to `art/campaign/islands/`, saving the scene as `art/CampaignIslands.blend`. `art/tools/build_campaign_art.py` then outlines them, makes the gray versions and packs `Islands.png`, plus the node icons, area backgrounds and logo cut from `art/reference/`.
+- Node types (from the reference legend): **Battle**, **Rest Site**, **Treasure Hunt**, **Queen Fight** (the elite), **Boss Fight** (King).
+- A node opens once any node linking to it is cleared. Taking one branch doesn't lock the others.
+- Every region ends Queen → King, and nothing else links to the King. `CampaignRules.Validate` errors at server start if this is broken.
+- Rest and Treasure nodes clear as soon as they're entered and can't be revisited. Rest sites currently do nothing, because health doesn't carry between battles yet.
+- Defeating a King completes the region and permanently unlocks its class (King's Training unlocks no class).
+- Losing or leaving a battle returns to the area map; cleared nodes are kept.
+- **Win condition in campaign:** armies with a King are beaten by killing the King, armies without one by clearing every enemy piece.
+
+### Rewards
+
+Base rewards, multiplied by the region's `RewardScale` (Training 0.5, Forest 1, Cliffside 1.5, Outskirts 2, Gravehollow 2.5):
+
+| Node | Gold | XP |
+|---|---|---|
+| Battle | 100 | 50 |
+| Treasure Hunt | 150 | 25 |
+| Rest Site | 0 | 0 |
+| Queen Fight | 400 | 200 |
+| Boss Fight | 750 | 350 |
+
+First clears pay in full. Battle replays pay `REPLAY_REWARD_SCALE` (20%). Clearing every node in the campaign once gives about 16,100 Gold and 7,185 XP (level 12); Duels at level 20 still needs replays. Nodes can override rewards with their own `Reward` table.
+
+### Progression
+
+- Gold buys shotguns. XP raises the account level. Each level needs 100 more XP than the last: 100 for level 2, 200 for level 3, and so on (`ProgressionRules.GetExpToLevel`).
+- **Duels unlock at level 20** (`ProgressionConfig.DUELS_UNLOCK_LEVEL`, 19,000 total XP), checked on the server.
+- Back steps out one level at a time: area map → world map → main menu.
+- **Dev panel:** a Developer button on the main menu, shown only to the accounts in `DevConfig.USER_IDS` (Snoothe3rd). It can unlock everything (all shotguns, classes, campaign nodes and level 20), add 1000 Gold, or reset the profile. The server checks the account on every request.
+- Saved in a DataStore (`PlayerProfile_v1`): gold, XP, owned shotguns, unlocked classes, cleared nodes and equipped loadout. If the profile can't load (e.g. Studio API access off), a temporary profile is used and never saved.
+
+## Visual Style
+
+- Palette: `#332A35` (panels), `#9C574B` (borders, dark tiles), `#D49A77` (secondary text, light tiles), `#F1D4AC` (highlights), `#E9E3D6` (text). Derived shades: `#271F29` and `#1E1820` for backgrounds, `#C8644F` for warnings and enemy text, `#4A3D48` for empty bars.
+- Font: Grenze Gotisch Bold, the closest built-in Roblox font to the logo lettering (Roblox can't load custom fonts). UI text is Title Case because blackletter is hard to read in all caps.
+- The menu uses the logo image (`CampaignArt.LOGO`) instead of text.
 
 ## Pieces
 
@@ -151,9 +200,13 @@ Not yet specified in the design doc. Do not implement guesses without confirming
 
 - Fusion rules and cost
 - Starting energy (prototype uses 0)
-- Starter class (prototype uses Reaper)
 - Class numbers: soul abilities, trap damage, Quickdraw damage, what counts as an "isolated" piece, bounty energy reward
-- Gold economy and how shotguns are purchased
+- Enemy AI: enemies still don't act, so campaign battles can't be lost yet
+- Encounter armies (current ones are placeholders in `CampaignConfig.Armies`)
+- Regional King and Queen boss abilities (need the class abilities first)
+- What Rest Sites do (no carried-over health yet)
+- What Treasure Hunts find beyond gold and XP (items, upgrades)
+- The replay reward fraction (20% placeholder)
 - Exact ranges/arcs for Double Barrel and Long Barrel
 
 ## Prototype Test Setup

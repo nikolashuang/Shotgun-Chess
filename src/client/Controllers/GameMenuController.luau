@@ -20,7 +20,8 @@ local function ShowPage(page)
 end
 
 local init = false
-function GameMenuController.Init(leaveMatch)
+-- onReturn runs after the main menu is shown again
+function GameMenuController.Init(leaveMatch, onReturn)
     if init then return end
     init = true
 
@@ -56,6 +57,10 @@ function GameMenuController.Init(leaveMatch)
         leaveMatch()
         hud.Enabled = false
         menu.Enabled = true
+
+        if onReturn then
+            onReturn()
+        end
     end)
 end
 

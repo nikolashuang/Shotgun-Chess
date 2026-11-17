@@ -19,12 +19,18 @@ local MatchClass = {}
 
 MatchClass.__index = MatchClass
 
-function MatchClass.new(player, shotgunName, className)
+-- enemies is a list of {Type, Column, Row}; without one the match uses the test dummies
+function MatchClass.new(player, shotgunName, className, enemies)
     local self = setmetatable({}, MatchClass)
 
     self.Player = player
     self.King = KingClass.new(player, BoardConfig.KING_START_COLUMN, BoardConfig.KING_START_ROW, shotgunName)
     self.ClassName = className
+    self.Enemies = enemies or MatchConfig.TEST_DUMMIES
+
+    -- Set by whoever owns the match (campaign) to be told the result; matches without it never end
+    self.OnEnd = nil
+    self.HasEnemyKing = false
 
     self.Pieces = {}
     self.NextPieceId = 1
@@ -52,6 +58,7 @@ function MatchClass:SendTurnState()
         Turn = self.Turn,
         HasMoved = self.HasMoved,
         HasActed = self.HasActed,
+        Class = self.ClassName,
         Shotgun = self.King.ShotgunName,
         Ammo = self.King.Ammo,
         MaxAmmo = self.King.Shotgun.MaxAmmo,
@@ -66,9 +73,11 @@ function MatchClass:Start()
     self:Send("MatchStarted")
     self:Send("KingMoved", self.King.Column, self.King.Row)
 
-    for _, dummy in ipairs(MatchConfig.TEST_DUMMIES) do
-        self:AddPiece(dummy.Type, "Black", dummy.Column, dummy.Row)
+    for _, enemy in ipairs(self.Enemies) do
+        self:AddPiece(enemy.Type, "Black", enemy.Column, enemy.Row)
     end
+
+    self.HasEnemyKing = self:CountPieces("King", "Black") > 0
 
     self:GainEnergy()
     self:SendTurnState()
@@ -140,8 +149,49 @@ function MatchClass:CanAct()
     return true
 end
 
+-- Armies with a King are beaten by killing it, armies without one by clearing the board
+function MatchClass:CheckVictory()
+    if not self.OnEnd then return false end
+
+    local isWon = false
+
+    if self.HasEnemyKing then
+        isWon = self:CountPieces("King", "Black") == 0
+    else
+        isWon = self:CountTeam("Black") == 0
+    end
+
+    if not isWon then return false end
+
+    self:End("Victory")
+
+    return true
+end
+
+function MatchClass:CountTeam(team)
+    local count = 0
+
+    for _, piece in pairs(self.Pieces) do
+        if piece.Team == team then
+            count += 1
+        end
+    end
+
+    return count
+end
+
+function MatchClass:End(result)
+    self.isActive = false
+    self.Phase = "Over"
+    self:SendTurnState()
+
+    self.OnEnd(result)
+end
+
 -- Ends the turn once both the movement and action events are used
 function MatchClass:FinishEvent()
+    if self:CheckVictory() then return end
+
     if self.HasMoved and self.HasActed then
         self:StartEnemyTurn()
     else
@@ -290,6 +340,8 @@ function MatchClass:StartEnemyTurn()
     self.Phase = "EnemyTurn"
 
     self:TickBleed("Black")
+    if self:CheckVictory() then return end
+
     self:SendTurnState()
 
     -- Dummies don't act, so the enemy turn is just a timed wait

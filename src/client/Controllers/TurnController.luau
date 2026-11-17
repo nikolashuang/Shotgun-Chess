@@ -3,10 +3,10 @@ local Players = game:GetService("Players")
 
 local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BoardRemote")
 
-local PLAYER_COLOR = Color3.fromHex("F0E9D8")
-local ENEMY_COLOR = Color3.fromHex("D9544D")
-local READY_COLOR = Color3.fromHex("E6C47C")
-local DISABLED_COLOR = Color3.fromHex("354867")
+local PLAYER_COLOR = Color3.fromHex("E9E3D6")
+local ENEMY_COLOR = Color3.fromHex("C8644F")
+local READY_COLOR = Color3.fromHex("F1D4AC")
+local DISABLED_COLOR = Color3.fromHex("9C574B")
 
 local turnLabel = nil
 local endTurnButton = nil
@@ -21,10 +21,13 @@ local function Update(state)
         local moves = state.HasMoved and 0 or 1
         local actions = state.HasActed and 0 or 1
 
-        turnLabel.Text = string.format("TURN %d   MOVE %d   ACTION %d", state.Turn, moves, actions)
+        turnLabel.Text = string.format("Turn %d   Move %d   Action %d", state.Turn, moves, actions)
         turnLabel.TextColor3 = PLAYER_COLOR
+    elseif state.Phase == "Over" then
+        turnLabel.Text = "Match Over"
+        turnLabel.TextColor3 = READY_COLOR
     else
-        turnLabel.Text = "ENEMY TURN"
+        turnLabel.Text = "Enemy Turn"
         turnLabel.TextColor3 = ENEMY_COLOR
     end
 
@@ -33,7 +36,7 @@ local function Update(state)
 end
 
 function TurnController.SetKeyLabel(text)
-    endTurnButton.Label.Text = "END TURN [" .. text .. "]"
+    endTurnButton.Label.Text = "End Turn [" .. text .. "]"
 end
 
 function TurnController.EndTurn()

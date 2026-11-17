@@ -1,29 +1,71 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
+local ProfileService = require(ServerScriptService.Player.ProfileService)
 
 local LoadoutRemote = ReplicatedStorage.Remotes.LoadoutRemote
 
--- Equipped items are player attributes so the client menu can read them
+-- Shotguns are bought with gold, classes are unlocked by defeating regional Kings
 local LoadoutService = {}
 
--- Everything is unlocked until the shop and gold are implemented
 function LoadoutService.IsUnlocked(player, kind, name)
-    if kind == "Shotgun" then return ShotgunConfig.Shotguns[name] ~= nil end
-    if kind == "Class" then return ClassConfig.Classes[name] ~= nil end
+    local profile = ProfileService.Get(player)
+    if not profile then return false end
+
+    if kind == "Shotgun" then return ShotgunConfig.Shotguns[name] ~= nil and profile.Data.Shotguns[name] == true end
+    if kind == "Class" then return ClassConfig.Classes[name] ~= nil and profile.Data.Classes[name] == true end
 
     return false
 end
 
+-- A nil class means the king plays with normal turns and summons only
 function LoadoutService.GetLoadout(player)
-    return player:GetAttribute("Shotgun") or ShotgunConfig.STARTER, player:GetAttribute("Class") or ClassConfig.STARTER
+    local profile = ProfileService.Get(player)
+    if not profile then return ShotgunConfig.STARTER, ClassConfig.STARTER end
+
+    local equipped = profile.Data.Equipped
+    local shotgun = equipped.Shotgun
+    local class = equipped.Class
+
+    if not LoadoutService.IsUnlocked(player, "Shotgun", shotgun) then
+        shotgun = ShotgunConfig.STARTER
+    end
+
+    if class and not LoadoutService.IsUnlocked(player, "Class", class) then
+        class = nil
+    end
+
+    return shotgun, class
 end
 
-local function SetupPlayer(player)
-    player:SetAttribute("Shotgun", ShotgunConfig.STARTER)
-    player:SetAttribute("Class", ClassConfig.STARTER)
+local function Equip(player, kind, name)
+    if not LoadoutService.IsUnlocked(player, kind, name) then return end
+
+    ProfileService.Get(player).Data.Equipped[kind] = name
+    ProfileService.Sync(player)
+end
+
+local function UnequipClass(player)
+    local profile = ProfileService.Get(player)
+    if not profile then return end
+
+    profile.Data.Equipped.Class = nil
+    ProfileService.Sync(player)
+end
+
+local function BuyShotgun(player, name)
+    local weapon = ShotgunConfig.Shotguns[name]
+    if not weapon then return end
+
+    local profile = ProfileService.Get(player)
+    if not profile then return end
+    if profile.Data.Shotguns[name] then return end
+    if not ProfileService.SpendGold(player, weapon.Price) then return end
+
+    profile.Data.Shotguns[name] = true
+    ProfileService.Sync(player)
 end
 
 local init = false
@@ -31,19 +73,25 @@ function LoadoutService.Init()
     if init then return end
     init = true
 
-    Players.PlayerAdded:Connect(SetupPlayer)
-
-    for _, player in pairs(Players:GetPlayers()) do
-        SetupPlayer(player)
-    end
-
     LoadoutRemote.OnServerEvent:Connect(function(player, action, kind, name)
-        if action ~= "Equip" then return end
         if kind ~= "Shotgun" and kind ~= "Class" then return end
-        if typeof(name) ~= "string" then return end
-        if not LoadoutService.IsUnlocked(player, kind, name) then return end
 
-        player:SetAttribute(kind, name)
+        if action == "Unequip" then
+            if kind ~= "Class" then return end
+
+            UnequipClass(player)
+            return
+        end
+
+        if typeof(name) ~= "string" then return end
+
+        if action == "Equip" then
+            Equip(player, kind, name)
+        elseif action == "Buy" then
+            if kind ~= "Shotgun" then return end
+
+            BuyShotgun(player, name)
+        end
     end)
 end
 

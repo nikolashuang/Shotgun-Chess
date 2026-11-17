@@ -2,13 +2,13 @@ local KeybindConfig = {
     ORDER = {"Fire", "Special", "Ultimate", "Summon", "Command", "Reload", "EndTurn"},
 
     DisplayNames = {
-        Fire = "FIRE SHOTGUN",
-        Special = "SPECIAL",
-        Ultimate = "ULTIMATE",
-        Summon = "SUMMON",
-        Command = "COMMAND",
-        Reload = "RELOAD",
-        EndTurn = "END TURN",
+        Fire = "Fire Shotgun",
+        Special = "Special",
+        Ultimate = "Ultimate",
+        Summon = "Summon",
+        Command = "Command",
+        Reload = "Reload",
+        EndTurn = "End Turn",
     },
 
     -- Enum.KeyCode names
@@ -26,14 +26,14 @@ local KeybindConfig = {
     KeyLabels = {
         Zero = "0", One = "1", Two = "2", Three = "3", Four = "4",
         Five = "5", Six = "6", Seven = "7", Eight = "8", Nine = "9",
-        LeftShift = "LSHFT", RightShift = "RSHFT",
-        LeftControl = "LCTRL", RightControl = "RCTRL",
-        LeftAlt = "LALT", RightAlt = "RALT",
-        Space = "SPACE", Tab = "TAB", Return = "ENTER", Backspace = "BKSP",
-        CapsLock = "CAPS", Backquote = "`", Minus = "-", Equals = "=",
+        LeftShift = "LShift", RightShift = "RShift",
+        LeftControl = "LCtrl", RightControl = "RCtrl",
+        LeftAlt = "LAlt", RightAlt = "RAlt",
+        Space = "Space", Tab = "Tab", Return = "Enter", Backspace = "Bksp",
+        CapsLock = "Caps", Backquote = "`", Minus = "-", Equals = "=",
         LeftBracket = "[", RightBracket = "]", Semicolon = ";", Quote = "'",
         Comma = ",", Period = ".", Slash = "/", BackSlash = "\\",
-        Up = "UP", Down = "DOWN", Left = "LEFT", Right = "RIGHT",
+        Up = "Up", Down = "Down", Left = "Left", Right = "Right",
     },
 
     -- Keys that can't be bound

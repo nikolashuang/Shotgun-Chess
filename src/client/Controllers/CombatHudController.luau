@@ -10,11 +10,11 @@ local SummonPanelController = require(script.Parent.SummonPanelController)
 local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BoardRemote")
 
 local ALT_MODE_NAMES = {
-    Precise = "PRECISE SHOT",
-    Knife = "KNIFE SWING",
+    Precise = "Precise Shot",
+    Knife = "Knife Swing",
 }
 
-local DIVIDER_COLOR = Color3.fromHex("171D32")
+local DIVIDER_COLOR = Color3.fromHex("271F29")
 -- In pixels
 local DIVIDER_WIDTH = 2
 

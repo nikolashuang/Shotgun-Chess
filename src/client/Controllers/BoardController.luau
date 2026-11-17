@@ -13,11 +13,11 @@ local SummonPanelController = require(script.Parent.SummonPanelController)
 
 local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BoardRemote")
 
-local MOVE_COLOR = Color3.fromHex("354867")
-local SUMMON_COLOR = Color3.fromHex("E6C47C")
-local SELECT_COLOR = Color3.fromHex("E6C47C")
-local ATTACK_COLOR = Color3.fromHex("D9544D")
-local MOVE_OUTLINE_COLOR = Color3.fromHex("E6C47C")
+local MOVE_COLOR = Color3.fromHex("9C574B")
+local SUMMON_COLOR = Color3.fromHex("F1D4AC")
+local SELECT_COLOR = Color3.fromHex("F1D4AC")
+local ATTACK_COLOR = Color3.fromHex("C8644F")
+local MOVE_OUTLINE_COLOR = Color3.fromHex("F1D4AC")
 
 -- In pixels
 local MOVE_OUTLINE_THICKNESS = 2
@@ -423,6 +423,7 @@ function BoardController.Init(actionPanelController)
         elseif action == "TurnState" then
             turnState = ...
             ShotgunController.SetWeapon(turnState.Shotgun)
+            actionPanel.SetClassActionsVisible(turnState.Class ~= nil)
 
             if not IsMyTurn() then
                 actionPanel.ClearSelection()
@@ -444,8 +445,9 @@ function BoardController.LeaveMatch()
     BoardController.RefreshPreview()
 end
 
-function BoardController.StartMatch()
-    BoardRemote:FireServer("StartMatch")
+-- mode is "Duel" or "Campaign" (with the region and node ids)
+function BoardController.StartMatch(mode, regionId, nodeId)
+    BoardRemote:FireServer("StartMatch", mode, regionId, nodeId)
 end
 
 return BoardController
