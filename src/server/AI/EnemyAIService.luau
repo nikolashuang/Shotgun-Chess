@@ -348,7 +348,8 @@ local function AddShots(context, piece, options)
                 for _, tile in pairs(hitTiles) do
                     local hitTarget = context.Targets[GetKey(tile.Column, tile.Row)]
 
-                    if hitTarget then
+                    -- Nothing inside the Outlaw's smoke can be hit
+                    if hitTarget and not context.Match:IsProtected(tile.Column, tile.Row) then
                         local distance = BoardRules.GetDistance(piece.Column, piece.Row, tile.Column, tile.Row)
                         table.insert(hits, {Target = hitTarget, Damage = ShotgunRules.GetHitDamage(weapon, shotType, distance)})
                     end
@@ -370,7 +371,7 @@ local function GetOptions(context, piece)
     end
 
     local function IsTarget(column, row)
-        return context.Targets[GetKey(column, row)] ~= nil
+        return context.Targets[GetKey(column, row)] ~= nil and not context.Match:IsProtected(column, row)
     end
 
     if piece.Type == "King" then

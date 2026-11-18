@@ -6,13 +6,20 @@ local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
-local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
 local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
 local MatchConfig = require(script.Parent.MatchConfig)
 local AIConfig = require(ServerScriptService.AI.AIConfig)
 local KingClass = require(script.Parent.KingClass)
 local PieceClass = require(script.Parent.PieceClass)
 local EnemyAIService = require(ServerScriptService.AI.EnemyAIService)
+
+-- Each class's passive, special and ultimate live in its own component
+local ClassComponents = {
+    Reaper = require(script.Parent.Classes.ReaperClass),
+    Hunter = require(script.Parent.Classes.HunterClass),
+    Gunslinger = require(script.Parent.Classes.GunslingerClass),
+    Outlaw = require(script.Parent.Classes.OutlawClass),
+}
 
 local BoardRemote = ReplicatedStorage.Remotes.BoardRemote
 
@@ -30,7 +37,7 @@ function MatchClass.new(player, shotgunName, className, enemies, aiRating)
     local self = setmetatable({}, MatchClass)
 
     self.Player = player
-    self.King = KingClass.new(player, BoardConfig.KING_START_COLUMN, BoardConfig.KING_START_ROW, shotgunName)
+    self.King = KingClass.new(player, BoardConfig.KING_START_COLUMN, BoardConfig.KING_START_ROW, shotgunName, className)
     self.ClassName = className
     self.Enemies = enemies or MatchConfig.TEST_DUMMIES
 
@@ -49,6 +56,8 @@ function MatchClass.new(player, shotgunName, className, enemies, aiRating)
 
     self.Energy = EnergyConfig.START_ENERGY
     self.UltimateCharge = 0
+    -- Extra damage on every hit of the next shot (Reaper's High, Ambush)
+    self.NextShotBonus = 0
 
     self.Random = Random.new()
 
@@ -57,7 +66,18 @@ function MatchClass.new(player, shotgunName, className, enemies, aiRating)
 
     self.isActive = true
 
+    local component = ClassComponents[className]
+    self.Ability = component and component.new(self)
+
     return self
+end
+
+-- Calls an optional hook on the class component; returns nil when there is no class or no hook
+function MatchClass:CallAbility(method, ...)
+    local ability = self.Ability
+    if not ability or not ability[method] then return nil end
+
+    return ability[method](ability, ...)
 end
 
 function MatchClass:Send(action, ...)
@@ -80,6 +100,8 @@ function MatchClass:SendTurnState()
         MaxUltimateCharge = UltimateConfig.MAX_CHARGE,
         KingHealth = self.King.Health,
         KingMaxHealth = self.King.MaxHealth,
+        NextShotBonus = self.NextShotBonus,
+        Ability = self:CallAbility("GetState"),
     })
 end
 
@@ -138,7 +160,11 @@ function MatchClass:CountPieces(pieceType, team)
 end
 
 function MatchClass:GainEnergy()
-    self.Energy = math.min(self.Energy + EnergyConfig.ENERGY_PER_TURN, EnergyConfig.MAX_ENERGY)
+    self:AddEnergy(EnergyConfig.ENERGY_PER_TURN)
+end
+
+function MatchClass:AddEnergy(amount)
+    self.Energy = math.min(self.Energy + amount, EnergyConfig.MAX_ENERGY)
 end
 
 -- Damage to enemy pieces builds ultimate charge; returns true when the piece dies
@@ -152,6 +178,10 @@ function MatchClass:DamagePiece(piece, amount)
     if piece:IsAlive() then return false end
 
     self.Pieces[piece.Id] = nil
+
+    if piece.Team ~= "White" then
+        self:CallAbility("OnEnemyKilled", piece)
+    end
 
     return true
 end
@@ -227,13 +257,29 @@ end
 
 --MOVEMENT EVENT--
 
+-- Assimilate (Reaper) swaps the king's step for another piece's movement for this move
 function MatchClass:Move(column, row)
     if self.Phase ~= "PlayerTurn" then return end
     if self.HasMoved then return end
     if self:IsOccupied(column, row) then return end
-    if not self.King:MoveTo(column, row) then return end
+
+    local moveType = self:CallAbility("GetMoveType")
+
+    if moveType then
+        local function IsBlocked(blockColumn, blockRow)
+            return self:IsOccupied(blockColumn, blockRow)
+        end
+
+        local king = self.King
+        if not PieceRules.IsValidMove(moveType, "White", king.Column, king.Row, column, row, IsBlocked) then return end
+
+        king:SetTile(column, row)
+    elseif not self.King:MoveTo(column, row) then
+        return
+    end
 
     self.HasMoved = true
+    self:CallAbility("OnKingMoved")
     self:Send("KingMoved", column, row)
     self:FinishEvent()
 end
@@ -266,22 +312,84 @@ function MatchClass:Fire(targetX, targetY, mode)
     local weapon = self.King.Shotgun
     local damaged = {}
 
-    for _, piece in pairs(targets) do
+    -- Farthest first, so a knocked back enemy never blocks one behind it that is also being pushed
+    table.sort(targets, function(a, b)
+        return BoardRules.GetDistance(self.King.Column, self.King.Row, a.Column, a.Row) > BoardRules.GetDistance(self.King.Column, self.King.Row, b.Column, b.Row)
+    end)
+
+    -- Bonuses are worked out before anyone is hit, so a kill can't change whether a neighbor counts as isolated
+    local bonuses = {}
+
+    for _, piece in ipairs(targets) do
+        bonuses[piece] = self.NextShotBonus + (self:CallAbility("GetHitBonus", piece) or 0)
+    end
+
+    self.NextShotBonus = 0
+
+    for _, piece in ipairs(targets) do
         local distance = BoardRules.GetDistance(self.King.Column, self.King.Row, piece.Column, piece.Row)
-        self:DamagePiece(piece, ShotgunRules.GetHitDamage(weapon, shotType, distance))
+        self:DamagePiece(piece, ShotgunRules.GetHitDamage(weapon, shotType, distance) + bonuses[piece])
 
         if shotType == "Knife" and piece:IsAlive() then
             piece:ApplyBleed(weapon.Knife.BleedDamage, weapon.Knife.BleedTurns)
         end
 
-        table.insert(damaged, {Id = piece.Id, Health = piece.Health})
+        local result = {Id = piece.Id, Health = piece.Health}
+
+        if weapon.Knockback and piece:IsAlive() then
+            result.KnockColumn, result.KnockRow = self:KnockBack(piece, weapon.Knockback)
+        end
+
+        table.insert(damaged, result)
     end
 
     self.King:SpendAmmo(mode)
     self:SpendEnergy(ActionCost.Fire, "Fire")
 
     self:Send("ShotFired", pellets, hitTiles, damaged, shotType)
+
+    -- Knocked back enemies can land in traps
+    for _, result in ipairs(damaged) do
+        local piece = self.Pieces[result.Id]
+
+        if piece and result.KnockColumn then
+            self:OnEnemyMoved(piece)
+        end
+    end
+
     self:FinishEvent()
+end
+
+-- Pushes a piece straight away from the king, stopping at anything in the way; Kings can't be moved
+-- Returns the new tile, or nil if the piece didn't move
+function MatchClass:KnockBack(piece, tiles)
+    if piece.Type == "King" then return nil end
+
+    local stepColumn = math.sign(piece.Column - self.King.Column)
+    local stepRow = math.sign(piece.Row - self.King.Row)
+    local column, row = piece.Column, piece.Row
+
+    for _ = 1, tiles do
+        local nextColumn = column + stepColumn
+        local nextRow = row + stepRow
+
+        if not BoardRules.IsOnBoard(nextColumn, nextRow) then break end
+        if self:IsOccupied(nextColumn, nextRow) then break end
+
+        column, row = nextColumn, nextRow
+    end
+
+    if column == piece.Column and row == piece.Row then return nil end
+
+    piece.Column = column
+    piece.Row = row
+
+    return column, row
+end
+
+-- Called whenever an enemy ends up on a new tile (its own move or a knockback)
+function MatchClass:OnEnemyMoved(piece)
+    self:CallAbility("OnEnemyMoved", piece)
 end
 
 function MatchClass:Reload()
@@ -293,50 +401,38 @@ function MatchClass:Reload()
     self:FinishEvent()
 end
 
---SPECIALS--
+--CLASS ABILITIES--
 
-function MatchClass:Special(targetX, targetY)
-    if self.ClassName == "Gunslinger" then
-        self:FanTheHammer(targetX, targetY)
-    end
-end
-
--- Every shot travels the line and hits the first enemy still standing in it, or misses
-function MatchClass:FanTheHammer(targetX, targetY)
+-- payload is a table whose fields depend on the class; the class component validates it
+function MatchClass:Special(payload)
     if not self:CanAct(ActionCost.Special, "Special") then return end
-
-    local fan = ClassConfig.Classes.Gunslinger.FanTheHammer
-    local _, lineTiles = ShotgunRules.GetPreciseShot(self.King.Column, self.King.Row, targetX, targetY, fan.Range)
-    if not lineTiles then return end
-
-    local lastTile = lineTiles[#lineTiles]
-    local shots = {}
-
-    for _ = 1, fan.Shots do
-        local target = nil
-
-        for _, tile in ipairs(lineTiles) do
-            local piece = self:GetPieceAt(tile.Column, tile.Row)
-
-            if piece and piece.Team ~= "White" then
-                target = piece
-                break
-            end
-        end
-
-        if target and self.Random:NextNumber() < fan.HitChance then
-            local column, row = target.Column, target.Row
-            self:DamagePiece(target, fan.Damage)
-
-            table.insert(shots, {Column = column, Row = row, Id = target.Id, Health = target.Health})
-        else
-            table.insert(shots, {Column = lastTile.Column, Row = lastTile.Row})
-        end
-    end
+    if not self:CallAbility("Special", payload) then return end
 
     self:SpendEnergy(ActionCost.Special, "Special")
-    self:Send("FanFired", shots)
     self:FinishEvent()
+end
+
+-- Free once fully charged, once per turn, and spends the whole charge
+function MatchClass:Ultimate(payload)
+    if not self:CanAct(ActionCost.Ultimate, "Ultimate") then return end
+    if self.UltimateCharge < UltimateConfig.MAX_CHARGE then return end
+    if not self:CallAbility("Ultimate", payload) then return end
+
+    self.UltimateCharge = 0
+    self:SpendEnergy(ActionCost.Ultimate, "Ultimate")
+    self:FinishEvent()
+end
+
+-- kind is the look of the stun ("Stars" or "Bolas")
+function MatchClass:StunPiece(piece, turns, kind)
+    piece:Stun(turns)
+    piece.isStunShown = true
+
+    self:Send("PieceStunned", piece.Id, true, kind or "Stars")
+end
+
+function MatchClass:IsProtected(column, row)
+    return self:CallAbility("IsProtected", column, row) == true
 end
 
 function MatchClass:Summon(pieceType, column, row)
@@ -436,6 +532,8 @@ function MatchClass:StartEnemyTurn()
 
         self:RunEnemyPlans(plans)
         if self:CheckDefeat() then return end
+        -- Traps can kill enemies on their own turn
+        if self:CheckVictory() then return end
 
         self:SendTurnState()
 
@@ -470,6 +568,7 @@ function MatchClass:RunEnemyPlans(plans)
             piece.Row = plan.Row
 
             self:Send("PieceMoved", piece.Id, plan.Column, plan.Row)
+            self:OnEnemyMoved(piece)
         end
     end
 
@@ -482,13 +581,6 @@ function MatchClass:RunEnemyPlans(plans)
     end
 end
 
--- Nothing stuns yet; abilities like Hunting Strike will call this
-function MatchClass:StunPiece(piece, turns)
-    piece:Stun(turns)
-    piece.isStunShown = true
-
-    self:Send("PieceStunned", piece.Id, true)
-end
 
 -- Damages the player's king or a white piece on the tile; returns the health left, or nil if nothing was there
 function MatchClass:DamageWhiteTile(column, row, amount)
@@ -507,6 +599,7 @@ end
 
 function MatchClass:EnemyAttack(piece, column, row)
     if not self.King:IsAlive() then return end
+    if self:IsProtected(column, row) then return end
 
     local health, targetId = self:DamageWhiteTile(column, row, PieceConfig.Damage[piece.Type])
     if not health then return end
@@ -536,7 +629,7 @@ function MatchClass:EnemyShoot(piece, aimX, aimY)
     local damaged = {}
 
     for _, tile in pairs(hitTiles) do
-        if IsWhiteTile(tile.Column, tile.Row) then
+        if IsWhiteTile(tile.Column, tile.Row) and not self:IsProtected(tile.Column, tile.Row) then
             local distance = BoardRules.GetDistance(piece.Column, piece.Row, tile.Column, tile.Row)
             local health, targetId = self:DamageWhiteTile(tile.Column, tile.Row, ShotgunRules.GetHitDamage(weapon, shotType, distance))
 
@@ -558,10 +651,14 @@ function MatchClass:TickBleed(team)
 end
 
 function MatchClass:StartPlayerTurn()
+    self:CallAbility("OnEnemyTurnEnd")
+
     self.Phase = "PlayerTurn"
     self.Turn += 1
     self.HasMoved = false
     self.UsedActions = {}
+
+    self:CallAbility("OnPlayerTurnStart")
 
     self:GainEnergy()
     self:TickBleed("White")

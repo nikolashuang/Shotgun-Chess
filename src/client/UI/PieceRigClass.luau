@@ -34,6 +34,12 @@ local BAR_DRAIN_TIME = 0.25
 local STUN_DROP = 2 * PIXEL
 local ARROW_GAP = 2 * PIXEL
 local ARROW_BOB = 3 * PIXEL
+-- Bolas wrap the body this far down from the head, as a fraction of the head-to-feet height
+local BOLAS_DROP = 0.55
+
+-- One divider per point of health, like the energy bar
+local TICK_COLOR = Color3.fromHex("271F29")
+local TICK_TRANSPARENCY = 0.35
 
 local OUTLINE_COLOR = Color3.fromHex("271F29")
 local EMPTY_COLOR = Color3.fromHex("4A3D48")
@@ -133,6 +139,7 @@ function PieceRigClass.new(board, pieceType, team)
 
     self.StunEffect = nil
     self.ArrowEffect = nil
+    self.MarkEffect = nil
 
     self:CreateHealthBar(board, pieceType, team)
 
@@ -167,6 +174,9 @@ function PieceRigClass:CreateHealthBar(board, pieceType, team)
     self.HealthFill.Size = UDim2.fromScale(1, 1)
     self.HealthFill.Parent = track
 
+    self.HealthTrack = track
+    self.TickCount = 0
+
     local barOffset = UDim2.fromScale(0, -GetBarOffset(pieceType) / BoardConfig.SIZE)
 
     self.Rig:GetPropertyChangedSignal("Position"):Connect(function()
@@ -174,22 +184,55 @@ function PieceRigClass:CreateHealthBar(board, pieceType, team)
     end)
 end
 
--- Stars circling the head while the piece is stunned
-function PieceRigClass:SetStunned(isStunned)
-    if not isStunned then
-        if self.StunEffect then
-            self.StunEffect:Destroy()
-            self.StunEffect = nil
+-- Stars circling the head while the piece is stunned, or bolas wrapped around its body (kind "Bolas")
+function PieceRigClass:SetStunned(isStunned, kind)
+    if self.StunEffect then
+        self.StunEffect:Destroy()
+        self.StunEffect = nil
+    end
+
+    if not isStunned then return end
+
+    local headTop = GetHeadTop(self.PieceType)
+    local isBolas = kind == "Bolas"
+
+    self.StunEffect = EffectSpriteClass.new(isBolas and "BolasBound" or "Stun", self.Rig)
+    self.StunEffect.Image.Size = UDim2.fromScale(self.StunEffect.Width, self.StunEffect.Height)
+    self.StunEffect.Image.ZIndex = 4
+
+    if isBolas then
+        self.StunEffect.BasePosition = UDim2.fromScale(0.5, headTop + (BODY_BOTTOM - headTop) * BOLAS_DROP)
+    else
+        self.StunEffect.BasePosition = UDim2.fromScale(0.5, headTop + STUN_DROP)
+    end
+end
+
+-- Height of an effect's center when it floats above the health bar
+function PieceRigClass:GetAboveBarPosition(effect)
+    local barTop = GetHeadTop(self.PieceType) - BAR_GAP - BAR_HEIGHT
+
+    return UDim2.fromScale(0.5, barTop - ARROW_GAP - effect.Height / 2)
+end
+
+-- Red X bobbing above an enemy marked by High Noon's Bounty
+function PieceRigClass:SetMarked(isMarked)
+    if not isMarked then
+        if self.MarkEffect then
+            self.MarkEffect:Destroy()
+            self.MarkEffect = nil
         end
         return
     end
 
-    if self.StunEffect then return end
+    if self.MarkEffect then return end
 
-    self.StunEffect = EffectSpriteClass.new("Stun", self.Rig)
-    self.StunEffect.Image.Size = UDim2.fromScale(self.StunEffect.Width, self.StunEffect.Height)
-    self.StunEffect.Image.ZIndex = 4
-    self.StunEffect.BasePosition = UDim2.fromScale(0.5, GetHeadTop(self.PieceType) + STUN_DROP)
+    local mark = EffectSpriteClass.new("Mark", self.Rig)
+    mark.Image.Size = UDim2.fromScale(mark.Width, mark.Height)
+    mark.Image.ZIndex = 4
+    mark.BasePosition = self:GetAboveBarPosition(mark)
+    mark.BobHeight = ARROW_BOB
+
+    self.MarkEffect = mark
 end
 
 -- Spinning arrow bobbing above the health bar while the piece is chosen for a command
@@ -205,19 +248,46 @@ function PieceRigClass:SetArrow(isShown)
     if self.ArrowEffect then return end
 
     local arrow = EffectSpriteClass.new("Arrow", self.Rig)
-    local barTop = GetHeadTop(self.PieceType) - BAR_GAP - BAR_HEIGHT
 
     arrow.Image.Size = UDim2.fromScale(arrow.Width, arrow.Height)
     arrow.Image.ZIndex = 4
-    arrow.BasePosition = UDim2.fromScale(0.5, barTop - ARROW_GAP - arrow.Height / 2)
+    arrow.BasePosition = self:GetAboveBarPosition(arrow)
     arrow.BobHeight = ARROW_BOB
 
     self.ArrowEffect = arrow
 end
 
+-- Draws a divider between every point of health so players can count the hits left
+function PieceRigClass:DrawTicks()
+    local count = math.max(math.floor(self.MaxHealth) - 1, 0)
+    if count == self.TickCount then return end
+
+    for _, child in pairs(self.HealthTrack:GetChildren()) do
+        if child.Name == "Tick" then
+            child:Destroy()
+        end
+    end
+
+    for i = 1, count do
+        local tick = Instance.new("Frame")
+        tick.Name = "Tick"
+        tick.BackgroundColor3 = TICK_COLOR
+        tick.BackgroundTransparency = TICK_TRANSPARENCY
+        tick.BorderSizePixel = 0
+        tick.AnchorPoint = Vector2.new(0.5, 0)
+        tick.Position = UDim2.fromScale(i / self.MaxHealth, 0)
+        tick.Size = UDim2.new(0, 1, 1, 0)
+        tick.ZIndex = 2
+        tick.Parent = self.HealthTrack
+    end
+
+    self.TickCount = count
+end
+
 function PieceRigClass:SetHealth(health, maxHealth)
     self.MaxHealth = maxHealth or self.MaxHealth
     self.Health = health
+    self:DrawTicks()
 
     local fill = UDim2.fromScale(math.clamp(health / self.MaxHealth, 0, 1), 1)
     TweenService:Create(self.HealthFill, TweenInfo.new(BAR_DRAIN_TIME), {Size = fill}):Play()
@@ -383,6 +453,7 @@ end
 function PieceRigClass:Die()
     self:SetStunned(false)
     self:SetArrow(false)
+    self:SetMarked(false)
 
     self.HideToken += 1
     TweenService:Create(self.HealthBar, TweenInfo.new(BAR_HIDE_TIME), {GroupTransparency = 1}):Play()
@@ -395,6 +466,7 @@ end
 function PieceRigClass:Destroy()
     self:SetStunned(false)
     self:SetArrow(false)
+    self:SetMarked(false)
 
     if self.HopConnection then
         self.HopConnection:Disconnect()

@@ -3,8 +3,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
+local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
 
 local DIRECTION_STEP = math.pi / 4
+
+-- Class-tuned copies of each shotgun, made once so the same weapon table is always returned
+local classWeapons = {}
 
 local ShotgunRules = {}
 
@@ -18,8 +22,22 @@ local function GetNeighbor(column, row, directionIndex)
     return column + math.round(math.cos(direction)), row + math.round(math.sin(direction))
 end
 
-function ShotgunRules.GetWeapon(shotgunName)
-    return ShotgunConfig.Shotguns[shotgunName]
+-- className tunes the shotgun for class passives (Gunslinger's Deadeye); nil gives the base weapon
+function ShotgunRules.GetWeapon(shotgunName, className)
+    local weapon = ShotgunConfig.Shotguns[shotgunName]
+    if not weapon or className ~= "Gunslinger" then return weapon end
+
+    classWeapons[shotgunName] = classWeapons[shotgunName] or (function()
+        local deadeye = ClassConfig.Classes.Gunslinger.Deadeye
+        local tuned = table.clone(weapon)
+
+        tuned.ArcDegrees = weapon.ArcDegrees * deadeye.ArcScale
+        tuned.MaxRange = weapon.MaxRange + deadeye.RangeBonus
+
+        return tuned
+    end)()
+
+    return classWeapons[shotgunName]
 end
 
 function ShotgunRules.GetKingOrigin(column, row)
@@ -267,7 +285,6 @@ end
 --FIRING--
 
 function ShotgunRules.GetAmmoCost(weapon, mode)
-    if mode == "Alt" and weapon.AltMode == "Precise" then return weapon.Precise.AmmoCost end
     if mode == "Alt" and weapon.AltMode == "Knife" then return 0 end
 
     return weapon.AmmoPerShot
@@ -276,12 +293,7 @@ end
 -- Returns pellets, hitTiles and the shot type, or nil when the aim is invalid
 function ShotgunRules.GetFireResult(kingColumn, kingRow, targetX, targetY, weapon, mode, isBlocking)
     if mode == "Alt" then
-        if weapon.AltMode == "Precise" then
-            local pellets, hitTiles = ShotgunRules.GetPreciseShot(kingColumn, kingRow, targetX, targetY, weapon.Precise.Range)
-            if not pellets then return nil end
-
-            return pellets, hitTiles, "Precise"
-        elseif weapon.AltMode == "Knife" then
+        if weapon.AltMode == "Knife" then
             return {}, ShotgunRules.GetKnifeTiles(kingColumn, kingRow, targetX, targetY), "Knife"
         end
 
@@ -305,7 +317,6 @@ function ShotgunRules.GetFireResult(kingColumn, kingRow, targetX, targetY, weapo
 end
 
 function ShotgunRules.GetHitDamage(weapon, shotType, tileDistance)
-    if shotType == "Precise" then return weapon.MaxDamage end
     if shotType == "Knife" then return weapon.Knife.Damage end
 
     return ShotgunRules.GetDamage(tileDistance, weapon) * weapon.Blasts

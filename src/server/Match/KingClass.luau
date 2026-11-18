@@ -7,7 +7,7 @@ local KingClass = {}
 
 KingClass.__index = KingClass
 
-function KingClass.new(player, column, row, shotgunName)
+function KingClass.new(player, column, row, shotgunName, className)
     local self = setmetatable({}, KingClass)
 
     self.Player = player
@@ -19,7 +19,7 @@ function KingClass.new(player, column, row, shotgunName)
     self.Health = 15
 
     self.ShotgunName = shotgunName
-    self.Shotgun = ShotgunRules.GetWeapon(shotgunName)
+    self.Shotgun = ShotgunRules.GetWeapon(shotgunName, className)
     self.Ammo = self.Shotgun.MaxAmmo
 
     return self
@@ -35,6 +35,16 @@ end
 
 function KingClass:IsAlive()
     return self.Health > 0
+end
+
+function KingClass:Heal(amount)
+    self.Health = math.min(self.Health + amount, self.MaxHealth)
+end
+
+-- Places the king without checking king movement (abilities that move it their own way)
+function KingClass:SetTile(column, row)
+    self.Column = column
+    self.Row = row
 end
 
 function KingClass:MoveTo(column, row)

@@ -41,6 +41,10 @@ function EffectSpriteClass.new(effectName, parent)
     self.Frame = 1
     self.LastFrame = time()
 
+    -- One-shot effects hold their last frame and call OnFinished once
+    self.isLooped = true
+    self.OnFinished = nil
+
     activeEffects[self] = true
     self:SetFrame(1)
 
@@ -57,11 +61,28 @@ end
 function EffectSpriteClass:Step(now)
     if now - self.LastFrame >= self.Effect.FrameTime then
         self.LastFrame = now
-        self:SetFrame(self.Frame % #self.Effect.Rects + 1)
+
+        if self.Frame < #self.Effect.Rects then
+            self:SetFrame(self.Frame + 1)
+        elseif self.isLooped then
+            self:SetFrame(1)
+        elseif self.OnFinished then
+            local onFinished = self.OnFinished
+            self.OnFinished = nil
+            onFinished()
+        end
     end
 
     local bob = self.BobHeight * (0.5 + 0.5 * math.sin(now * BOB_SPEED))
     self.Image.Position = self.BasePosition - UDim2.fromScale(0, bob)
+end
+
+-- Restarts a one-shot effect from its first frame
+function EffectSpriteClass:PlayOnce(onFinished)
+    self.isLooped = false
+    self.OnFinished = onFinished
+    self.LastFrame = time()
+    self:SetFrame(1)
 end
 
 function EffectSpriteClass:Destroy()

@@ -71,11 +71,18 @@ function PieceController.Attack(attackerId, targetId, health)
     end)
 end
 
-function PieceController.SetStunned(id, isStunned)
+function PieceController.SetStunned(id, isStunned, kind)
     local piece = pieces[id]
     if not piece then return end
 
-    piece.Rig:SetStunned(isStunned)
+    piece.Rig:SetStunned(isStunned, kind)
+end
+
+function PieceController.SetMarked(id, isMarked)
+    local piece = pieces[id]
+    if not piece then return end
+
+    piece.Rig:SetMarked(isMarked)
 end
 
 -- Only one piece shows the command arrow at a time; nil hides it

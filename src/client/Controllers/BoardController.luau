@@ -10,6 +10,8 @@ local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
 local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
 local PieceRigClass = require(script.Parent.Parent.UI.PieceRigClass)
 local PieceController = require(script.Parent.PieceController)
+local AbilityController = require(script.Parent.AbilityController)
+local BoardEffectsController = require(script.Parent.BoardEffectsController)
 local ShotgunController = require(script.Parent.ShotgunController)
 local SummonPanelController = require(script.Parent.SummonPanelController)
 
@@ -17,9 +19,11 @@ local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Boar
 
 local ActionCost = CombatConfig.ActionCost
 local FanConfig = ClassConfig.Classes.Gunslinger.FanTheHammer
+local HuntingStrikeConfig = ClassConfig.Classes.Hunter.HuntingStrike
 
--- Seconds between Fan the Hammer shots
+-- Seconds between Fan the Hammer shots, and how long the revolver stays out after the last
 local FAN_SHOT_INTERVAL = 0.12
+local REVOLVER_HOLD_TIME = 0.4
 -- Seconds between the blasts of a multi-blast shotgun
 local BLAST_INTERVAL = 0.18
 
@@ -177,7 +181,11 @@ local function UpdateHoverOutline()
     local outline = GetHoverOutline()
     local isChoice = hoveredTile ~= nil and table.find(previewTiles, hoveredTile) ~= nil
 
-    outline.Visible = isChoice and actionPanel.SelectedAction ~= "Fire" and actionPanel.SelectedAction ~= "Special"
+    local isAiming = actionPanel.SelectedAction == "Fire"
+        or (actionPanel.SelectedAction == "Special" and turnState ~= nil and turnState.Class == "Gunslinger")
+        or AbilityController.IsThrowingBolas()
+
+    outline.Visible = isChoice and not isAiming
 
     if outline.Visible then
         outline.Parent = hoveredTile
@@ -234,14 +242,27 @@ local function DrawPreview()
     PieceController.SetArrow(commandPieceId)
 
     local isFanning = selectedAction == "Special" and turnState ~= nil and turnState.Class == "Gunslinger" and CanAct(ActionCost.Special, "Special")
+    local isThrowing = AbilityController.IsThrowingBolas()
 
     ShotgunController.SetLineAim(isFanning and FanConfig.Range or nil)
-    ShotgunController.SetActive(isFanning or (selectedAction == "Fire" and CanAct(ActionCost.Fire, "Fire")))
+    ShotgunController.SetRevolverAimed(isFanning)
+    ShotgunController.SetAimWeapon(isThrowing and HuntingStrikeConfig.Weapon or nil)
+    ShotgunController.SetActive(isFanning or isThrowing or (selectedAction == "Fire" and CanAct(ActionCost.Fire, "Fire")))
 
     if not kingColumn then return end
 
     if selectedAction == nil then
         if not CanMove() then return end
+
+        -- Assimilate (Reaper) swaps the king's step for another piece's movement
+        local moveType = turnState.Ability and turnState.Ability.Assimilate
+
+        if moveType then
+            for _, move in pairs(PieceRules.GetMoves(moveType, "White", kingColumn, kingRow, IsOccupied)) do
+                HighlightTile(move.Column, move.Row, MOVE_COLOR, 0.45, true)
+            end
+            return
+        end
 
         for columnOffset = -1, 1 do
             for rowOffset = -1, 1 do
@@ -290,6 +311,8 @@ local function DrawPreview()
         for _, attack in pairs(PieceRules.GetAttacks(selectedPiece.Type, selectedPiece.Team, selectedPiece.Rig.Column, selectedPiece.Rig.Row, IsOccupied, IsEnemyTile)) do
             HighlightTile(attack.Column, attack.Row, ATTACK_COLOR, 0.3, true)
         end
+    elseif selectedAction == "Special" or selectedAction == "Ultimate" then
+        AbilityController.DrawPreview(selectedAction)
     end
 end
 
@@ -330,15 +353,16 @@ local function OnTileClicked(column, row)
 
         BoardRemote:FireServer("Fire", targetX, targetY, mode)
         actionPanel.ClearSelection()
-    elseif selectedAction == "Special" then
-        if turnState.Class ~= "Gunslinger" then return end
+    elseif selectedAction == "Special" and turnState.Class == "Gunslinger" then
         if not CanAct(ActionCost.Special, "Special") then return end
 
         local targetX, targetY = ShotgunController.GetMouseBoardPosition()
         if not ShotgunRules.GetPreciseShot(kingColumn, kingRow, targetX, targetY, FanConfig.Range) then return end
 
-        BoardRemote:FireServer("Special", targetX, targetY)
+        BoardRemote:FireServer("Special", {X = targetX, Y = targetY})
         actionPanel.ClearSelection()
+    elseif selectedAction == "Special" or selectedAction == "Ultimate" then
+        AbilityController.OnTileClicked(selectedAction, column, row)
     elseif selectedAction == "Summon" then
         local pieceType = SummonPanelController.SelectedPiece
 
@@ -371,8 +395,15 @@ local function OnTileClicked(column, row)
         end
     elseif selectedAction == nil then
         if not CanMove() then return end
-        if not BoardRules.IsValidKingMove(kingColumn, kingRow, column, row) then return end
         if IsOccupied(column, row) then return end
+
+        local moveType = turnState.Ability and turnState.Ability.Assimilate
+
+        if moveType then
+            if not PieceRules.IsValidMove(moveType, "White", kingColumn, kingRow, column, row, IsOccupied) then return end
+        elseif not BoardRules.IsValidKingMove(kingColumn, kingRow, column, row) then
+            return
+        end
 
         BoardRemote:FireServer("Move", column, row)
     end
@@ -407,7 +438,12 @@ local function BindTile(tile)
     tile.MouseEnter:Connect(function()
         hoveredTile = tile
         SetHoveredRig(GetRigAt(column, row))
-        UpdateHoverOutline()
+
+        if AbilityController.WantsHoverRefresh(actionPanel.SelectedAction) then
+            BoardController.RefreshPreview()
+        else
+            UpdateHoverOutline()
+        end
     end)
 
     tile.MouseLeave:Connect(function()
@@ -458,6 +494,8 @@ local function OnShotFired(pellets, hitTiles, damaged, shotType)
                 Id = result.Id,
                 StartHealth = piece.Rig.Health,
                 Health = result.Health,
+                KnockColumn = result.KnockColumn,
+                KnockRow = result.KnockRow,
             }
         end
     end
@@ -474,12 +512,21 @@ local function OnShotFired(pellets, hitTiles, damaged, shotType)
 
                 local health = result.StartHealth - (result.StartHealth - result.Health) * blast / blasts
                 PieceController.ApplyDamage(result.Id, blast == blasts and result.Health or health)
+
+                -- Knocked back pieces hop away once the last blast lands
+                if blast == blasts and result.KnockColumn then
+                    PieceController.Move(result.Id, result.KnockColumn, result.KnockRow)
+                    BoardController.RefreshPreview()
+                end
             end)
         end)
     end
 end
 
+-- The Gunslinger swaps to a revolver for Fan the Hammer, then back to the shotgun
 local function OnFanFired(shots)
+    ShotgunController.ShowRevolver(#shots * FAN_SHOT_INTERVAL + REVOLVER_HOLD_TIME)
+
     for index, shot in ipairs(shots) do
         task.delay((index - 1) * FAN_SHOT_INTERVAL, function()
             if not kingRig then return end
@@ -515,6 +562,43 @@ local function OnKingAttacked(attackerId, health)
     attacker.Rig:Lunge(kingColumn, kingRow, function()
         DamageKing(health)
     end)
+end
+
+local function OnKingHealed(health)
+    if not kingRig then return end
+
+    kingRig:SetHealth(health)
+    kingRig:ShowHealth()
+    kingRig:HideHealth()
+end
+
+-- Ambush: the king vanishes and reappears on its new tile without hopping
+local function OnKingAmbushed(column, row)
+    kingColumn = column
+    kingRow = row
+
+    if kingRig then
+        kingRig:SetTile(column, row)
+        kingRig.Sprite:Play("Hop")
+    end
+
+    BoardController.RefreshPreview()
+end
+
+local function OnPieceStunned(id, isStunned, kind)
+    -- Bolas fly from the king first, then wrap the piece
+    if isStunned and kind == "Bolas" then
+        BoardEffectsController.ThrowBolas(id)
+        return
+    end
+
+    PieceController.SetStunned(id, isStunned, kind)
+end
+
+local function GetHoveredTile()
+    if not hoveredTile then return nil end
+
+    return {Column = hoveredTile:GetAttribute("Column"), Row = hoveredTile:GetAttribute("Row")}
 end
 
 local function OnEnemyShotFired(shooterId, pellets, hitTiles, damaged)
@@ -556,6 +640,9 @@ function BoardController.Init(actionPanelController)
             return
         end
 
+        -- Untargeted ultimates fire as soon as they're selected
+        if AbilityController.OnSelected(actionPanel.SelectedAction) then return end
+
         BoardController.RefreshPreview()
     end
 
@@ -567,10 +654,37 @@ function BoardController.Init(actionPanelController)
     local hud = Players.LocalPlayer.PlayerGui:WaitForChild("GameHUD")
     board = hud:WaitForChild("Root"):WaitForChild("BoardFrame"):WaitForChild("Board")
 
-    PieceController.Init(board)
-    ShotgunController.Init(board, function()
+    local function GetKingTile()
         return kingColumn, kingRow
-    end, IsEnemyTile)
+    end
+
+    PieceController.Init(board)
+    ShotgunController.Init(board, GetKingTile, IsEnemyTile)
+    BoardEffectsController.Init(board, GetKingTile)
+
+    AbilityController.Init({
+        GetTurnState = function()
+            return turnState
+        end,
+        GetKingTile = GetKingTile,
+        GetHoveredTile = GetHoveredTile,
+        IsSelected = function(action)
+            return actionPanel.SelectedAction == action
+        end,
+        CanAct = CanAct,
+        IsOccupied = IsOccupied,
+        HighlightTile = HighlightTile,
+        IsEnemyTile = IsEnemyTile,
+        GetAimPosition = function()
+            return ShotgunController.GetMouseBoardPosition()
+        end,
+        RefreshPreview = function()
+            BoardController.RefreshPreview()
+        end,
+        ClearSelection = function()
+            actionPanel.ClearSelection()
+        end,
+    })
 
     for _, tile in pairs(board:GetChildren()) do
         BindTile(tile)
@@ -579,6 +693,7 @@ function BoardController.Init(actionPanelController)
     BoardRemote.OnClientEvent:Connect(function(action, ...)
         if action == "MatchStarted" then
             PieceController.Clear()
+            BoardEffectsController.Clear()
         elseif action == "KingMoved" then
             PlaceKing(...)
         elseif action == "PieceAdded" then
@@ -592,7 +707,26 @@ function BoardController.Init(actionPanelController)
         elseif action == "FanFired" then
             OnFanFired(...)
         elseif action == "PieceStunned" then
-            PieceController.SetStunned(...)
+            OnPieceStunned(...)
+        elseif action == "PieceMarked" then
+            PieceController.SetMarked(...)
+        elseif action == "SoulAdded" then
+            BoardEffectsController.AddSoul(...)
+            BoardController.RefreshPreview()
+        elseif action == "SoulsRemoved" then
+            BoardEffectsController.RemoveSouls(...)
+        elseif action == "TrapsPlaced" then
+            BoardEffectsController.AddTraps(...)
+        elseif action == "TrapSprung" then
+            BoardEffectsController.SpringTrap(...)
+        elseif action == "SmokeChanged" then
+            BoardEffectsController.SetSmoke(...)
+        elseif action == "EnergyDropped" then
+            BoardEffectsController.ShowEnergy(...)
+        elseif action == "KingHealed" then
+            OnKingHealed(...)
+        elseif action == "KingAmbushed" then
+            OnKingAmbushed(...)
         elseif action == "PieceDamaged" then
             PieceController.ApplyDamage(...)
         elseif action == "PieceAttacked" then
@@ -604,7 +738,7 @@ function BoardController.Init(actionPanelController)
             OnEnemyShotFired(...)
         elseif action == "TurnState" then
             turnState = ...
-            ShotgunController.SetWeapon(turnState.Shotgun)
+            ShotgunController.SetWeapon(turnState.Shotgun, turnState.Class)
 
             if kingRig then
                 kingRig:SetHealth(turnState.KingHealth, turnState.KingMaxHealth)
@@ -629,6 +763,7 @@ function BoardController.LeaveMatch()
     commandPieceId = nil
     actionPanel.ClearSelection()
     PieceController.Clear()
+    BoardEffectsController.Clear()
     BoardController.RefreshPreview()
 end
 

@@ -6,7 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRAMES = os.path.join(ROOT, "frames")
 OUT_PNG = os.path.join(ROOT, "SpriteAtlas.png")
 OUT_LUAU = os.path.join(os.path.dirname(ROOT), "src", "shared", "Sprites", "SpriteConfig.luau")
-ASSET_ID = "rbxassetid://110802814818807"
+ASSET_ID = "rbxassetid://131996643293402"
 
 CELL = 32
 # Transparent gutter around every sprite so rotated or scaled sampling can't bleed into neighbors
@@ -39,16 +39,25 @@ ANIMS = {
     "Recoil": (4, 0.05, False, []),
 }
 
-# Looping board effects from art/tools/build_effects.py: name: (frames, seconds per frame)
+# Board effects from art/tools/build_effects.py: name: (frames, seconds per frame, snap to the piece palette)
+# Class effects keep their own flat colors (teal souls, red marks) instead of snapping
 EFFECTS = {
-    "Stun": (8, 0.08),
-    "Arrow": (8, 0.08),
+    "Stun": (8, 0.08, True),
+    "Arrow": (8, 0.08, True),
+    "Soul": (6, 0.1, False),
+    "Bolt": (1, 0.1, False),
+    "Trap": (1, 0.1, False),
+    "TrapSnap": (4, 0.05, False),
+    "Bolas": (4, 0.06, False),
+    "BolasBound": (1, 0.1, False),
+    "Mark": (1, 0.1, False),
+    "Smoke": (3, 0.3, False),
 }
 
 def nearest(c):
     return min(PALETTE, key=lambda p: sum((a - b) ** 2 for a, b in zip(p, c[:3])))
 
-def clean(im, flash=False):
+def clean(im, flash=False, snap=True):
     im = im.convert("RGBA")
     w, h = im.size
     px = im.load()
@@ -58,7 +67,7 @@ def clean(im, flash=False):
     for y in range(h):
         for x in range(w):
             if solid[y][x]:
-                op[x, y] = FLASH if flash else nearest(px[x, y]) + (255,)
+                op[x, y] = FLASH if flash else (nearest(px[x, y]) if snap else px[x, y][:3]) + (255,)
     for y in range(h):
         for x in range(w):
             if solid[y][x]: continue
@@ -113,7 +122,9 @@ for piece in PIECES:
 
 # Gun sprites and grips come from art/tools/build_guns.py
 GUNS = json.load(open(os.path.join(FRAMES, "guns.json")))
-gun_images = {name: clean(Image.open(os.path.join(FRAMES, info["Frame"]))) for name, info in GUNS.items()}
+# Gunslinger's Fan the Hammer revolver (build_effects.py) is held like a gun
+GUNS["Revolver"] = {"Frame": "Revolver_0.png", "Grip": [5, 7]}
+gun_images = {name: clean(Image.open(os.path.join(FRAMES, info["Frame"])), snap=name != "Revolver") for name, info in GUNS.items()}
 
 # Loaded shell and empty slot for the ammo bar
 shell_full = from_mask([
@@ -148,29 +159,34 @@ pellet = from_mask([".oo.", "oxxo", "oxxo", ".oo."], {"o": OUTLINE, "x": CREAM})
 mark = tile_mark()
 
 TEAM_WIDTH = STRIDE * 6
-width = TEAM_WIDTH * 2
-ui_y = len(rows) * STRIDE + PAD
+# Roblox shrinks images taller or wider than 1024 px, which would throw every rect off,
+# so the UI sprites go in a column beside the piece rows instead of below them
+MAX_SIZE = 1024
+UI_COLUMN_WIDTH = 220
+ui_x = TEAM_WIDTH * 2 + PAD
+width = ui_x + UI_COLUMN_WIDTH
 
 ui_images = [("TileMark", mark), ("ArcDot", arc_dot), ("ArcEdge", arc_edge), ("Pellet", pellet), ("ShellFull", shell_full), ("ShellEmpty", shell_empty)]
 for name, img in gun_images.items():
     ui_images.append(("Gun" + name, img))
     ui_images.append(("Gun" + name + "Flipped", img.transpose(Image.FLIP_TOP_BOTTOM)))
-for name, (count, _) in EFFECTS.items():
+for name, (count, _, snap) in EFFECTS.items():
     for i in range(count):
-        ui_images.append((f"{name}{i + 1}", clean(Image.open(os.path.join(FRAMES, f"{name}_{i}.png")))))
+        ui_images.append((f"{name}{i + 1}", clean(Image.open(os.path.join(FRAMES, f"{name}_{i}.png")), snap=snap)))
 
-# Shelf pack the UI sprites below the piece rows
+# Shelf pack the UI sprites into the column right of the piece rows
 ui = {}
-x, y, row_height = PAD, ui_y, 0
+x, y, row_height = ui_x, PAD, 0
 for name, img in ui_images:
     w, h = img.size
     if x + w + PAD > width:
-        x, y, row_height = PAD, y + row_height + PAD * 2, 0
+        x, y, row_height = ui_x, y + row_height + PAD * 2, 0
     ui[name] = (x, y, w, h)
     x += w + PAD * 2
     row_height = max(row_height, h)
 
-height = y + row_height + PAD
+height = max(y + row_height + PAD, len(rows) * STRIDE + PAD)
+assert width <= MAX_SIZE and height <= MAX_SIZE, f"atlas is {width}x{height}, over Roblox's {MAX_SIZE} px limit"
 atlas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
 
 anim_entries = {}
@@ -226,7 +242,7 @@ lines.append("    },")
 lines.append("")
 lines.append("    -- Looping board effects: one rect per frame")
 lines.append("    Effects = {")
-for name, (count, frame_time) in EFFECTS.items():
+for name, (count, frame_time, _) in EFFECTS.items():
     rects = ", ".join(f"\"{name}{i + 1}\"" for i in range(count))
     lines.append(f"        {name} = {{FrameTime = {frame_time}, Rects = {{{rects}}}}},")
 lines.append("    },")

@@ -42,7 +42,14 @@ local previewTiles = {}
 local lastPreviewKey = nil
 
 local weapon = nil
+-- Another weapon's aim and hitbox to preview instead of the shotgun's (Hunting Strike's bolas)
+local aimWeapon = nil
 local gunSprite = SpriteConfig.Guns.Pump
+-- The equipped shotgun's sprite; gunSprite is the revolver while Fan the Hammer is aimed or firing
+local shotgunSprite = SpriteConfig.Guns.Pump
+local isRevolverAimed = false
+local isRevolverFiring = false
+local revolverToken = 0
 local aimAngle = 0
 local mode = "Normal"
 -- Set while aiming a straight-line ability instead of the shotgun
@@ -170,6 +177,8 @@ function ShotgunController.GetMouseBoardPosition()
 end
 
 local function DrawArc()
+    local weapon = aimWeapon or weapon
+    local mode = aimWeapon and "Normal" or mode
     local column, row = getKingPosition()
     if not column then
         HideDots(1)
@@ -187,7 +196,7 @@ local function DrawArc()
         return
     end
 
-    -- Line abilities, precise shots and knife swings only preview their tiles
+    -- Line abilities and knife swings only preview their tiles
     if lineRange or mode == "Alt" then
         local hitTiles = nil
 
@@ -300,14 +309,54 @@ function ShotgunController.GetWeapon()
     return weapon
 end
 
-function ShotgunController.SetWeapon(shotgunName)
-    local newWeapon = ShotgunRules.GetWeapon(shotgunName)
+function ShotgunController.SetWeapon(shotgunName, className)
+    local newWeapon = ShotgunRules.GetWeapon(shotgunName, className)
     if newWeapon == weapon then return end
 
     weapon = newWeapon
-    gunSprite = SpriteConfig.Guns[shotgunName]
+    shotgunSprite = SpriteConfig.Guns[shotgunName]
+
     ClearPreviewTiles()
+    ShotgunController.UpdateGunSprite()
+end
+
+function ShotgunController.UpdateGunSprite()
+    local newSprite = (isRevolverAimed or isRevolverFiring) and SpriteConfig.Guns.Revolver or shotgunSprite
+    if newSprite == gunSprite then return end
+
+    gunSprite = newSprite
     AimGun(aimAngle)
+end
+
+-- weaponName previews that weapon's normal shot instead of the shotgun's; nil goes back to the shotgun
+function ShotgunController.SetAimWeapon(weaponName)
+    local newAim = weaponName and ShotgunRules.GetWeapon(weaponName) or nil
+    if newAim == aimWeapon then return end
+
+    aimWeapon = newAim
+    ClearPreviewTiles()
+end
+
+-- The Gunslinger holds a revolver while aiming Fan the Hammer
+function ShotgunController.SetRevolverAimed(isAimed)
+    isRevolverAimed = isAimed
+    ShotgunController.UpdateGunSprite()
+end
+
+-- Keeps the revolver out for duration seconds while Fan the Hammer fires
+function ShotgunController.ShowRevolver(duration)
+    revolverToken += 1
+    local token = revolverToken
+
+    isRevolverFiring = true
+    ShotgunController.UpdateGunSprite()
+
+    task.delay(duration, function()
+        if revolverToken ~= token then return end
+
+        isRevolverFiring = false
+        ShotgunController.UpdateGunSprite()
+    end)
 end
 
 -- Right click switches to the shotgun's alt mode, if it has one

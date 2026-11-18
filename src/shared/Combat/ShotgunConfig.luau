@@ -53,10 +53,10 @@ local ShotgunConfig = {
 
         BuckBarrel = {
             DisplayName = "Buck Barrel",
-            Description = "Right click for a precise shot: 3 tile line that pierces for max damage. Needs all 3 shells.",
+            Description = "Knocks enemies back a tile. Hits harder at long range.",
             Price = 2100,
 
-            MaxAmmo = 3,
+            MaxAmmo = 4,
             AmmoPerShot = 1,
             Blasts = 1,
 
@@ -64,13 +64,10 @@ local ShotgunConfig = {
             ArcDegrees = 64,
             PelletCount = 5,
             MaxDamage = 5,
-            MinDamage = 2,
+            MinDamage = 3,
 
-            AltMode = "Precise",
-            Precise = {
-                Range = 3,
-                AmmoCost = 3,
-            },
+            -- Tiles every enemy hit (except Kings) is pushed straight away from the king, if the tile is free
+            Knockback = 1,
         },
 
         LongBarrel = {
@@ -82,7 +79,7 @@ local ShotgunConfig = {
             AmmoPerShot = 1,
             Blasts = 1,
 
-            MaxRange = 5,
+            MaxRange = 4,
             ArcDegrees = 24,
             PelletCount = 5,
             MaxDamage = 5,

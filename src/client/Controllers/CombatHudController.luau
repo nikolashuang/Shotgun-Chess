@@ -10,7 +10,6 @@ local SummonPanelController = require(script.Parent.SummonPanelController)
 local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BoardRemote")
 
 local ALT_MODE_NAMES = {
-    Precise = "Precise Shot",
     Knife = "Knife Swing",
 }
 
