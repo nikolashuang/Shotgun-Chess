@@ -13,7 +13,9 @@ local GHOST_SIZE = 1.05
 local GHOST_TRANSPARENCY = 0.35
 local GHOST_COLOR = Color3.fromHex("7FE3C8")
 local BOLT_RISE = 0.7
-local TRAP_RISE = 0.5
+local TRAP_RISE = 0.9
+-- Raises the snap from the tile center onto the trapped piece's body
+local TRAP_SNAP_LIFT = 0.35
 
 -- In seconds
 local FADE_TIME = 0.35
@@ -23,6 +25,8 @@ local BOLT_STAGGER = 0.15
 local BOLAS_FLIGHT_TIME = 0.35
 -- Waits for an enemy's hop to land before its trap snaps
 local TRAP_SNAP_DELAY = 0.25
+local TRAP_HOLD_TIME = 0.15
+local TRAP_FADE_TIME = 1
 
 -- See-through enough that pieces inside still show
 local SMOKE_TRANSPARENCY = 0.4
@@ -173,7 +177,7 @@ function BoardEffectsController.AddTraps(placed)
     end
 end
 
--- The jaws clamp shut on the enemy, then the trap jumps up and fades
+-- The jaws clamp shut over the enemy, then the trap floats up and fades away
 function BoardEffectsController.SpringTrap(trapId, pieceId, health)
     local trap = traps[trapId]
     traps[trapId] = nil
@@ -185,9 +189,11 @@ function BoardEffectsController.SpringTrap(trapId, pieceId, health)
 
         trap.Effect:Destroy()
 
-        local snap = NewEffect("TrapSnap", GetLayer("Overhead", 7), trap.Column, trap.Row)
+        local snap = NewEffect("TrapSnap", GetLayer("Overhead", 7), trap.Column, trap.Row, -TRAP_SNAP_LIFT)
         snap:PlayOnce(function()
-            FadeAndDestroy(snap, snap.BasePosition - UDim2.fromScale(0, TRAP_RISE / BoardConfig.SIZE))
+            task.delay(TRAP_HOLD_TIME, function()
+                FadeAndDestroy(snap, snap.BasePosition - UDim2.fromScale(0, TRAP_RISE / BoardConfig.SIZE), TRAP_FADE_TIME)
+            end)
         end)
     end)
 end

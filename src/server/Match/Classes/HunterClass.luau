@@ -95,6 +95,36 @@ function HunterClass:OnEnemyMoved(piece)
     end
 end
 
+-- A move or attack whose straight line crosses a trap stops on the trap's square and springs it
+-- Returns true when the piece was caught, which cancels the rest of its move or attack
+-- Knights jump over traps they cross; only landing on one catches them
+function HunterClass:InterceptPath(piece, column, row)
+    if piece.Type == "Knight" then return false end
+
+    local columnStep = math.sign(column - piece.Column)
+    local rowStep = math.sign(row - piece.Row)
+    local columnDistance = math.abs(column - piece.Column)
+    local rowDistance = math.abs(row - piece.Row)
+
+    if columnDistance ~= 0 and rowDistance ~= 0 and columnDistance ~= rowDistance then return false end
+
+    for step = 1, math.max(columnDistance, rowDistance) - 1 do
+        local trap = self:GetTrapAt(piece.Column + columnStep * step, piece.Row + rowStep * step)
+
+        if trap then
+            piece.Column = trap.Column
+            piece.Row = trap.Row
+
+            self.Match:Send("PieceMoved", piece.Id, trap.Column, trap.Row)
+            self:OnEnemyMoved(piece)
+
+            return true
+        end
+    end
+
+    return false
+end
+
 -- payload.X, payload.Y is the aim; the bolas cover exactly what a Double Barrel shot would hit there
 function HunterClass:Ultimate(payload)
     if not ArgumentRules.IsFiniteNumber(payload.X) or not ArgumentRules.IsFiniteNumber(payload.Y) then return false end

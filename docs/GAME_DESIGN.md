@@ -44,8 +44,8 @@ Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuni
    - Position: line up an attack on the player's king and cover the tiles it could step to.
    - Teamwork: near an ally, cover escape tiles no ally covers yet.
    - Advance: close distance to the player's king.
-- **Enemy pieces** attack with chess capture rules and their normal damage, against the player's king or summoned pieces.
-- **Enemy Kings** fire a Pump shotgun (`AIConfig.KING_SHOTGUN`) with the same rules as the player's, aimed straight at a target. They don't track ammo (assumption).
+- **Enemy pieces** attack with chess capture rules and their normal damage, against the player's king or summoned pieces. Killing a summoned piece moves the attacker onto its square, and the AI scores that capture square (Position, Teamwork, Advance) as where the piece ends up.
+- **Enemy Kings** hold and fire a Pump shotgun (`ShotgunConfig.ENEMY_KING`) with the same rules as the player's, aimed straight at a target. The gun points at the player's king until they fire, then at their last shot. They don't track ammo (assumption).
 - **Ratings** set how often a piece takes a random option instead of its best one: 500 → 40%, 1000 → 25%, 1500 → 10%, 2000 → 5%, 2500 → 1% (max 2 per match). Campaign battles use 1000 (`CampaignConfig.AI_RATING`).
 - **Defeat:** the player's king dying ends the match as a Defeat.
 
@@ -55,7 +55,7 @@ Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuni
 - Pawns move one tile forward (toward the enemy side).
 - Every highlighted choice on the board (moves, summon tiles, command targets) has a border, and the one under the cursor gets a thicker yellow border.
 - Choosing Command outlines every piece you can choose in yellow; the chosen piece gets a spinning yellow arrow bobbing above it.
-- **Attacking:** commanding a piece onto an enemy attacks it instead of moving. Targets follow chess capture rules: pawns attack diagonally forward, knights jump, sliding pieces hit the first piece in each line (friendly pieces block). The attacker hops to the enemy and returns to its own square. Survivors flash white like any hit; killed pieces fall over and crumble.
+- **Attacking:** commanding a piece onto an enemy attacks it instead of moving. Targets follow chess capture rules: pawns attack diagonally forward, knights jump, sliding pieces hit the first piece in each line (friendly pieces block). The attacker hops to the enemy; if the hit kills it, the attacker takes the enemy's square like a chess capture, otherwise it returns to its own square. Enemy pieces capture the same way when they kill a summoned piece (attacks on the player's king never move the attacker). Survivors flash white like any hit; killed pieces fall over and crumble.
 - Summon damage builds ultimate charge like any other damage to enemy pieces.
 
 ### Energy
@@ -126,7 +126,7 @@ Chosen in the Armory alongside the shotgun. All numbers live in `ClassConfig`; e
 
 ### Hunter
 - **Passive [Collector]:** each enemy death has a 25% chance to give +1 energy, shown as a lightning bolt floating up. *(+1 is a placeholder.)*
-- **Special [Trap Layout]:** place 3 bear traps on empty tiles within 2 of the king *(range placeholder)*; click 3 tiles (fewer if there aren't 3 free). Only the player sees them. An enemy that moves or is knocked onto one takes 3 damage and is stunned 1 turn; the trap clamps shut, jumps up and fades.
+- **Special [Trap Layout]:** place 3 bear traps on empty tiles within 2 of the king *(range placeholder)*; click 3 tiles (fewer if there aren't 3 free). Only the player sees them. An enemy that moves or is knocked onto one takes 3 damage and is stunned 1 turn. Any move or attack whose line crosses a trap stops on the trap's square and springs it, cancelling the rest of the move or attack, so traps also shield the king and allies. Knights jump over traps they cross and are only caught by landing on one; enemy Kings are affected. The trap clamps shut over the piece, floats up and fades.
 - **Ultimate [Hunting Strike]:** aimed and thrown exactly like a Double Barrel shot: same cone, range, line of sight and point blank (`HuntingStrike.Weapon`), previewed with the same arc. Every non-King enemy in the hit tiles is stunned for 3 turns and deals no damage; a bolas flies to each one and stays wrapped around it while it's stunned. Kings are immune. Only throws if it would catch at least one non-King enemy, so the charge isn't wasted. (Replaced the old 5-tile radius in Nov 2026.)
 
 ### Gunslinger
@@ -155,6 +155,7 @@ World map, bottom to top: **King's Training** (tutorial) → **Hunter Forest** (
 - Waterfalls (Forest, Cliffside) run from a stream on top over the island's front rim and down the rock face into a puff of mist.
 - Art pipeline: `art/tools/build_islands.py` (run inside Blender with the sprite file open) builds the islands, chains and padlock from primitives and renders them to `art/campaign/islands/`, saving the scene as `art/CampaignIslands.blend`. `art/tools/build_campaign_art.py` then outlines them, makes the gray versions and packs `Islands.png`, draws the parchment (`Paper.png`), and cuts the node icons and logo from `art/reference/`.
 - Node types (from the reference legend): **Battle**, **Rest Site**, **Treasure Hunt**, **Queen Fight** (the elite), **Boss Fight** (King).
+- Every Boss Fight army fields a Queen alongside the enemy King.
 - A node opens once any node linking to it is cleared. Taking one branch doesn't lock the others.
 - Every region ends Queen → King, and nothing else links to the King. `CampaignRules.Validate` errors at server start if this is broken.
 - Rest and Treasure nodes clear as soon as they're entered and can't be revisited. Rest sites currently do nothing, because health doesn't carry between battles yet.

@@ -4,6 +4,7 @@ local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
+local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local AIConfig = require(script.Parent.AIConfig)
 
 local Weights = AIConfig.Weights
@@ -70,7 +71,7 @@ local function BuildContext(match)
         Match = match,
         PlayerKing = {isKing = true, Column = king.Column, Row = king.Row},
         PlayerWeapon = king.Shotgun,
-        KingWeapon = ShotgunRules.GetWeapon(AIConfig.KING_SHOTGUN),
+        KingWeapon = ShotgunRules.GetWeapon(ShotgunConfig.ENEMY_KING),
         EnemyKing = nil,
 
         Whites = {},
@@ -273,7 +274,7 @@ end
 local function ScoreOption(context, piece, weights, option)
     local score = weights.Defend * GetDefendValue(context, piece, option)
 
-    -- Attackers end on their own tile, so they keep its Position and Teamwork value
+    -- An attack scores Position, Teamwork and Advance from the tile it ends on: its own, or the captured one
     -- Attacking outranks Evade unless the piece's weights say otherwise
     if option.Hits then
         score += weights.Attack * GetAttackValue(context, option)
@@ -378,13 +379,19 @@ local function GetOptions(context, piece)
         AddShots(context, piece, options)
     else
         for _, attack in pairs(PieceRules.GetAttacks(piece.Type, piece.Team, piece.Column, piece.Row, IsBlocked, IsTarget)) do
+            local target = context.Targets[GetKey(attack.Column, attack.Row)]
+            local damage = PieceConfig.Damage[piece.Type]
+
+            -- A kill on a summoned piece captures its square, so the attacker ends the turn there
+            local isCapture = not target.isKing and damage >= context.Health[target]
+
             table.insert(options, {
                 Type = "Attack",
-                Column = piece.Column,
-                Row = piece.Row,
+                Column = isCapture and attack.Column or piece.Column,
+                Row = isCapture and attack.Row or piece.Row,
                 TargetColumn = attack.Column,
                 TargetRow = attack.Row,
-                Hits = {{Target = context.Targets[GetKey(attack.Column, attack.Row)], Damage = PieceConfig.Damage[piece.Type]}},
+                Hits = {{Target = target, Damage = damage}},
             })
         end
     end

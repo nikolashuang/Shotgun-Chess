@@ -45,7 +45,8 @@ end
 
 -- The attacker lunges at the target and returns to its tile
 -- Survivors flash like any hit, killed pieces are knocked over and crumble
-function PieceController.Attack(attackerId, targetId, health)
+-- isCapture: the attacker takes the killed piece's square instead of returning (summoned pieces)
+function PieceController.Attack(attackerId, targetId, health, isCapture)
     local attacker = pieces[attackerId]
     local target = pieces[targetId]
 
@@ -65,9 +66,17 @@ function PieceController.Attack(attackerId, targetId, health)
 
     local direction = target.Rig.Column < attacker.Rig.Column and -1 or 1
 
-    attacker.Rig:Lunge(target.Rig.Column, target.Rig.Row, function()
+    local targetColumn, targetRow = target.Rig.Column, target.Rig.Row
+
+    attacker.Rig:Lunge(targetColumn, targetRow, function()
         target.Rig:SetHealth(health)
         target.Rig:KnockOver(direction)
+
+        -- Lunge hops back to the rig's tile, so changing it lands the attacker on the captured square
+        if isCapture then
+            attacker.Rig.Column = targetColumn
+            attacker.Rig.Row = targetRow
+        end
     end)
 end
 

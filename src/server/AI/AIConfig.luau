@@ -30,9 +30,6 @@ local AIConfig = {
     TEAMWORK_RANGE = 2,
     -- Tiles of distance closed that count as a full Advance
     ADVANCE_STEP = 3,
-
-    -- Enemy Kings fire this shotgun (no ammo tracking)
-    KING_SHOTGUN = "Pump",
 }
 
 return AIConfig

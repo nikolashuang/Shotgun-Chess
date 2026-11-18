@@ -33,6 +33,7 @@ local CampaignConfig = {
 
     -- Placeholder enemy layouts (black pieces) until encounters are designed
     -- An army with a King is won by killing the King, otherwise by clearing the board
+    -- Every King army (boss fight) also fields a Queen
     Armies = {
         TutorialPawns = {
             {Type = "Pawn", Column = 5, Row = 4},
@@ -56,6 +57,7 @@ local CampaignConfig = {
             {Type = "Pawn", Column = 5, Row = 5},
             {Type = "Pawn", Column = 7, Row = 5},
             {Type = "Knight", Column = 4, Row = 7},
+            {Type = "Queen", Column = 7, Row = 8},
             {Type = "King", Column = 6, Row = 8},
         },
 
@@ -97,6 +99,7 @@ local CampaignConfig = {
             {Type = "Bishop", Column = 7, Row = 7},
             {Type = "Rook", Column = 3, Row = 9},
             {Type = "Rook", Column = 9, Row = 9},
+            {Type = "Queen", Column = 7, Row = 10},
             {Type = "King", Column = 6, Row = 10},
         },
     },

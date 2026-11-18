@@ -273,30 +273,62 @@ def build_bolt(bm):
 bolt_obj = located(mesh_object("FxBolt", build_bolt, bolt_mats))
 
 
-# Bear trap: a steel ring base with two toothed jaws hinged on its long sides
+# Bear trap seen from straight above: two toothed half-ring jaws hinged on a bar with a spring at each end
+# and a pressure pan in the middle. Closing folds the jaws onto the bar until their teeth interlock
 trap_mats = [flat("TrapSteel", "8A93A6"), flat("TrapDark", "4E566B"), flat("TrapLight", "C9CED8"), flat("TrapRust", "9C574B")]
 TRAP_SNAP_FRAMES = 4
+TRAP_TEETH = 6
+# Jaw width when fully shut, as a fraction of the open width
+TRAP_SHUT = 0.34
+
+
+def disc(bm, center, radius, height, index, squash=1):
+    result = bmesh.ops.create_cone(bm, cap_ends=True, segments=16, radius1=radius, radius2=radius, depth=height)
+    bmesh.ops.scale(bm, vec=(1, squash, 1), verts=result["verts"])
+    bmesh.ops.translate(bm, vec=center, verts=result["verts"])
+    set_material(bm, {f for v in result["verts"] for f in v.link_faces}, index)
+
+
+def arc_band(bm, inner, outer, side, squash, z, index, segments=16):
+    def point(radius, angle):
+        return bm.verts.new((radius * math.cos(angle), side * radius * math.sin(angle) * squash, z))
+
+    for i in range(segments):
+        a, b = math.pi * i / segments, math.pi * (i + 1) / segments
+        face = bm.faces.new((point(inner, a), point(outer, a), point(outer, b), point(inner, b)))
+        face.material_index = index
 
 
 def build_trap(close):
+    squash = 1 - (1 - TRAP_SHUT) * close
+
     def build(bm):
-        # Base plate and pressure pan
-        box(bm, (0, 0, 0.02), (1.5, 1.0, 0.06), 1)
-        ball(bm, (0, 0, 0.06), 0.22, 3, 1)
-        # Jaws: each a bar of teeth rotating up from flat (0) to closed (1)
-        for side in (-1, 1):
-            angle = side * (90 - 82 * close) if close > 0 else side * 90
-            matrix = rot("X", -angle)
-            for k in range(5):
-                x = -0.56 + k * 0.28
-                verts = cone(bm, (0, 0, 0), 0.26, 0.09, 2, 4)
-                bmesh.ops.translate(bm, vec=(x, 0, 0.13 + 0.4), verts=verts)
-                bmesh.ops.rotate(bm, cent=(0, 0, 0.04), matrix=matrix, verts=verts)
-            verts = box(bm, (0, 0, 0.3), (1.45, 0.08, 0.16), 0)
-            bmesh.ops.rotate(bm, cent=(0, 0, 0.04), matrix=matrix, verts=verts)
-        # Springs at both ends
-        for x in (-0.85, 0.85):
-            box(bm, (x, 0, 0.06), (0.16, 0.6, 0.12), 0)
+        box(bm, (0, 0, 0), (1.9, 0.14, 0.05), 1)
+        for x in (-0.82, 0.82):
+            box(bm, (x, 0, 0.04), (0.24, 0.26, 0.06), 1)
+            for k in range(3):
+                box(bm, (x - 0.08 + k * 0.08, 0, 0.08), (0.04, 0.24, 0.04), 2)
+        disc(bm, (0, 0, 0.03), 0.34, 0.02, 1, squash)
+        disc(bm, (0, 0, 0.05), 0.29, 0.02, 3, squash)
+
+        for side in (1, -1):
+            arc_band(bm, 0.86, 0.92, side, squash, 0.13, 1)
+            arc_band(bm, 0.72, 0.86, side, squash, 0.15, 0)
+            # The two jaws' teeth sit half a tooth apart so they mesh when shut
+            offset = 0.25 if side == 1 else -0.25
+            for k in range(TRAP_TEETH):
+                angle = math.pi * (k + 0.5 + offset) / TRAP_TEETH
+                half = math.radians(7)
+                base = [Vector((0.73 * math.cos(a), side * 0.73 * math.sin(a) * squash, 0.16)) for a in (angle - half, angle + half)]
+                middle = (base[0] + base[1]) / 2
+                inward = Vector((-math.cos(angle), -side * math.sin(angle) * squash, 0))
+                if inward.length > 0:
+                    inward.normalize()
+                direction = inward.lerp(Vector((0, -side, 0)), close)
+                direction.normalize()
+                tip = middle + direction * (0.24 + 0.08 * close)
+                face = bm.faces.new([bm.verts.new(v) for v in (base[0], base[1], tip)])
+                face.material_index = 2
     return build
 
 
@@ -434,10 +466,9 @@ def still(_):
 # Smoke covers 3 tiles; one board tile is CELL / CELL_TILES = about 22.9 sprite pixels
 render_frames([soul_obj], (20, 28), (72, 20, 20 * math.tan(math.radians(18)) + 0.35), "Soul", SOUL_FRAMES, pose_soul)
 render_frames([bolt_obj], (12, 22), FRONT_VIEW, "Bolt", 1, still)
-# Traps are seen more from above than the pieces so the open jaws read
-TRAP_VIEW = (45, 20, 20 + 0.25)
-render_frames([trap_obj], (20, 16), TRAP_VIEW, "Trap", 1, still)
-render_frames([trap_obj], (20, 16), TRAP_VIEW, "TrapSnap", TRAP_SNAP_FRAMES, pose_trap)
+# Traps lie flat on the board, seen from straight above like the smoke
+render_frames([trap_obj], (20, 20), (0, 0, 20), "Trap", 1, still)
+render_frames([trap_obj], (20, 20), (0, 0, 20), "TrapSnap", TRAP_SNAP_FRAMES, pose_trap)
 render_frames([bolas_obj], (16, 16), FRONT_VIEW, "Bolas", BOLAS_FRAMES, pose_bolas)
 render_frames([bound_obj], (14, 10), BOARD_VIEW, "BolasBound", 1, still)
 render_frames([revolver_obj], (18, 12), FRONT_VIEW, "Revolver", 1, still)

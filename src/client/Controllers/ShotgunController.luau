@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
+local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 
 local HIT_COLOR = Color3.fromHex("C8644F")
@@ -34,6 +35,8 @@ local GUN_KICK_TIME = 0.15
 local board = nil
 local gunPivot = nil
 local gunImage = nil
+-- Enemy King rig -> {Pivot, Image}; the gun is destroyed along with the rig
+local enemyGuns = setmetatable({}, {__mode = "k"})
 local getKingPosition = nil
 local isBlockingTile = nil
 local active = false
@@ -109,23 +112,26 @@ local function GetTileMark(tile)
     return mark
 end
 
+local function PoseGun(pivot, image, sprite, angle)
+    -- Use the flipped sprite when aiming left so the gun is never upside down
+    local flipped = math.cos(angle) < 0
+    local rectName = flipped and sprite.FlippedRect or sprite.Rect
+    local rect = SpriteConfig.Rects[rectName]
+    local grip = sprite.Grip
+    local gripY = flipped and rect[4] - grip.Y or grip.Y
+
+    SetRect(image, rectName, GUN_PIVOT_TILES)
+    image.AnchorPoint = Vector2.new(grip.X / rect[3], gripY / rect[4])
+
+    pivot.Position = UDim2.fromScale(flipped and 1 - GUN_HOLD.X or GUN_HOLD.X, GUN_HOLD.Y)
+    pivot.Rotation = -math.deg(angle)
+end
+
 local function AimGun(angle)
     if not gunImage then return end
 
     aimAngle = angle
-
-    -- Use the flipped sprite when aiming left so the gun is never upside down
-    local flipped = math.cos(angle) < 0
-    local rectName = flipped and gunSprite.FlippedRect or gunSprite.Rect
-    local rect = SpriteConfig.Rects[rectName]
-    local grip = gunSprite.Grip
-    local gripY = flipped and rect[4] - grip.Y or grip.Y
-
-    SetRect(gunImage, rectName, GUN_PIVOT_TILES)
-    gunImage.AnchorPoint = Vector2.new(grip.X / rect[3], gripY / rect[4])
-
-    gunPivot.Position = UDim2.fromScale(flipped and 1 - GUN_HOLD.X or GUN_HOLD.X, GUN_HOLD.Y)
-    gunPivot.Rotation = -math.deg(angle)
+    PoseGun(gunPivot, gunImage, gunSprite, angle)
 end
 
 local function HideDots(fromIndex)
@@ -384,32 +390,56 @@ function ShotgunController.SetActive(enabled)
     end
 end
 
+local function NewGun(rig, sprite)
+    local pivot = Instance.new("Frame")
+    pivot.Name = "GunPivot"
+    pivot.BackgroundTransparency = 1
+    pivot.AnchorPoint = Vector2.new(0.5, 0.5)
+    pivot.Size = UDim2.fromScale(GUN_PIVOT_TILES, GUN_PIVOT_TILES)
+    pivot.ZIndex = 4
+    pivot.Interactable = false
+    pivot.Parent = rig
+
+    local image = NewSprite("Shotgun", sprite.Rect, 4, GUN_PIVOT_TILES)
+    image.Position = UDim2.fromScale(0.5, 0.5)
+    image.Parent = pivot
+
+    return pivot, image
+end
+
+local function KickImage(image)
+    image.Position = UDim2.fromScale(0.5 - GUN_KICK / GUN_PIVOT_TILES, 0.5)
+
+    TweenService:Create(image, TweenInfo.new(GUN_KICK_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Position = UDim2.fromScale(0.5, 0.5),
+    }):Play()
+end
+
 function ShotgunController.AttachGun(rig)
-    gunPivot = Instance.new("Frame")
-    gunPivot.Name = "GunPivot"
-    gunPivot.BackgroundTransparency = 1
-    gunPivot.AnchorPoint = Vector2.new(0.5, 0.5)
-    gunPivot.Size = UDim2.fromScale(GUN_PIVOT_TILES, GUN_PIVOT_TILES)
-    gunPivot.ZIndex = 4
-    gunPivot.Interactable = false
-    gunPivot.Parent = rig
-
-    gunImage = NewSprite("Shotgun", gunSprite.Rect, 4, GUN_PIVOT_TILES)
-    gunImage.Position = UDim2.fromScale(0.5, 0.5)
-    gunImage.Parent = gunPivot
-
+    gunPivot, gunImage = NewGun(rig, gunSprite)
     AimGun(aimAngle)
+end
+
+-- Enemy Kings hold their shotgun pointed at the player's king until they fire
+function ShotgunController.AttachEnemyGun(rig, column, row)
+    local sprite = SpriteConfig.Guns[ShotgunConfig.ENEMY_KING]
+    local pivot, image = NewGun(rig, sprite)
+    enemyGuns[rig] = {Pivot = pivot, Image = image}
+
+    local angle = math.pi
+    local kingColumn, kingRow = getKingPosition()
+
+    if kingColumn then
+        angle = math.atan2(kingRow - row, kingColumn - column)
+    end
+
+    PoseGun(pivot, image, sprite, angle)
 end
 
 local function KickGun()
     if not gunImage then return end
 
-    local rest = UDim2.fromScale(0.5, 0.5)
-    gunImage.Position = UDim2.fromScale(0.5 - GUN_KICK / GUN_PIVOT_TILES, 0.5)
-
-    TweenService:Create(gunImage, TweenInfo.new(GUN_KICK_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Position = rest,
-    }):Play()
+    KickImage(gunImage)
 end
 
 local function NewTracer()
@@ -435,8 +465,25 @@ function ShotgunController.GetTravelTime(distance)
     return math.max(distance - MUZZLE_OFFSET, 0) / PELLET_SPEED
 end
 
--- originColumn and originRow fire from another tile (enemy Kings); otherwise the shot comes from the player's king
-function ShotgunController.PlayShot(pellets, hitTiles, onTileReached, originColumn, originRow)
+-- Points an enemy King's gun at the middle of its pellets and kicks it back
+local function FireEnemyGun(rig, originX, originY, pellets)
+    local gun = enemyGuns[rig]
+    if not gun or #pellets == 0 then return end
+
+    local sumX, sumY = 0, 0
+
+    for _, target in ipairs(pellets) do
+        sumX += target.X
+        sumY += target.Y
+    end
+
+    local angle = math.atan2(sumY / #pellets - originY, sumX / #pellets - originX)
+    PoseGun(gun.Pivot, gun.Image, SpriteConfig.Guns[ShotgunConfig.ENEMY_KING], angle)
+    KickImage(gun.Image)
+end
+
+-- originColumn and originRow fire from another tile (enemy Kings, whose rig is shooterRig); otherwise the shot comes from the player's king
+function ShotgunController.PlayShot(pellets, hitTiles, onTileReached, originColumn, originRow, shooterRig)
     local column, row = originColumn, originRow
 
     if not column then
@@ -447,6 +494,10 @@ function ShotgunController.PlayShot(pellets, hitTiles, onTileReached, originColu
     end
 
     local originX, originY = ShotgunRules.GetKingOrigin(column, row)
+
+    if shooterRig then
+        FireEnemyGun(shooterRig, originX, originY, pellets)
+    end
     local tracers = {}
 
     for _, target in ipairs(pellets) do

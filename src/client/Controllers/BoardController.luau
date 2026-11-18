@@ -601,6 +601,13 @@ local function GetHoveredTile()
     return {Column = hoveredTile:GetAttribute("Column"), Row = hoveredTile:GetAttribute("Row")}
 end
 
+-- Enemy Kings fight with a shotgun like the player's king, so they hold one
+local function OnPieceAdded(id, pieceType, team, column, row)
+    if pieceType ~= "King" or team ~= "Black" then return end
+
+    ShotgunController.AttachEnemyGun(PieceController.Get(id).Rig.Rig, column, row)
+end
+
 local function OnEnemyShotFired(shooterId, pellets, hitTiles, damaged)
     local shooter = PieceController.Get(shooterId)
     if not shooter then return end
@@ -620,7 +627,7 @@ local function OnEnemyShotFired(shooterId, pellets, hitTiles, damaged)
         else
             DamageKing(result.Health)
         end
-    end, shooter.Rig.Column, shooter.Rig.Row)
+    end, shooter.Rig.Column, shooter.Rig.Row, shooter.Rig.Rig)
 end
 
 local init = false
@@ -698,6 +705,7 @@ function BoardController.Init(actionPanelController)
             PlaceKing(...)
         elseif action == "PieceAdded" then
             PieceController.Add(...)
+            OnPieceAdded(...)
             BoardController.RefreshPreview()
         elseif action == "PieceMoved" then
             PieceController.Move(...)

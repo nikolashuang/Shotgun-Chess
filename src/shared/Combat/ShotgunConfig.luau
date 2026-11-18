@@ -1,5 +1,7 @@
 local ShotgunConfig = {
     STARTER = "Pump",
+    -- Enemy Kings hold and fire this shotgun (no ammo tracking)
+    ENEMY_KING = "Pump",
     -- Sorted by price for the shop and armory
     ORDER = {"Pump", "DoubleBarrel", "BuckBarrel", "KnifeShotty", "LongBarrel"},
 

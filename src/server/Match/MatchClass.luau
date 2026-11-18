@@ -6,9 +6,9 @@ local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
+local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
 local MatchConfig = require(script.Parent.MatchConfig)
-local AIConfig = require(ServerScriptService.AI.AIConfig)
 local KingClass = require(script.Parent.KingClass)
 local PieceClass = require(script.Parent.PieceClass)
 local EnemyAIService = require(ServerScriptService.AI.EnemyAIService)
@@ -465,7 +465,8 @@ function MatchClass:Command(pieceId, column, row)
         return self:IsOccupied(blockColumn, blockRow)
     end
 
-    -- Commanding onto an enemy attacks it; the attacker stays on its own square
+    -- Commanding onto an enemy attacks it; like a chess capture, a kill moves the attacker onto the enemy's square,
+    -- otherwise it stays on its own
     local target = self:GetPieceAt(column, row)
     if target then
         if target.Team == piece.Team then return end
@@ -477,10 +478,15 @@ function MatchClass:Command(pieceId, column, row)
 
         if not PieceRules.IsValidAttack(piece.Type, piece.Team, piece.Column, piece.Row, column, row, IsBlocked, IsEnemy) then return end
 
-        self:DamagePiece(target, PieceConfig.Damage[piece.Type])
+        local isCapture = self:DamagePiece(target, PieceConfig.Damage[piece.Type])
+
+        if isCapture then
+            piece.Column = column
+            piece.Row = row
+        end
 
         self:SpendEnergy(ActionCost.Command, "Command")
-        self:Send("PieceAttacked", piece.Id, target.Id, target.Health)
+        self:Send("PieceAttacked", piece.Id, target.Id, target.Health, isCapture)
         self:FinishEvent()
         return
     end
@@ -563,7 +569,8 @@ function MatchClass:RunEnemyPlans(plans)
     for _, plan in ipairs(plans) do
         local piece = self.Pieces[plan.PieceId]
 
-        if piece and plan.Type == "Move" and not self:IsOccupied(plan.Column, plan.Row) then
+        if piece and plan.Type == "Move" and not self:IsOccupied(plan.Column, plan.Row)
+            and not self:CallAbility("InterceptPath", piece, plan.Column, plan.Row) then
             piece.Column = plan.Column
             piece.Row = plan.Row
 
@@ -600,21 +607,35 @@ end
 function MatchClass:EnemyAttack(piece, column, row)
     if not self.King:IsAlive() then return end
     if self:IsProtected(column, row) then return end
+    if self:CallAbility("InterceptPath", piece, column, row) then return end
 
     local health, targetId = self:DamageWhiteTile(column, row, PieceConfig.Damage[piece.Type])
     if not health then return end
 
-    if targetId then
-        self:Send("PieceAttacked", piece.Id, targetId, health)
-    else
+    if not targetId then
         self:Send("KingAttacked", piece.Id, health)
+        return
+    end
+
+    -- Killing a summoned piece captures its square, like the player's own captures
+    local isCapture = health <= 0
+
+    if isCapture then
+        piece.Column = column
+        piece.Row = row
+    end
+
+    self:Send("PieceAttacked", piece.Id, targetId, health, isCapture)
+
+    if isCapture then
+        self:OnEnemyMoved(piece)
     end
 end
 
 function MatchClass:EnemyShoot(piece, aimX, aimY)
     if not self.King:IsAlive() then return end
 
-    local weapon = ShotgunRules.GetWeapon(AIConfig.KING_SHOTGUN)
+    local weapon = ShotgunRules.GetWeapon(ShotgunConfig.ENEMY_KING)
 
     local function IsWhiteTile(column, row)
         if self.King.Column == column and self.King.Row == row then return true end
