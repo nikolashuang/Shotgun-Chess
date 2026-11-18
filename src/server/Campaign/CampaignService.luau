@@ -91,7 +91,7 @@ function CampaignService.CreateMatch(player, regionId, nodeId)
     if not CampaignRules.IsBattle(node) then return nil end
 
     local shotgun, class = LoadoutService.GetLoadout(player)
-    local match = MatchClass.new(player, shotgun, class, PlaceArmy(CampaignConfig.Armies[node.Army]))
+    local match = MatchClass.new(player, shotgun, class, PlaceArmy(CampaignConfig.Armies[node.Army]), CampaignConfig.AI_RATING)
 
     match.OnEnd = function(result)
         local summary = {Victory = false, Region = regionId, Node = nodeId}

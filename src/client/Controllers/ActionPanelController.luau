@@ -3,6 +3,9 @@ local Players = game:GetService("Players")
 local SELECTED_COLOR = Color3.fromHex("F1D4AC")
 local DEFAULT_COLOR = Color3.fromHex("9C574B")
 
+-- Label transparency of actions already used this turn
+local USED_TRANSPARENCY = 0.6
+
 -- Only usable with a class equipped
 local CLASS_ACTIONS = {"Special", "Ultimate"}
 
@@ -99,6 +102,17 @@ function ActionPanelController.SetClassActionsVisible(isVisible)
     end
 
     abilityPanel.Visible = isVisible
+end
+
+-- Each action can be used once per turn, so used ones are faded out
+function ActionPanelController.SetUsedActions(usedActions)
+    for action, button in pairs(buttonsByAction) do
+        local label = button:FindFirstChild("Label")
+
+        if label then
+            label.TextTransparency = usedActions[action] and USED_TRANSPARENCY or 0
+        end
+    end
 end
 
 function ActionPanelController.SetKeyLabel(action, text)

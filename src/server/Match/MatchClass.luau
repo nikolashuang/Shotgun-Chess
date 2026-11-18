@@ -1,4 +1,5 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
@@ -8,8 +9,10 @@ local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
 local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
 local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
 local MatchConfig = require(script.Parent.MatchConfig)
+local AIConfig = require(ServerScriptService.AI.AIConfig)
 local KingClass = require(script.Parent.KingClass)
 local PieceClass = require(script.Parent.PieceClass)
+local EnemyAIService = require(ServerScriptService.AI.EnemyAIService)
 
 local BoardRemote = ReplicatedStorage.Remotes.BoardRemote
 
@@ -22,7 +25,8 @@ local MatchClass = {}
 MatchClass.__index = MatchClass
 
 -- enemies is a list of {Type, Column, Row}; without one the match uses the test dummies
-function MatchClass.new(player, shotgunName, className, enemies)
+-- aiRating is a key of AIConfig.Ratings; without one the enemies never act
+function MatchClass.new(player, shotgunName, className, enemies, aiRating)
     local self = setmetatable({}, MatchClass)
 
     self.Player = player
@@ -40,11 +44,16 @@ function MatchClass.new(player, shotgunName, className, enemies)
     self.Phase = "PlayerTurn"
     self.Turn = 1
     self.HasMoved = false
+    -- Each action can be used once per turn
+    self.UsedActions = {}
 
     self.Energy = EnergyConfig.START_ENERGY
     self.UltimateCharge = 0
 
     self.Random = Random.new()
+
+    self.AIRating = aiRating
+    self.AIMistakes = 0
 
     self.isActive = true
 
@@ -60,6 +69,7 @@ function MatchClass:SendTurnState()
         Phase = self.Phase,
         Turn = self.Turn,
         HasMoved = self.HasMoved,
+        UsedActions = self.UsedActions,
         Class = self.ClassName,
         Shotgun = self.King.ShotgunName,
         Ammo = self.King.Ammo,
@@ -68,6 +78,8 @@ function MatchClass:SendTurnState()
         MaxEnergy = EnergyConfig.MAX_ENERGY,
         UltimateCharge = self.UltimateCharge,
         MaxUltimateCharge = UltimateConfig.MAX_CHARGE,
+        KingHealth = self.King.Health,
+        KingMaxHealth = self.King.MaxHealth,
     })
 end
 
@@ -144,15 +156,17 @@ function MatchClass:DamagePiece(piece, amount)
     return true
 end
 
-function MatchClass:CanAct(cost)
+function MatchClass:CanAct(cost, action)
     if self.Phase ~= "PlayerTurn" then return false end
+    if self.UsedActions[action] then return false end
     if self.Energy < cost then return false end
 
     return true
 end
 
-function MatchClass:SpendEnergy(cost)
+function MatchClass:SpendEnergy(cost, action)
     self.Energy -= cost
+    self.UsedActions[action] = true
 end
 
 -- Armies with a King are beaten by killing it, armies without one by clearing the board
@@ -191,10 +205,20 @@ function MatchClass:End(result)
     self.Phase = "Over"
     self:SendTurnState()
 
-    self.OnEnd(result)
+    if self.OnEnd then
+        self.OnEnd(result)
+    end
 end
 
--- Actions are limited only by energy, so the turn ends through End Turn
+function MatchClass:CheckDefeat()
+    if self.King:IsAlive() then return false end
+
+    self:End("Defeat")
+
+    return true
+end
+
+-- Actions are limited by energy and once per turn each, so the turn ends through End Turn
 function MatchClass:FinishEvent()
     if self:CheckVictory() then return end
 
@@ -217,7 +241,7 @@ end
 --ACTION EVENTS--
 
 function MatchClass:Fire(targetX, targetY, mode)
-    if not self:CanAct(ActionCost.Fire) then return end
+    if not self:CanAct(ActionCost.Fire, "Fire") then return end
     if not self.King:CanFire(mode) then return end
 
     local function IsEnemyTile(column, row)
@@ -254,17 +278,17 @@ function MatchClass:Fire(targetX, targetY, mode)
     end
 
     self.King:SpendAmmo(mode)
-    self:SpendEnergy(ActionCost.Fire)
+    self:SpendEnergy(ActionCost.Fire, "Fire")
 
     self:Send("ShotFired", pellets, hitTiles, damaged, shotType)
     self:FinishEvent()
 end
 
 function MatchClass:Reload()
-    if not self:CanAct(ActionCost.Reload) then return end
+    if not self:CanAct(ActionCost.Reload, "Reload") then return end
     if not self.King:Reload() then return end
 
-    self:SpendEnergy(ActionCost.Reload)
+    self:SpendEnergy(ActionCost.Reload, "Reload")
     self:Send("Reloaded")
     self:FinishEvent()
 end
@@ -279,7 +303,7 @@ end
 
 -- Every shot travels the line and hits the first enemy still standing in it, or misses
 function MatchClass:FanTheHammer(targetX, targetY)
-    if not self:CanAct(ActionCost.Special) then return end
+    if not self:CanAct(ActionCost.Special, "Special") then return end
 
     local fan = ClassConfig.Classes.Gunslinger.FanTheHammer
     local _, lineTiles = ShotgunRules.GetPreciseShot(self.King.Column, self.King.Row, targetX, targetY, fan.Range)
@@ -310,7 +334,7 @@ function MatchClass:FanTheHammer(targetX, targetY)
         end
     end
 
-    self:SpendEnergy(ActionCost.Special)
+    self:SpendEnergy(ActionCost.Special, "Special")
     self:Send("FanFired", shots)
     self:FinishEvent()
 end
@@ -319,7 +343,7 @@ function MatchClass:Summon(pieceType, column, row)
     if not table.find(PieceConfig.SUMMONABLE, pieceType) then return end
 
     local cost = PieceConfig.Cost[pieceType]
-    if not self:CanAct(cost) then return end
+    if not self:CanAct(cost, "Summon") then return end
 
     if not BoardRules.IsOnBoard(column, row) then return end
     if BoardRules.GetDistance(self.King.Column, self.King.Row, column, row) > BoardConfig.SUMMON_RANGE then return end
@@ -328,14 +352,14 @@ function MatchClass:Summon(pieceType, column, row)
     local maxActive = PieceConfig.MaxActive[pieceType]
     if maxActive and self:CountPieces(pieceType, "White") >= maxActive then return end
 
-    self:SpendEnergy(cost)
+    self:SpendEnergy(cost, "Summon")
     self:AddPiece(pieceType, "White", column, row)
 
     self:FinishEvent()
 end
 
 function MatchClass:Command(pieceId, column, row)
-    if not self:CanAct(ActionCost.Command) then return end
+    if not self:CanAct(ActionCost.Command, "Command") then return end
 
     local piece = self.Pieces[pieceId]
     if not piece then return end
@@ -359,7 +383,7 @@ function MatchClass:Command(pieceId, column, row)
 
         self:DamagePiece(target, PieceConfig.Damage[piece.Type])
 
-        self:SpendEnergy(ActionCost.Command)
+        self:SpendEnergy(ActionCost.Command, "Command")
         self:Send("PieceAttacked", piece.Id, target.Id, target.Health)
         self:FinishEvent()
         return
@@ -370,7 +394,7 @@ function MatchClass:Command(pieceId, column, row)
     piece.Column = column
     piece.Row = row
 
-    self:SpendEnergy(ActionCost.Command)
+    self:SpendEnergy(ActionCost.Command, "Command")
     self:Send("PieceMoved", piece.Id, column, row)
     self:FinishEvent()
 end
@@ -391,15 +415,120 @@ function MatchClass:StartEnemyTurn()
 
     self:SendTurnState()
 
-    -- Dummies don't act, so the enemy turn is just a timed wait
     local turn = self.Turn
 
-    task.delay(MatchConfig.ENEMY_TURN_TIME, function()
+    -- Without an AI rating the enemies are test dummies, so the enemy turn is just a timed wait
+    if not self.AIRating then
+        task.delay(MatchConfig.ENEMY_TURN_TIME, function()
+            if not self.isActive then return end
+            if self.Turn ~= turn then return end
+
+            self:StartPlayerTurn()
+        end)
+        return
+    end
+
+    local plans = EnemyAIService.PlanTurn(self)
+
+    task.delay(MatchConfig.ENEMY_THINK_TIME, function()
         if not self.isActive then return end
         if self.Turn ~= turn then return end
 
-        self:StartPlayerTurn()
+        self:RunEnemyPlans(plans)
+        if self:CheckDefeat() then return end
+
+        self:SendTurnState()
+
+        task.delay(MatchConfig.ENEMY_ACTION_TIME, function()
+            if not self.isActive then return end
+            if self.Turn ~= turn then return end
+
+            self:StartPlayerTurn()
+        end)
     end)
+end
+
+--ENEMY ACTIONS--
+
+-- Every plan was made against the same board, so attacks resolve first and then everyone moves at once
+function MatchClass:RunEnemyPlans(plans)
+    for _, plan in ipairs(plans) do
+        local piece = self.Pieces[plan.PieceId]
+
+        if piece and plan.Type == "Attack" then
+            self:EnemyAttack(piece, plan.TargetColumn, plan.TargetRow)
+        elseif piece and plan.Type == "Shoot" then
+            self:EnemyShoot(piece, plan.AimX, plan.AimY)
+        end
+    end
+
+    for _, plan in ipairs(plans) do
+        local piece = self.Pieces[plan.PieceId]
+
+        if piece and plan.Type == "Move" and not self:IsOccupied(plan.Column, plan.Row) then
+            piece.Column = plan.Column
+            piece.Row = plan.Row
+
+            self:Send("PieceMoved", piece.Id, plan.Column, plan.Row)
+        end
+    end
+end
+
+-- Damages the player's king or a white piece on the tile; returns the health left, or nil if nothing was there
+function MatchClass:DamageWhiteTile(column, row, amount)
+    if self.King.Column == column and self.King.Row == row then
+        self.King:TakeDamage(amount)
+        return self.King.Health, nil
+    end
+
+    local target = self:GetPieceAt(column, row)
+    if not target or target.Team ~= "White" then return nil end
+
+    self:DamagePiece(target, amount)
+
+    return target.Health, target.Id
+end
+
+function MatchClass:EnemyAttack(piece, column, row)
+    if not self.King:IsAlive() then return end
+
+    local health, targetId = self:DamageWhiteTile(column, row, PieceConfig.Damage[piece.Type])
+    if not health then return end
+
+    if targetId then
+        self:Send("PieceAttacked", piece.Id, targetId, health)
+    else
+        self:Send("KingAttacked", piece.Id, health)
+    end
+end
+
+function MatchClass:EnemyShoot(piece, aimX, aimY)
+    if not self.King:IsAlive() then return end
+
+    local weapon = ShotgunRules.GetWeapon(AIConfig.KING_SHOTGUN)
+
+    local function IsWhiteTile(column, row)
+        if self.King.Column == column and self.King.Row == row then return true end
+
+        local target = self:GetPieceAt(column, row)
+        return target ~= nil and target.Team == "White"
+    end
+
+    local pellets, hitTiles, shotType = ShotgunRules.GetFireResult(piece.Column, piece.Row, aimX, aimY, weapon, "Normal", IsWhiteTile)
+    if not pellets then return end
+
+    local damaged = {}
+
+    for _, tile in pairs(hitTiles) do
+        if IsWhiteTile(tile.Column, tile.Row) then
+            local distance = BoardRules.GetDistance(piece.Column, piece.Row, tile.Column, tile.Row)
+            local health, targetId = self:DamageWhiteTile(tile.Column, tile.Row, ShotgunRules.GetHitDamage(weapon, shotType, distance))
+
+            table.insert(damaged, {Id = targetId, Column = tile.Column, Row = tile.Row, Health = health})
+        end
+    end
+
+    self:Send("EnemyShotFired", piece.Id, pellets, hitTiles, damaged)
 end
 
 -- Bleeding pieces lose health at the start of their team's turn
@@ -416,6 +545,7 @@ function MatchClass:StartPlayerTurn()
     self.Phase = "PlayerTurn"
     self.Turn += 1
     self.HasMoved = false
+    self.UsedActions = {}
 
     self:GainEnergy()
     self:TickBleed("White")

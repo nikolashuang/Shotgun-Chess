@@ -22,6 +22,8 @@ function PieceClass.new(id, pieceType, team, column, row)
     self.BleedDamage = 0
     self.BleedTurns = 0
 
+    self.StunTurns = 0
+
     return self
 end
 
@@ -51,6 +53,23 @@ function PieceClass:TickBleed()
     self.BleedTurns -= 1
 
     return self.BleedDamage
+end
+
+function PieceClass:Stun(turns)
+    self.StunTurns = math.max(self.StunTurns, turns)
+end
+
+function PieceClass:IsStunned()
+    return self.StunTurns > 0
+end
+
+-- Called once per enemy turn; returns true when the piece may move or attack this turn
+function PieceClass:TickStun()
+    if not self:IsStunned() then return true end
+
+    self.StunTurns -= 1
+
+    return false
 end
 
 return PieceClass

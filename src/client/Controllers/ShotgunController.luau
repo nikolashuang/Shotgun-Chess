@@ -386,11 +386,16 @@ function ShotgunController.GetTravelTime(distance)
     return math.max(distance - MUZZLE_OFFSET, 0) / PELLET_SPEED
 end
 
-function ShotgunController.PlayShot(pellets, hitTiles, onTileReached)
-    local column, row = getKingPosition()
-    if not column then return end
+-- originColumn and originRow fire from another tile (enemy Kings); otherwise the shot comes from the player's king
+function ShotgunController.PlayShot(pellets, hitTiles, onTileReached, originColumn, originRow)
+    local column, row = originColumn, originRow
 
-    KickGun()
+    if not column then
+        column, row = getKingPosition()
+        if not column then return end
+
+        KickGun()
+    end
 
     local originX, originY = ShotgunRules.GetKingOrigin(column, row)
     local tracers = {}

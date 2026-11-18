@@ -25,6 +25,18 @@ function KingClass.new(player, column, row, shotgunName)
     return self
 end
 
+-- Returns the health actually lost
+function KingClass:TakeDamage(amount)
+    local dealt = math.min(amount, self.Health)
+    self.Health -= dealt
+
+    return dealt
+end
+
+function KingClass:IsAlive()
+    return self.Health > 0
+end
+
 function KingClass:MoveTo(column, row)
     if not BoardRules.IsValidKingMove(self.Column, self.Row, column, row) then return false end
 

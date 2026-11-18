@@ -69,8 +69,11 @@ local function IsMyTurn()
     return turnState ~= nil and turnState.Phase == "PlayerTurn"
 end
 
-local function CanAct(cost)
-    return IsMyTurn() and turnState.Energy >= cost
+local function CanAct(cost, action)
+    if not IsMyTurn() then return false end
+    if turnState.UsedActions[action] then return false end
+
+    return turnState.Energy >= cost
 end
 
 local function CanMove()
@@ -174,10 +177,10 @@ function BoardController.RefreshPreview()
         commandPieceId = nil
     end
 
-    local isFanning = selectedAction == "Special" and turnState ~= nil and turnState.Class == "Gunslinger" and CanAct(ActionCost.Special)
+    local isFanning = selectedAction == "Special" and turnState ~= nil and turnState.Class == "Gunslinger" and CanAct(ActionCost.Special, "Special")
 
     ShotgunController.SetLineAim(isFanning and FanConfig.Range or nil)
-    ShotgunController.SetActive(isFanning or (selectedAction == "Fire" and CanAct(ActionCost.Fire)))
+    ShotgunController.SetActive(isFanning or (selectedAction == "Fire" and CanAct(ActionCost.Fire, "Fire")))
 
     if not kingColumn then return end
 
@@ -196,7 +199,7 @@ function BoardController.RefreshPreview()
         end
     elseif selectedAction == "Summon" then
         if not SummonPanelController.SelectedPiece then return end
-        if not CanAct(PieceConfig.Cost[SummonPanelController.SelectedPiece]) then return end
+        if not CanAct(PieceConfig.Cost[SummonPanelController.SelectedPiece], "Summon") then return end
 
         local range = BoardConfig.SUMMON_RANGE
 
@@ -211,7 +214,7 @@ function BoardController.RefreshPreview()
             end
         end
     elseif selectedAction == "Command" then
-        if not CanAct(ActionCost.Command) then return end
+        if not CanAct(ActionCost.Command, "Command") then return end
 
         local selectedPiece = commandPieceId and PieceController.Get(commandPieceId)
 
@@ -241,7 +244,7 @@ local function OnTileClicked(column, row)
     local selectedAction = actionPanel.SelectedAction
 
     if selectedAction == "Fire" then
-        if not CanAct(ActionCost.Fire) then return end
+        if not CanAct(ActionCost.Fire, "Fire") then return end
 
         local weapon = ShotgunController.GetWeapon()
         local mode = ShotgunController.GetMode()
@@ -268,7 +271,7 @@ local function OnTileClicked(column, row)
         actionPanel.ClearSelection()
     elseif selectedAction == "Special" then
         if turnState.Class ~= "Gunslinger" then return end
-        if not CanAct(ActionCost.Special) then return end
+        if not CanAct(ActionCost.Special, "Special") then return end
 
         local targetX, targetY = ShotgunController.GetMouseBoardPosition()
         if not ShotgunRules.GetPreciseShot(kingColumn, kingRow, targetX, targetY, FanConfig.Range) then return end
@@ -279,13 +282,13 @@ local function OnTileClicked(column, row)
         local pieceType = SummonPanelController.SelectedPiece
 
         if not pieceType then return end
-        if not CanAct(PieceConfig.Cost[pieceType]) then return end
+        if not CanAct(PieceConfig.Cost[pieceType], "Summon") then return end
         if not IsSummonTile(column, row) then return end
 
         BoardRemote:FireServer("Summon", pieceType, column, row)
         actionPanel.ClearSelection()
     elseif selectedAction == "Command" then
-        if not CanAct(ActionCost.Command) then return end
+        if not CanAct(ActionCost.Command, "Command") then return end
 
         local clickedPiece = PieceController.GetAt(column, row)
 
@@ -429,6 +432,50 @@ local function OnFanFired(shots)
     end
 end
 
+local function DamageKing(health)
+    if not kingRig then return end
+
+    kingRig:SetHealth(health)
+    kingRig.Sprite:Play("Hit")
+    kingRig:ShowHealth()
+    kingRig:HideHealth()
+end
+
+local function OnKingAttacked(attackerId, health)
+    local attacker = PieceController.Get(attackerId)
+
+    if not attacker then
+        DamageKing(health)
+        return
+    end
+
+    attacker.Rig:Lunge(kingColumn, kingRow, function()
+        DamageKing(health)
+    end)
+end
+
+local function OnEnemyShotFired(shooterId, pellets, hitTiles, damaged)
+    local shooter = PieceController.Get(shooterId)
+    if not shooter then return end
+
+    local damageByTile = {}
+
+    for _, result in pairs(damaged) do
+        damageByTile[BoardRules.GetTileName(result.Column, result.Row)] = result
+    end
+
+    ShotgunController.PlayShot(pellets, hitTiles, function(column, row)
+        local result = damageByTile[BoardRules.GetTileName(column, row)]
+        if not result then return end
+
+        if result.Id then
+            PieceController.ApplyDamage(result.Id, result.Health)
+        else
+            DamageKing(result.Health)
+        end
+    end, shooter.Rig.Column, shooter.Rig.Row)
+end
+
 local init = false
 function BoardController.Init(actionPanelController)
     if init then return end
@@ -438,7 +485,7 @@ function BoardController.Init(actionPanelController)
     actionPanel.OnSelectionChanged = function()
         -- Reload happens on select instead of waiting for a tile click
         if actionPanel.SelectedAction == "Reload" then
-            if CanAct(ActionCost.Reload) and turnState.Ammo < turnState.MaxAmmo then
+            if CanAct(ActionCost.Reload, "Reload") and turnState.Ammo < turnState.MaxAmmo then
                 BoardRemote:FireServer("Reload")
             end
 
@@ -486,10 +533,19 @@ function BoardController.Init(actionPanelController)
         elseif action == "PieceAttacked" then
             PieceController.Attack(...)
             BoardController.RefreshPreview()
+        elseif action == "KingAttacked" then
+            OnKingAttacked(...)
+        elseif action == "EnemyShotFired" then
+            OnEnemyShotFired(...)
         elseif action == "TurnState" then
             turnState = ...
             ShotgunController.SetWeapon(turnState.Shotgun)
+
+            if kingRig then
+                kingRig:SetHealth(turnState.KingHealth, turnState.KingMaxHealth)
+            end
             actionPanel.SetClassActionsVisible(turnState.Class ~= nil)
+            actionPanel.SetUsedActions(turnState.UsedActions)
 
             if not IsMyTurn() then
                 actionPanel.ClearSelection()

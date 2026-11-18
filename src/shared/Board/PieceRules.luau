@@ -5,6 +5,7 @@ local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local ORTHOGONAL = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 local DIAGONAL = {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}}
 local KNIGHT = {{1, 2}, {2, 1}, {2, -1}, {1, -2}, {-1, -2}, {-2, -1}, {-2, 1}, {-1, 2}}
+local KING = table.move(DIAGONAL, 1, #DIAGONAL, #ORTHOGONAL + 1, table.clone(ORTHOGONAL))
 
 local SLIDES = {
     Rook = ORTHOGONAL,
@@ -34,6 +35,10 @@ function PieceRules.GetMoves(pieceType, team, column, row, isBlocked)
         TryAdd(column, row + PieceRules.GetForward(team))
     elseif pieceType == "Knight" then
         for _, offset in pairs(KNIGHT) do
+            TryAdd(column + offset[1], row + offset[2])
+        end
+    elseif pieceType == "King" then
+        for _, offset in pairs(KING) do
             TryAdd(column + offset[1], row + offset[2])
         end
     elseif SLIDES[pieceType] then

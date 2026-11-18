@@ -20,7 +20,7 @@ The game is fully turn-based. All durations (stuns, souls, crafted weapons, etc.
 Turns are energy-based:
 
 - **Movement** — the king gets 1 free move per turn, like a chess king: one tile in any of the 8 directions.
-- **Actions** — any number per turn, in any order, as long as there's energy to pay for them:
+- **Actions** — each action can be used **once per turn**, in any order, as long as there's energy to pay for it (prevents spam; used actions fade out in the action panel):
    - **Fire shotgun** — 1 energy
    - **Command a piece** — 1 energy (move or attack with one of your pieces using its normal chess movement)
    - **Reload** — 1 energy, refills the shotgun's magazine
@@ -32,7 +32,22 @@ The turn ends with **End Turn**.
 
 ### Enemy Turn
 
-- *Prototype:* test dummies don't act, so the enemy turn is a fixed 5-second window (`MatchConfig.ENEMY_TURN_TIME`).
+Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuning in `AIConfig`). Matches without an AI rating (the Duel test dummies) still use a fixed 5-second wait (`MatchConfig.ENEMY_TURN_TIME`).
+
+- Every enemy piece may move OR attack on every enemy turn. *(The Active/Passive cycle from the design doc was removed in Nov 2026: too easy.)*
+- **Stuns:** a stunned piece skips its enemy turns until the stun runs out (`PieceClass:Stun`, nothing applies stuns yet).
+- **Rotating priority:** acting pieces plan in Id order, rotated by one each enemy turn. Earlier pieces reserve their destination tiles first.
+- **Simultaneous execution:** every plan is made against the same board snapshot, then all attacks resolve and all moves happen together.
+- **Priorities** (weights in `AIConfig.Weights`): Defend > Attack > Evade > Position > Teamwork > Advance. Queens put Attack above Defend until only their King and Queen are left. Enemy Kings: Evade > Attack > Teamwork > Position > Advance.
+   - Defend: attack whatever threatens the enemy King, or stand next to it on the threat's side.
+   - Evade: avoid tiles the player's king could shoot after one step, or that a white piece could hit.
+   - Position: line up an attack on the player's king and cover the tiles it could step to.
+   - Teamwork: near an ally, cover escape tiles no ally covers yet.
+   - Advance: close distance to the player's king.
+- **Enemy pieces** attack with chess capture rules and their normal damage, against the player's king or summoned pieces.
+- **Enemy Kings** fire a Pump shotgun (`AIConfig.KING_SHOTGUN`) with the same rules as the player's, aimed straight at a target. They don't track ammo (assumption).
+- **Ratings** set how often a piece takes a random option instead of its best one: 500 → 40%, 1000 → 25%, 1500 → 10%, 2000 → 5%, 2500 → 1% (max 2 per match). Campaign battles use 1000 (`CampaignConfig.AI_RATING`).
+- **Defeat:** the player's king dying ends the match as a Defeat.
 
 ### Commanding Pieces
 
@@ -193,6 +208,8 @@ Right click toggles a shotgun's alt mode while aiming.
 
 ## Removed Mechanics
 
+- **Enemy Active/Passive cycle** — enemies act every turn instead (Nov 2026).
+
 - **Interrupt Cards / defensive interrupts** — discarded entirely (Nov 2026).
 
 ## Open Design Decisions
@@ -202,7 +219,9 @@ Not yet specified in the design doc. Do not implement guesses without confirming
 - Fusion rules and cost
 - Starting energy (prototype uses 0)
 - Class numbers: soul abilities, trap damage, Fan the Hammer damage per shot, what counts as an "isolated" piece, bounty energy reward
-- Enemy AI: enemies still don't act, so campaign battles can't be lost yet
+- Elite mode: scales enemy health and AI rating (1500–2000), not implemented yet
+- Enemy King shotgun ammo, and whether bosses use their class abilities
+- Pawn promotion: enemy pawns that reach row 1 just stop
 - Encounter armies (current ones are placeholders in `CampaignConfig.Armies`)
 - Regional King and Queen boss abilities (need the class abilities first)
 - What Rest Sites do (no carried-over health yet)

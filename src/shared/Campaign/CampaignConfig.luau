@@ -28,6 +28,9 @@ local CampaignConfig = {
     -- Armies are pushed toward the far end so their closest piece starts on this row
     ARMY_FRONT_ROW = 8,
 
+    -- Enemy AI rating for every campaign battle (a key of AIConfig.Ratings); elite scaling comes later
+    AI_RATING = 1000,
+
     -- Placeholder enemy layouts (black pieces) until encounters are designed
     -- An army with a King is won by killing the King, otherwise by clearing the board
     Armies = {
