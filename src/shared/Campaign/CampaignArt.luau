@@ -9,7 +9,7 @@ local CampaignArt = {
 
     -- World map islands rendered by art/tools/build_islands.py, ISLAND_SIZE pixels square
     -- Row 0 is the islands in color, row 1 the same islands grayed out, row 2 the chain and padlock layers
-    ISLANDS = "rbxassetid://133568068913211",
+    ISLANDS = "rbxassetid://84139968706737",
     ISLAND_SIZE = 160,
     IslandColumn = {Training = 0, Forest = 1, Cliffside = 2, Outskirts = 3, Gravehollow = 4},
     LockColumn = {ChainA = 0, ChainB = 1, Lock = 2},

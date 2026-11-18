@@ -6,7 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRAMES = os.path.join(ROOT, "frames")
 OUT_PNG = os.path.join(ROOT, "SpriteAtlas.png")
 OUT_LUAU = os.path.join(os.path.dirname(ROOT), "src", "shared", "Sprites", "SpriteConfig.luau")
-ASSET_ID = "rbxassetid://77321054614308"
+ASSET_ID = "rbxassetid://110802814818807"
 
 CELL = 32
 # Transparent gutter around every sprite so rotated or scaled sampling can't bleed into neighbors
@@ -37,6 +37,12 @@ ANIMS = {
     "Hit":    (3, 0.07, False, [0]),
     "Death":  (6, 0.08, False, [0]),
     "Recoil": (4, 0.05, False, []),
+}
+
+# Looping board effects from art/tools/build_effects.py: name: (frames, seconds per frame)
+EFFECTS = {
+    "Stun": (8, 0.08),
+    "Arrow": (8, 0.08),
 }
 
 def nearest(c):
@@ -149,6 +155,9 @@ ui_images = [("TileMark", mark), ("ArcDot", arc_dot), ("ArcEdge", arc_edge), ("P
 for name, img in gun_images.items():
     ui_images.append(("Gun" + name, img))
     ui_images.append(("Gun" + name + "Flipped", img.transpose(Image.FLIP_TOP_BOTTOM)))
+for name, (count, _) in EFFECTS.items():
+    for i in range(count):
+        ui_images.append((f"{name}{i + 1}", clean(Image.open(os.path.join(FRAMES, f"{name}_{i}.png")))))
 
 # Shelf pack the UI sprites below the piece rows
 ui = {}
@@ -213,6 +222,13 @@ lines.append("    -- Offset X, Offset Y, Width, Height")
 lines.append("    Rects = {")
 for name, (rx, ry, rw, rh) in ui.items():
     lines.append(f"        {name} = {{{rx}, {ry}, {rw}, {rh}}},")
+lines.append("    },")
+lines.append("")
+lines.append("    -- Looping board effects: one rect per frame")
+lines.append("    Effects = {")
+for name, (count, frame_time) in EFFECTS.items():
+    rects = ", ".join(f"\"{name}{i + 1}\"" for i in range(count))
+    lines.append(f"        {name} = {{FrameTime = {frame_time}, Rects = {{{rects}}}}},")
 lines.append("    },")
 lines.append("")
 lines.append("    -- Rect names and grip position (pixels inside the sprite) for each shotgun")

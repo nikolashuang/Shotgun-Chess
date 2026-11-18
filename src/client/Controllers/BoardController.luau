@@ -36,6 +36,11 @@ local MOVE_OUTLINE_COLOR = Color3.fromHex("F1D4AC")
 local MOVE_OUTLINE_THICKNESS = 2
 local MOVE_OUTLINE_INSET = 3
 
+-- Thicker border on the highlighted tile under the cursor, with a dark inner line so it shows on any fill
+local HOVER_COLOR = Color3.fromHex("F1D4AC")
+local HOVER_INNER_COLOR = Color3.fromHex("332A35")
+local HOVER_THICKNESS = 3
+
 local board = nil
 local actionPanel = nil
 local kingRig = nil
@@ -47,6 +52,7 @@ local turnState = nil
 local commandPieceId = nil
 local hoveredRig = nil
 local hoveredTile = nil
+local hoverOutline = nil
 
 local BoardController = {}
 
@@ -130,6 +136,54 @@ local function HighlightTile(column, row, color, transparency, isOutlined, outli
     table.insert(previewTiles, tile)
 end
 
+local function GetHoverOutline()
+    if hoverOutline then return hoverOutline end
+
+    hoverOutline = Instance.new("Frame")
+    hoverOutline.Name = "HoverOutline"
+    hoverOutline.BackgroundTransparency = 1
+    hoverOutline.Position = UDim2.fromOffset(HOVER_THICKNESS, HOVER_THICKNESS)
+    hoverOutline.Size = UDim2.new(1, -HOVER_THICKNESS * 2, 1, -HOVER_THICKNESS * 2)
+    hoverOutline.ZIndex = 3
+    hoverOutline.Interactable = false
+    hoverOutline.Visible = false
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = HOVER_COLOR
+    stroke.Thickness = HOVER_THICKNESS
+    stroke.LineJoinMode = Enum.LineJoinMode.Miter
+    stroke.Parent = hoverOutline
+
+    local inner = Instance.new("Frame")
+    inner.Name = "Inner"
+    inner.BackgroundTransparency = 1
+    inner.Position = UDim2.fromOffset(HOVER_THICKNESS, HOVER_THICKNESS)
+    inner.Size = UDim2.new(1, -HOVER_THICKNESS * 2, 1, -HOVER_THICKNESS * 2)
+    inner.Interactable = false
+    inner.Parent = hoverOutline
+
+    local innerStroke = Instance.new("UIStroke")
+    innerStroke.Color = HOVER_INNER_COLOR
+    innerStroke.Thickness = 1
+    innerStroke.LineJoinMode = Enum.LineJoinMode.Miter
+    innerStroke.Parent = inner
+
+    return hoverOutline
+end
+
+-- Borders the tile under the cursor when it's one of the highlighted choices, so it's clear where a click lands
+-- Aiming the shotgun has its own preview, so it's left out
+local function UpdateHoverOutline()
+    local outline = GetHoverOutline()
+    local isChoice = hoveredTile ~= nil and table.find(previewTiles, hoveredTile) ~= nil
+
+    outline.Visible = isChoice and actionPanel.SelectedAction ~= "Fire" and actionPanel.SelectedAction ~= "Special"
+
+    if outline.Visible then
+        outline.Parent = hoveredTile
+    end
+end
+
 local function ClearPreview()
     for _, tile in pairs(previewTiles) do
         SetOverlay(tile, nil)
@@ -162,7 +216,7 @@ local function GetCommandTargets(piece)
     return targets
 end
 
-function BoardController.RefreshPreview()
+local function DrawPreview()
     ClearPreview()
 
     local selectedAction = actionPanel.SelectedAction
@@ -176,6 +230,8 @@ function BoardController.RefreshPreview()
     if selectedAction ~= "Command" then
         commandPieceId = nil
     end
+
+    PieceController.SetArrow(commandPieceId)
 
     local isFanning = selectedAction == "Special" and turnState ~= nil and turnState.Class == "Gunslinger" and CanAct(ActionCost.Special, "Special")
 
@@ -209,7 +265,7 @@ function BoardController.RefreshPreview()
                 local row = kingRow + rowOffset
 
                 if IsSummonTile(column, row) then
-                    HighlightTile(column, row, SUMMON_COLOR, 0.5)
+                    HighlightTile(column, row, SUMMON_COLOR, 0.5, true, COMMAND_OUTLINE_COLOR)
                 end
             end
         end
@@ -220,12 +276,12 @@ function BoardController.RefreshPreview()
 
         if not selectedPiece then
             for _, piece in pairs(PieceController.GetTeamPieces("White")) do
-                HighlightTile(piece.Rig.Column, piece.Rig.Row, SELECT_COLOR, 0.65)
+                HighlightTile(piece.Rig.Column, piece.Rig.Row, SELECT_COLOR, 0.65, true)
             end
             return
         end
 
-        HighlightTile(selectedPiece.Rig.Column, selectedPiece.Rig.Row, SELECT_COLOR, 0.35)
+        HighlightTile(selectedPiece.Rig.Column, selectedPiece.Rig.Row, SELECT_COLOR, 0.35, true)
 
         for _, move in pairs(GetCommandMoves(selectedPiece)) do
             HighlightTile(move.Column, move.Row, COMMAND_MOVE_COLOR, 0.35, true, COMMAND_OUTLINE_COLOR)
@@ -235,6 +291,11 @@ function BoardController.RefreshPreview()
             HighlightTile(attack.Column, attack.Row, ATTACK_COLOR, 0.3, true)
         end
     end
+end
+
+function BoardController.RefreshPreview()
+    DrawPreview()
+    UpdateHoverOutline()
 end
 
 local function OnTileClicked(column, row)
@@ -346,6 +407,7 @@ local function BindTile(tile)
     tile.MouseEnter:Connect(function()
         hoveredTile = tile
         SetHoveredRig(GetRigAt(column, row))
+        UpdateHoverOutline()
     end)
 
     tile.MouseLeave:Connect(function()
@@ -353,6 +415,7 @@ local function BindTile(tile)
 
         hoveredTile = nil
         SetHoveredRig(nil)
+        UpdateHoverOutline()
     end)
 
     tile.InputBegan:Connect(function(input)
@@ -528,6 +591,8 @@ function BoardController.Init(actionPanelController)
             OnShotFired(...)
         elseif action == "FanFired" then
             OnFanFired(...)
+        elseif action == "PieceStunned" then
+            PieceController.SetStunned(...)
         elseif action == "PieceDamaged" then
             PieceController.ApplyDamage(...)
         elseif action == "PieceAttacked" then

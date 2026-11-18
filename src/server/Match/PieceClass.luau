@@ -23,6 +23,7 @@ function PieceClass.new(id, pieceType, team, column, row)
     self.BleedTurns = 0
 
     self.StunTurns = 0
+    self.isStunShown = false
 
     return self
 end

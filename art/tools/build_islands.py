@@ -87,6 +87,7 @@ RUST = ("5E2F2A", "9C574B", "C8644F")
 GOLD = ("8A5A2A", "D49A77", "F1D4AC")
 STEEL = ("3E3A44", "7A7680", "B8B4BC")
 WATER = ("3D5F8A", "5E8FC2", "A8D0F0")
+MIST = ("8FB8DC", "C8E2F4", "F4FAFF")
 
 
 def new_object(name, build, location, rotation, scale):
@@ -191,6 +192,30 @@ class Island:
         roof_obj.scale = (0.55, 1, 1)
         self.cube(toon("Shadow", "1E1820", "271F29", "332A35"), (x, y - d / 2 - 0.01, z + 0.18), (0.16, 0.02, 0.32))
 
+    # A stream from source to the island's front rim, then a fall that hangs just in front of the rock face
+    # and ends in a puff of mist, so it reads as one piece of water from the top down
+    def waterfall(self, source, rim_x, length, width=0.42):
+        water = toon("Water", *WATER)
+        mist = toon("Mist", *MIST)
+
+        # Front rim of the jittered grass cap, nudged out so the fall sits in front of the rock
+        rim_y = -math.sqrt(2.35 ** 2 - rim_x ** 2) - 0.08
+        sx, sy = source
+        dx, dy = rim_x - sx, rim_y - sy
+        stream_length = math.hypot(dx, dy)
+        angle = math.degrees(math.atan2(-dx, dy))
+
+        self.cube(water, ((sx + rim_x) / 2, (sy + rim_y) / 2, 0.09), (width, stream_length, 0.03), rotation=(0, 0, angle))
+        # Lip that rolls over the rim edge
+        self.cube(water, (rim_x, rim_y, 0.0), (width, 0.12, 0.2))
+        self.cube(water, (rim_x, rim_y - 0.03, 0.08 - length / 2), (width, 0.05, length))
+
+        bottom = 0.08 - length
+        for offset, size in ((-0.16, 0.16), (0.0, 0.22), (0.17, 0.15)):
+            self.ball(mist, (rim_x + offset, rim_y - 0.05, bottom + size * 0.3), size, scale=(1, 0.6, 0.8))
+
+        return angle, rim_y
+
 
 def training(island):
     grass = toon("TrainingGrass", "3F5A2E", "6E8B3D", "9DB45A")
@@ -243,11 +268,9 @@ def forest(island):
     island.cylinder(toon("Wood", *WOOD), (0.2, -1.0, 0.08), 0.2, 0.06, vertices=6)
     island.cone(glow("Fire", "F1A04A"), (0.2, -1.0, 0.25), 0.13, 0.3, vertices=5)
 
-    # Stream running off the edge as a waterfall
-    water = toon("Water", *WATER)
-    island.cube(water, (1.0, -0.4, 0.09), (0.5, 1.6, 0.03), rotation=(0, 0, -20))
-    island.cube(water, (1.3, -1.4, -0.9), (0.5, 0.06, 1.9), rotation=(0, 0, -20))
-    island.cube(toon("Wood", *WOOD), (1.0, -0.4, 0.14), (0.9, 0.3, 0.04), rotation=(0, 0, -20))
+    # Stream running off the front edge as a waterfall, with a plank bridge over it
+    angle, _ = island.waterfall((0.9, 0.2), 1.3, 1.25)
+    island.cube(toon("Wood", *WOOD), (1.03, -0.5, 0.14), (0.9, 0.3, 0.04), rotation=(0, 0, angle))
 
 
 def cliffside(island):
@@ -274,9 +297,8 @@ def cliffside(island):
         island.cube(wood, (x, -0.4, 0.3), (0.07, 0.07, 0.6))
     island.house((0.9, -0.4, 0.55), (0.9, 0.7, 0.55), toon("Plank", *WOOD), toon("Roof", *RUST))
 
-    # Waterfall off the cliff face
-    water = toon("Water", *WATER)
-    island.cube(water, (-1.0, -1.7, -0.9), (0.4, 0.06, 2.1))
+    # Spring at the foot of the left spire running off the cliff face
+    island.waterfall((-1.2, 0.3), -1.0, 1.3, width=0.36)
     island.cube(toon("Crate", *GOLD), (-0.6, -0.5, 0.2), (0.32, 0.32, 0.32))
 
 

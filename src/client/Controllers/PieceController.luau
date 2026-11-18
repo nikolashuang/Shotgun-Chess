@@ -71,6 +71,32 @@ function PieceController.Attack(attackerId, targetId, health)
     end)
 end
 
+function PieceController.SetStunned(id, isStunned)
+    local piece = pieces[id]
+    if not piece then return end
+
+    piece.Rig:SetStunned(isStunned)
+end
+
+-- Only one piece shows the command arrow at a time; nil hides it
+local arrowPieceId = nil
+
+function PieceController.SetArrow(id)
+    if id == arrowPieceId then return end
+
+    local previous = pieces[arrowPieceId]
+    if previous then
+        previous.Rig:SetArrow(false)
+    end
+
+    arrowPieceId = id
+
+    local piece = pieces[id]
+    if piece then
+        piece.Rig:SetArrow(true)
+    end
+end
+
 function PieceController.Get(id)
     return pieces[id]
 end
@@ -101,6 +127,7 @@ function PieceController.Clear()
     end
 
     pieces = {}
+    arrowPieceId = nil
 end
 
 local init = false

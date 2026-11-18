@@ -35,7 +35,7 @@ The turn ends with **End Turn**.
 Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuning in `AIConfig`). Matches without an AI rating (the Duel test dummies) still use a fixed 5-second wait (`MatchConfig.ENEMY_TURN_TIME`).
 
 - Every enemy piece may move OR attack on every enemy turn. *(The Active/Passive cycle from the design doc was removed in Nov 2026: too easy.)*
-- **Stuns:** a stunned piece skips its enemy turns until the stun runs out (`PieceClass:Stun`, nothing applies stuns yet).
+- **Stuns:** a stunned piece skips its enemy turns until the stun runs out. `MatchClass:StunPiece` applies one and shows stars circling the piece's head until it wears off (nothing applies stuns yet).
 - **Rotating priority:** acting pieces plan in Id order, rotated by one each enemy turn. Earlier pieces reserve their destination tiles first.
 - **Simultaneous execution:** every plan is made against the same board snapshot, then all attacks resolve and all moves happen together.
 - **Priorities** (weights in `AIConfig.Weights`): Defend > Attack > Evade > Position > Teamwork > Advance. Queens put Attack above Defend until only their King and Queen are left. Enemy Kings: Evade > Attack > Teamwork > Position > Advance.
@@ -53,6 +53,8 @@ Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuni
 
 - Pieces move with normal chess movement and can't move onto an occupied tile. Sliding pieces are blocked by any piece.
 - Pawns move one tile forward (toward the enemy side).
+- Every highlighted choice on the board (moves, summon tiles, command targets) has a border, and the one under the cursor gets a thicker yellow border.
+- Choosing Command outlines every piece you can choose in yellow; the chosen piece gets a spinning yellow arrow bobbing above it.
 - **Attacking:** commanding a piece onto an enemy attacks it instead of moving. Targets follow chess capture rules: pawns attack diagonally forward, knights jump, sliding pieces hit the first piece in each line (friendly pieces block). The attacker hops to the enemy and returns to its own square. Survivors flash white like any hit; killed pieces fall over and crumble.
 - Summon damage builds ultimate charge like any other damage to enemy pieces.
 
@@ -60,7 +62,7 @@ Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuni
 
 - Each player gains 1 energy at the start of every turn (including the first), up to 8.
 - Starting energy is 0. *(Assumption — confirm.)*
-- Summon costs: Pawn 1, Knight 2, Bishop 2, Rook 3, Queen 4.
+- Summon costs: Pawn 1, Knight 2, Bishop 2, Rook 3, Queen 6 (raised from 4 in Nov 2026 so the Queen is harder to get).
 - Action costs: Fire 1, Command 1, Reload 1, Special 2, Ultimate 0.
 - Only one active Queen per king.
 - Energy is also spent on fusion (cost undecided).
@@ -137,11 +139,12 @@ Chosen in the Armory alongside the shotgun. Replaces the old Necro/Spark/WindCha
 
 World map, bottom to top: **King's Training** (tutorial) → **Hunter Forest** (Hunter King) → **Cliffside** (Outlaw King) → **Outskirts** (Gunslinger King) → **Gravehollow** (Reaper King). Each region needs the one before it.
 
-- The Campaign button opens its own screen. The world map scrolls vertically: King's Training at the bottom, Gravehollow at the top. It opens scrolled to the newest unlocked region.
+- The Campaign button opens its own screen. The world map scrolls vertically: King's Training at the bottom, Gravehollow at the top. It always opens scrolled to the bottom (King's Training) so players see where the campaign starts.
 - Each region is a floating pixel-art island that bobs gently, joined by dotted paths. Locked islands are gray, wrapped in two chains with a padlock.
 - When a region unlocks, the map scrolls to it, the padlock shakes and drops, the chains slide off, the island fades into color and the path to it lights up.
 - Clicking a region opens its area map: a branching route of 11–13 nodes to the King, inked on a torn parchment sheet. Nodes have no names; a legend of the five node icons sits in the info bar.
 - All map data lives in `CampaignConfig`; art asset ids live in `CampaignArt`.
+- Waterfalls (Forest, Cliffside) run from a stream on top over the island's front rim and down the rock face into a puff of mist.
 - Art pipeline: `art/tools/build_islands.py` (run inside Blender with the sprite file open) builds the islands, chains and padlock from primitives and renders them to `art/campaign/islands/`, saving the scene as `art/CampaignIslands.blend`. `art/tools/build_campaign_art.py` then outlines them, makes the gray versions and packs `Islands.png`, draws the parchment (`Paper.png`), and cuts the node icons and logo from `art/reference/`.
 - Node types (from the reference legend): **Battle**, **Rest Site**, **Treasure Hunt**, **Queen Fight** (the elite), **Boss Fight** (King).
 - A node opens once any node linking to it is cleared. Taking one branch doesn't lock the others.
@@ -171,13 +174,16 @@ First clears pay in full. Battle replays pay `REPLAY_REWARD_SCALE` (20%). Cleari
 - **Duels unlock at level 20** (`ProgressionConfig.DUELS_UNLOCK_LEVEL`, 19,000 total XP), checked on the server.
 - Back steps out one level at a time: area map → world map → main menu.
 - **Dev panel:** a Developer button on the main menu, shown only to the accounts in `DevConfig.USER_IDS` (Snoothe3rd). It can unlock everything (all shotguns, classes, campaign nodes and level 20), add 1000 Gold, or reset the profile. The server checks the account on every request.
-- Saved in a DataStore (`PlayerProfile_v1`): gold, XP, owned shotguns, unlocked classes, cleared nodes and equipped loadout. If the profile can't load (e.g. Studio API access off), a temporary profile is used and never saved.
+- Saved in a DataStore (`PlayerProfile_v1`): gold, XP, owned shotguns, unlocked classes, cleared nodes, equipped loadout and settings. If the profile can't load (e.g. Studio API access off), a temporary profile is used and never saved.
 
 ## Visual Style
+
+- Board effects (stun stars, command arrow) are built and rendered in Blender by `art/tools/build_effects.py` (run with `art/ShotgunChessSprites.blend` open), then packed into the sprite atlas by `art/tools/build_atlas.py` as `SpriteConfig.Effects`.
 
 - Palette: `#332A35` (panels), `#9C574B` (borders, dark tiles), `#D49A77` (secondary text, light tiles), `#F1D4AC` (highlights), `#E9E3D6` (text). Derived shades: `#271F29` and `#1E1820` for backgrounds, `#C8644F` for warnings and enemy text, `#4A3D48` for empty bars.
 - Font: Grenze Gotisch Bold, the closest built-in Roblox font to the logo lettering (Roblox can't load custom fonts). UI text is Title Case because blackletter is hard to read in all caps.
 - The menu uses the logo image (`CampaignArt.LOGO`) instead of text.
+- Hovering a main menu button opens a gold ribbon behind its label from the middle outward and turns the label dark. The ribbon is built in Blender by `art/tools/build_ribbon.py`; `art/tools/build_menu_art.py` outlines it and generates the CRT textures. Asset ids live in `MenuArt`.
 
 ## Pieces
 
@@ -189,6 +195,10 @@ First clears pay in full. Battle replays pay `REPLAY_REWARD_SCALE` (20%). Cleari
 | Knight | 5      | 2             |
 | Rook   | 7      | 2             |
 | Queen  | 9      | 4             |
+
+## Settings
+
+- **CRT filter** (on by default): scanlines, a vignette and a soft band rolling down the screen, drawn over every screen. Toggled with the CRT Filter button in Settings (main menu and pause menu) and saved in the profile (`Settings.CRT`, defaults in `SettingsConfig`).
 
 ## Controls
 

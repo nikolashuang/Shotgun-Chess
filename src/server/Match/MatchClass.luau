@@ -472,6 +472,22 @@ function MatchClass:RunEnemyPlans(plans)
             self:Send("PieceMoved", piece.Id, plan.Column, plan.Row)
         end
     end
+
+    -- Stun stars come off once the stun has run out
+    for _, piece in pairs(self.Pieces) do
+        if piece.isStunShown and not piece:IsStunned() then
+            piece.isStunShown = false
+            self:Send("PieceStunned", piece.Id, false)
+        end
+    end
+end
+
+-- Nothing stuns yet; abilities like Hunting Strike will call this
+function MatchClass:StunPiece(piece, turns)
+    piece:Stun(turns)
+    piece.isStunShown = true
+
+    self:Send("PieceStunned", piece.Id, true)
 end
 
 -- Damages the player's king or a white piece on the tile; returns the health left, or nil if nothing was there

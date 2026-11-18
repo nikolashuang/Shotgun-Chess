@@ -23,7 +23,7 @@ local PieceConfig = {
         Knight = 2,
         Bishop = 2,
         Rook = 3,
-        Queen = 4,
+        Queen = 6,
     },
 
     -- Most of a piece type a king can have active at once

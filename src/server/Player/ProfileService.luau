@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 
 local ProgressionConfig = require(ReplicatedStorage.Shared.Player.ProgressionConfig)
 local ProgressionRules = require(ReplicatedStorage.Shared.Player.ProgressionRules)
+local SettingsConfig = require(ReplicatedStorage.Shared.Player.SettingsConfig)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 
 local ProfileRemote = ReplicatedStorage.Remotes.ProfileRemote
@@ -30,6 +31,7 @@ local function NewData()
             Shotgun = ShotgunConfig.STARTER,
             Class = nil,
         },
+        Settings = table.clone(SettingsConfig.DEFAULTS),
     }
 end
 
@@ -44,6 +46,12 @@ local function Reconcile(data)
     end
 
     data.Shotguns[ShotgunConfig.STARTER] = true
+
+    for name, value in pairs(SettingsConfig.DEFAULTS) do
+        if data.Settings[name] == nil then
+            data.Settings[name] = value
+        end
+    end
 
     return data
 end
@@ -86,6 +94,7 @@ function ProfileService.Sync(player)
         Shotguns = data.Shotguns,
         Classes = data.Classes,
         Nodes = data.Nodes,
+        Settings = data.Settings,
     })
 end
 
@@ -189,10 +198,20 @@ function ProfileService.Init()
         task.wait(2)
     end)
 
-    ProfileRemote.OnServerEvent:Connect(function(player, action)
-        if action ~= "Request" then return end
+    ProfileRemote.OnServerEvent:Connect(function(player, action, name, value)
+        if action == "Request" then
+            ProfileService.Sync(player)
+        elseif action == "SetSetting" then
+            local profile = Profiles[player]
+            if not profile then return end
 
-        ProfileService.Sync(player)
+            -- Only known settings, and only values of the default's type
+            local default = SettingsConfig.DEFAULTS[name]
+            if default == nil then return end
+            if typeof(value) ~= typeof(default) then return end
+
+            profile.Data.Settings[name] = value
+        end
     end)
 
     task.spawn(function()

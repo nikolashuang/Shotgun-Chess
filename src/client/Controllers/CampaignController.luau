@@ -183,19 +183,6 @@ local function ScrollTo(index, time)
     end
 end
 
-local function GetFrontier()
-    local cleared = GetCleared()
-    local frontier = 1
-
-    for i, regionId in ipairs(CampaignConfig.ORDER) do
-        if CampaignRules.IsRegionUnlocked(cleared, regionId) then
-            frontier = i
-        end
-    end
-
-    return frontier
-end
-
 local function StartBob(island)
     local art = island.Art
     local tweenInfo = TweenInfo.new(BOB_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
@@ -374,7 +361,8 @@ function CampaignController.ShowWorld(shouldScroll)
         isAnimating = true
         task.defer(PlayUnlock, islands[newlyUnlocked], dotsByIndex[newlyUnlocked] or {}, newlyUnlocked)
     elseif shouldScroll then
-        task.defer(ScrollTo, GetFrontier())
+        -- Always start at King's Training at the bottom so players see where the campaign begins
+        task.defer(ScrollTo, 1)
     end
 end
 
@@ -666,7 +654,7 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
         returnToWorld = false
     end)
 
-    -- Opening the screen fresh scrolls the world map to the newest region
+    -- Opening the screen fresh scrolls the world map to the bottom
     screen:GetPropertyChangedSignal("Enabled"):Connect(function()
         if not screen.Enabled then return end
 

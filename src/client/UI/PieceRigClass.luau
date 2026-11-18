@@ -5,6 +5,7 @@ local TweenService = game:GetService("TweenService")
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 local AnimatedSpriteClass = require(script.Parent.AnimatedSpriteClass)
+local EffectSpriteClass = require(script.Parent.EffectSpriteClass)
 
 -- In tiles
 local HOP_HEIGHT = 0.35
@@ -28,6 +29,11 @@ local BAR_SHOW_TIME = 0.15
 local BAR_HIDE_TIME = 0.3
 local BAR_HIDE_DELAY = 1.5
 local BAR_DRAIN_TIME = 0.25
+
+-- Stun stars sit this far below the top of the head, the command arrow this far above the health bar, in tiles
+local STUN_DROP = 2 * PIXEL
+local ARROW_GAP = 2 * PIXEL
+local ARROW_BOB = 3 * PIXEL
 
 local OUTLINE_COLOR = Color3.fromHex("271F29")
 local EMPTY_COLOR = Color3.fromHex("4A3D48")
@@ -83,12 +89,16 @@ local function GetBarLayer(board)
     return layer
 end
 
+-- Height of the top of the sprite's head inside the rig, in tiles from the rig's top
+local function GetHeadTop(pieceType)
+    local headRow = SpriteConfig.HeadRows[pieceType]
+
+    return BODY_BOTTOM - SpriteConfig.CELL_TILES * (1 - headRow / SpriteConfig.CELL)
+end
+
 -- Distance from the tile center up to just above the sprite's head, in tiles
 local function GetBarOffset(pieceType)
-    local headRow = SpriteConfig.HeadRows[pieceType]
-    local spriteTop = BODY_BOTTOM - SpriteConfig.CELL_TILES * (1 - headRow / SpriteConfig.CELL)
-
-    return spriteTop - 0.5 - BAR_GAP - BAR_HEIGHT / 2
+    return GetHeadTop(pieceType) - 0.5 - BAR_GAP - BAR_HEIGHT / 2
 end
 
 function PieceRigClass.new(board, pieceType, team)
@@ -114,10 +124,15 @@ function PieceRigClass.new(board, pieceType, team)
     self.HopConnection = nil
     self.TiltConnection = nil
 
+    self.PieceType = pieceType
+
     self.MaxHealth = nil
     self.Health = nil
     self.HideToken = 0
     self.isHovered = false
+
+    self.StunEffect = nil
+    self.ArrowEffect = nil
 
     self:CreateHealthBar(board, pieceType, team)
 
@@ -157,6 +172,47 @@ function PieceRigClass:CreateHealthBar(board, pieceType, team)
     self.Rig:GetPropertyChangedSignal("Position"):Connect(function()
         self.HealthBar.Position = self.Rig.Position - barOffset
     end)
+end
+
+-- Stars circling the head while the piece is stunned
+function PieceRigClass:SetStunned(isStunned)
+    if not isStunned then
+        if self.StunEffect then
+            self.StunEffect:Destroy()
+            self.StunEffect = nil
+        end
+        return
+    end
+
+    if self.StunEffect then return end
+
+    self.StunEffect = EffectSpriteClass.new("Stun", self.Rig)
+    self.StunEffect.Image.Size = UDim2.fromScale(self.StunEffect.Width, self.StunEffect.Height)
+    self.StunEffect.Image.ZIndex = 4
+    self.StunEffect.BasePosition = UDim2.fromScale(0.5, GetHeadTop(self.PieceType) + STUN_DROP)
+end
+
+-- Spinning arrow bobbing above the health bar while the piece is chosen for a command
+function PieceRigClass:SetArrow(isShown)
+    if not isShown then
+        if self.ArrowEffect then
+            self.ArrowEffect:Destroy()
+            self.ArrowEffect = nil
+        end
+        return
+    end
+
+    if self.ArrowEffect then return end
+
+    local arrow = EffectSpriteClass.new("Arrow", self.Rig)
+    local barTop = GetHeadTop(self.PieceType) - BAR_GAP - BAR_HEIGHT
+
+    arrow.Image.Size = UDim2.fromScale(arrow.Width, arrow.Height)
+    arrow.Image.ZIndex = 4
+    arrow.BasePosition = UDim2.fromScale(0.5, barTop - ARROW_GAP - arrow.Height / 2)
+    arrow.BobHeight = ARROW_BOB
+
+    self.ArrowEffect = arrow
 end
 
 function PieceRigClass:SetHealth(health, maxHealth)
@@ -325,6 +381,9 @@ function PieceRigClass:FadeOut()
 end
 
 function PieceRigClass:Die()
+    self:SetStunned(false)
+    self:SetArrow(false)
+
     self.HideToken += 1
     TweenService:Create(self.HealthBar, TweenInfo.new(BAR_HIDE_TIME), {GroupTransparency = 1}):Play()
 
@@ -334,6 +393,9 @@ function PieceRigClass:Die()
 end
 
 function PieceRigClass:Destroy()
+    self:SetStunned(false)
+    self:SetArrow(false)
+
     if self.HopConnection then
         self.HopConnection:Disconnect()
     end
