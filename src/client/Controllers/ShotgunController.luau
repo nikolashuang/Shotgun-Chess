@@ -45,6 +45,8 @@ local weapon = nil
 local gunSprite = SpriteConfig.Guns.Pump
 local aimAngle = 0
 local mode = "Normal"
+-- Set while aiming a straight-line ability instead of the shotgun
+local lineRange = nil
 
 local ShotgunController = {}
 
@@ -185,9 +187,16 @@ local function DrawArc()
         return
     end
 
-    -- Precise shots and knife swings only preview their tiles
-    if mode == "Alt" then
-        local _, hitTiles = ShotgunRules.GetFireResult(column, row, targetX, targetY, weapon, mode, isBlockingTile)
+    -- Line abilities, precise shots and knife swings only preview their tiles
+    if lineRange or mode == "Alt" then
+        local hitTiles = nil
+
+        if lineRange then
+            hitTiles = select(2, ShotgunRules.GetPreciseShot(column, row, targetX, targetY, lineRange))
+        else
+            hitTiles = select(2, ShotgunRules.GetFireResult(column, row, targetX, targetY, weapon, mode, isBlockingTile))
+        end
+
         hitTiles = hitTiles or {}
 
         local tileNames = {}
@@ -304,8 +313,16 @@ end
 -- Right click switches to the shotgun's alt mode, if it has one
 function ShotgunController.ToggleMode()
     if not weapon or not weapon.AltMode then return end
+    if lineRange then return end
 
     SetMode(mode == "Normal" and "Alt" or "Normal")
+end
+
+function ShotgunController.SetLineAim(range)
+    if lineRange == range then return end
+
+    lineRange = range
+    ClearPreviewTiles()
 end
 
 function ShotgunController.SetActive(enabled)

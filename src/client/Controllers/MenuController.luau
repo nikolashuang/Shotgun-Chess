@@ -113,6 +113,26 @@ local function BindProfile(profile)
 end
 
 
+-- Background art covers the whole screen at any aspect ratio, cropping toward its Focus point
+local function BindBackground(background)
+    local art = background:WaitForChild("Art")
+    local sourceSize = art:GetAttribute("SourceSize")
+    local focus = art:GetAttribute("Focus")
+
+    art.AnchorPoint = focus
+    art.Position = UDim2.fromScale(focus.X, focus.Y)
+
+    local function Fit()
+        local screenSize = background.AbsoluteSize
+        local scale = math.max(screenSize.X / sourceSize.X, screenSize.Y / sourceSize.Y)
+
+        art.Size = UDim2.fromOffset(math.ceil(sourceSize.X * scale), math.ceil(sourceSize.Y * scale))
+    end
+
+    background:GetPropertyChangedSignal("AbsoluteSize"):Connect(Fit)
+    Fit()
+end
+
 local init = false
 function MenuController.Init(startMatch)
     if init then return end
@@ -125,7 +145,8 @@ function MenuController.Init(startMatch)
     local campaign = playerGui:WaitForChild("CampaignScreen")
     root = menu:WaitForChild("Root")
 
-    BindProfile(root:WaitForChild("Profile"))
+    BindBackground(menu:WaitForChild("Background"))
+    BindProfile(menu:WaitForChild("Profile"))
 
     local duelsButton = root:WaitForChild("DuelsButton")
     player:GetAttributeChangedSignal("Level"):Connect(function()

@@ -20,10 +20,10 @@ local PieceConfig = {
     -- Energy cost to summon
     Cost = {
         Pawn = 1,
-        Knight = 3,
-        Bishop = 3,
-        Rook = 5,
-        Queen = 7,
+        Knight = 2,
+        Bishop = 2,
+        Rook = 3,
+        Queen = 4,
     },
 
     -- Most of a piece type a king can have active at once

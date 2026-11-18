@@ -17,18 +17,18 @@ Kill the enemy king.
 
 The game is fully turn-based. All durations (stuns, souls, crafted weapons, etc.) are measured in turns.
 
-Each player turn has two events:
+Turns are energy-based:
 
-1. **Movement Event** — the king moves like a chess king: one tile in any of the 8 directions.
-2. **Action Event** — one of:
-   - **Fire shotgun**
-   - **Use special** (costs energy)
-   - **Summon a piece** — placed on an empty tile within one tile of the king (costs energy)
-   - **Command a piece** — move one of your pieces using its normal chess movement
-   - **Use ultimate**
-   - **Reload** — refills the shotgun's magazine
+- **Movement** — the king gets 1 free move per turn, like a chess king: one tile in any of the 8 directions.
+- **Actions** — any number per turn, in any order, as long as there's energy to pay for them:
+   - **Fire shotgun** — 1 energy
+   - **Command a piece** — 1 energy (move or attack with one of your pieces using its normal chess movement)
+   - **Reload** — 1 energy, refills the shotgun's magazine
+   - **Use special** — 2 energy
+   - **Summon a piece** — the piece's cost (see Energy); placed on an empty tile within one tile of the king. Opening the summon menu is free.
+   - **Use ultimate** — free once fully charged
 
-The turn ends automatically once both events are used, or early with **End Turn**.
+The turn ends with **End Turn**.
 
 ### Enemy Turn
 
@@ -45,7 +45,8 @@ The turn ends automatically once both events are used, or early with **End Turn*
 
 - Each player gains 1 energy at the start of every turn (including the first), up to 8.
 - Starting energy is 0. *(Assumption — confirm.)*
-- Costs: Pawn 1, Knight 3, Bishop 3, Rook 5, Queen 7, Special 1.
+- Summon costs: Pawn 1, Knight 2, Bishop 2, Rook 3, Queen 4.
+- Action costs: Fire 1, Command 1, Reload 1, Special 2, Ultimate 0.
 - Only one active Queen per king.
 - Energy is also spent on fusion (cost undecided).
 
@@ -56,7 +57,7 @@ The turn ends automatically once both events are used, or early with **End Turn*
 
 ## Shotgun (Fire Action)
 
-Every shotgun has a magazine. Firing spends ammo; you can't fire without enough. **Reload** uses the Action event and refills the magazine.
+Every shotgun has a magazine. Firing spends ammo; you can't fire without enough. **Reload** costs 1 energy and refills the magazine.
 
 Aiming follows the Shotgun King style: a curved arc centered on the king.
 
@@ -86,8 +87,8 @@ Shotguns are bought in the Shop with gold and equipped in the Armory. Only the P
 
 **Alt modes** — right click while aiming switches between normal and alt; left click fires.
 
-- **Precise shot (Buck Barrel):** a 3-tile straight line snapped to the nearest of the 8 chess directions. Pierces every enemy in the line for max damage. Uses the Action and needs all 3 shells.
-- **Knife swing (Knife Shotty):** hits 2 adjacent tiles — the tile it points at plus its neighbor on the cursor's side. Needs an enemy in one of them. 6 damage and bleed (1 damage per turn for 2 turns, ticking at the start of the bleeding piece's turn; reapplying refreshes it). Uses the Action, costs no ammo, so it works at 0 ammo.
+- **Precise shot (Buck Barrel):** a 3-tile straight line snapped to the nearest of the 8 chess directions. Pierces every enemy in the line for max damage. Costs 1 energy like any shot and needs all 3 shells.
+- **Knife swing (Knife Shotty):** hits 2 adjacent tiles — the tile it points at plus its neighbor on the cursor's side. Needs an enemy in one of them. 6 damage and bleed (1 damage per turn for 2 turns, ticking at the start of the bleeding piece's turn; reapplying refreshes it). Costs 1 energy like any shot but no ammo, so it works at 0 ammo.
 - Point blank applies to normal shots of every shotgun.
 
 ## Classes
@@ -109,7 +110,7 @@ Chosen in the Armory alongside the shotgun. Replaces the old Necro/Spark/WindCha
 
 ### Gunslinger
 - **Passive [Deadeye]:** All shotgun cones shrink and shoot slightly further.
-- **Special [Quickdraw]:** Fire a weaker shot without using the Action event (once per turn).
+- **Special [Fan the Hammer]:** Pull out a revolver and fire 6 shots down a 3-tile straight line (snapped to the 8 chess directions). Each shot has a 50/50 chance to hit. Shots don't pierce: each one hits the first living enemy in the line, so once that enemy dies the remaining shots go to the next one. *(Design decision: damage per shot — placeholder 1.)*
 - **Ultimate [High Noon's Bounty]:** Mark 2 enemies; gain energy for killing both.
 
 ### Outlaw
@@ -200,7 +201,7 @@ Not yet specified in the design doc. Do not implement guesses without confirming
 
 - Fusion rules and cost
 - Starting energy (prototype uses 0)
-- Class numbers: soul abilities, trap damage, Quickdraw damage, what counts as an "isolated" piece, bounty energy reward
+- Class numbers: soul abilities, trap damage, Fan the Hammer damage per shot, what counts as an "isolated" piece, bounty energy reward
 - Enemy AI: enemies still don't act, so campaign battles can't be lost yet
 - Encounter armies (current ones are placeholders in `CampaignConfig.Armies`)
 - Regional King and Queen boss abilities (need the class abilities first)

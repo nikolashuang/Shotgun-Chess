@@ -6,12 +6,22 @@ local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
 local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
+local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
+local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
 local PieceRigClass = require(script.Parent.Parent.UI.PieceRigClass)
 local PieceController = require(script.Parent.PieceController)
 local ShotgunController = require(script.Parent.ShotgunController)
 local SummonPanelController = require(script.Parent.SummonPanelController)
 
 local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BoardRemote")
+
+local ActionCost = CombatConfig.ActionCost
+local FanConfig = ClassConfig.Classes.Gunslinger.FanTheHammer
+
+-- Seconds between Fan the Hammer shots
+local FAN_SHOT_INTERVAL = 0.12
+-- Seconds between the blasts of a multi-blast shotgun
+local BLAST_INTERVAL = 0.18
 
 local MOVE_COLOR = Color3.fromHex("9C574B")
 local SUMMON_COLOR = Color3.fromHex("F1D4AC")
@@ -59,8 +69,8 @@ local function IsMyTurn()
     return turnState ~= nil and turnState.Phase == "PlayerTurn"
 end
 
-local function CanAct()
-    return IsMyTurn() and not turnState.HasActed
+local function CanAct(cost)
+    return IsMyTurn() and turnState.Energy >= cost
 end
 
 local function CanMove()
@@ -164,7 +174,10 @@ function BoardController.RefreshPreview()
         commandPieceId = nil
     end
 
-    ShotgunController.SetActive(selectedAction == "Fire" and CanAct())
+    local isFanning = selectedAction == "Special" and turnState ~= nil and turnState.Class == "Gunslinger" and CanAct(ActionCost.Special)
+
+    ShotgunController.SetLineAim(isFanning and FanConfig.Range or nil)
+    ShotgunController.SetActive(isFanning or (selectedAction == "Fire" and CanAct(ActionCost.Fire)))
 
     if not kingColumn then return end
 
@@ -182,9 +195,8 @@ function BoardController.RefreshPreview()
             end
         end
     elseif selectedAction == "Summon" then
-        if not CanAct() then return end
         if not SummonPanelController.SelectedPiece then return end
-        if turnState.Energy < PieceConfig.Cost[SummonPanelController.SelectedPiece] then return end
+        if not CanAct(PieceConfig.Cost[SummonPanelController.SelectedPiece]) then return end
 
         local range = BoardConfig.SUMMON_RANGE
 
@@ -199,7 +211,7 @@ function BoardController.RefreshPreview()
             end
         end
     elseif selectedAction == "Command" then
-        if not CanAct() then return end
+        if not CanAct(ActionCost.Command) then return end
 
         local selectedPiece = commandPieceId and PieceController.Get(commandPieceId)
 
@@ -229,7 +241,7 @@ local function OnTileClicked(column, row)
     local selectedAction = actionPanel.SelectedAction
 
     if selectedAction == "Fire" then
-        if not CanAct() then return end
+        if not CanAct(ActionCost.Fire) then return end
 
         local weapon = ShotgunController.GetWeapon()
         local mode = ShotgunController.GetMode()
@@ -254,17 +266,26 @@ local function OnTileClicked(column, row)
 
         BoardRemote:FireServer("Fire", targetX, targetY, mode)
         actionPanel.ClearSelection()
+    elseif selectedAction == "Special" then
+        if turnState.Class ~= "Gunslinger" then return end
+        if not CanAct(ActionCost.Special) then return end
+
+        local targetX, targetY = ShotgunController.GetMouseBoardPosition()
+        if not ShotgunRules.GetPreciseShot(kingColumn, kingRow, targetX, targetY, FanConfig.Range) then return end
+
+        BoardRemote:FireServer("Special", targetX, targetY)
+        actionPanel.ClearSelection()
     elseif selectedAction == "Summon" then
         local pieceType = SummonPanelController.SelectedPiece
 
         if not pieceType then return end
-        if not CanAct() then return end
+        if not CanAct(PieceConfig.Cost[pieceType]) then return end
         if not IsSummonTile(column, row) then return end
 
         BoardRemote:FireServer("Summon", pieceType, column, row)
         actionPanel.ClearSelection()
     elseif selectedAction == "Command" then
-        if not CanAct() then return end
+        if not CanAct(ActionCost.Command) then return end
 
         local clickedPiece = PieceController.GetAt(column, row)
 
@@ -352,8 +373,14 @@ local function PlaceKing(column, row)
     BoardController.RefreshPreview()
 end
 
-local function OnShotFired(pellets, hitTiles, damaged)
-    kingRig.Sprite:Play("Recoil")
+-- Multi-blast shotguns replay the shot once per blast, each blast dealing an equal share of the damage
+local function OnShotFired(pellets, hitTiles, damaged, shotType)
+    local weapon = ShotgunController.GetWeapon()
+    local blasts = 1
+
+    if shotType == "Spread" or shotType == "PointBlank" then
+        blasts = weapon.Blasts
+    end
 
     local damageByTile = {}
 
@@ -361,16 +388,45 @@ local function OnShotFired(pellets, hitTiles, damaged)
         local piece = PieceController.Get(result.Id)
 
         if piece then
-            damageByTile[BoardRules.GetTileName(piece.Rig.Column, piece.Rig.Row)] = result
+            damageByTile[BoardRules.GetTileName(piece.Rig.Column, piece.Rig.Row)] = {
+                Id = result.Id,
+                StartHealth = piece.Rig.Health,
+                Health = result.Health,
+            }
         end
     end
 
-    ShotgunController.PlayShot(pellets, hitTiles, function(column, row)
-        local result = damageByTile[BoardRules.GetTileName(column, row)]
-        if not result then return end
+    for blast = 1, blasts do
+        task.delay((blast - 1) * BLAST_INTERVAL, function()
+            if not kingRig then return end
 
-        PieceController.ApplyDamage(result.Id, result.Health)
-    end)
+            kingRig.Sprite:Play("Recoil")
+
+            ShotgunController.PlayShot(pellets, hitTiles, function(column, row)
+                local result = damageByTile[BoardRules.GetTileName(column, row)]
+                if not result then return end
+
+                local health = result.StartHealth - (result.StartHealth - result.Health) * blast / blasts
+                PieceController.ApplyDamage(result.Id, blast == blasts and result.Health or health)
+            end)
+        end)
+    end
+end
+
+local function OnFanFired(shots)
+    for index, shot in ipairs(shots) do
+        task.delay((index - 1) * FAN_SHOT_INTERVAL, function()
+            if not kingRig then return end
+
+            kingRig.Sprite:Play("Recoil")
+
+            local hitTiles = shot.Id and {{Column = shot.Column, Row = shot.Row}} or {}
+
+            ShotgunController.PlayShot({{X = shot.Column - 0.5, Y = shot.Row - 0.5}}, hitTiles, function()
+                PieceController.ApplyDamage(shot.Id, shot.Health)
+            end)
+        end)
+    end
 end
 
 local init = false
@@ -382,7 +438,7 @@ function BoardController.Init(actionPanelController)
     actionPanel.OnSelectionChanged = function()
         -- Reload happens on select instead of waiting for a tile click
         if actionPanel.SelectedAction == "Reload" then
-            if CanAct() and turnState.Ammo < turnState.MaxAmmo then
+            if CanAct(ActionCost.Reload) and turnState.Ammo < turnState.MaxAmmo then
                 BoardRemote:FireServer("Reload")
             end
 
@@ -423,6 +479,8 @@ function BoardController.Init(actionPanelController)
             BoardController.RefreshPreview()
         elseif action == "ShotFired" then
             OnShotFired(...)
+        elseif action == "FanFired" then
+            OnFanFired(...)
         elseif action == "PieceDamaged" then
             PieceController.ApplyDamage(...)
         elseif action == "PieceAttacked" then

@@ -1,6 +1,6 @@
 -- Uploaded images, built by art/tools/build_campaign_art.py
 local CampaignArt = {
-    LOGO = "rbxassetid://76189780619268",
+    LOGO = "rbxassetid://77550011946469",
 
     NODE_ICONS = "rbxassetid://119794303932713",
     -- Pixels per icon in the atlas, icons sit side by side in this order

@@ -73,6 +73,10 @@ BoardRemote.OnServerEvent:Connect(function(player, action, first, second, third)
         match:Fire(first, second, third)
     elseif action == "Reload" then
         match:Reload()
+    elseif action == "Special" then
+        if not IsFiniteNumber(first) or not IsFiniteNumber(second) then return end
+
+        match:Special(first, second)
     elseif action == "Summon" then
         if typeof(first) ~= "string" then return end
         if not IsTileArgument(second, third) then return end

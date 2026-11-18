@@ -3,7 +3,7 @@ local ClassConfig = {
     STARTER = nil,
     ORDER = {"Reaper", "Hunter", "Gunslinger", "Outlaw"},
 
-    -- Display only until class abilities are implemented
+    -- Text is display only; ability numbers sit beside the text of implemented abilities
     Classes = {
         Reaper = {
             DisplayName = "Reaper",
@@ -22,8 +22,15 @@ local ClassConfig = {
         Gunslinger = {
             DisplayName = "Gunslinger",
             Passive = "Deadeye: Shotgun cones shrink and shoot slightly further.",
-            Special = "Quickdraw: Fire a weaker shot without using your action. Once per turn.",
+            Special = "Fan the Hammer: Fire 6 revolver shots down a 3 tile line. Each shot has a 50% chance to hit.",
             Ultimate = "High Noon's Bounty: Mark 2 enemies, gain energy for killing both.",
+
+            FanTheHammer = {
+                Shots = 6,
+                Range = 3,
+                HitChance = 0.5,
+                Damage = 1,
+            },
         },
 
         Outlaw = {

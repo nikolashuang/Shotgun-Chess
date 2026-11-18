@@ -5,6 +5,7 @@ local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
+local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
 local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
 local MatchConfig = require(script.Parent.MatchConfig)
 local KingClass = require(script.Parent.KingClass)
@@ -14,6 +15,7 @@ local BoardRemote = ReplicatedStorage.Remotes.BoardRemote
 
 local EnergyConfig = CombatConfig.Energy
 local UltimateConfig = CombatConfig.Ultimate
+local ActionCost = CombatConfig.ActionCost
 
 local MatchClass = {}
 
@@ -38,10 +40,11 @@ function MatchClass.new(player, shotgunName, className, enemies)
     self.Phase = "PlayerTurn"
     self.Turn = 1
     self.HasMoved = false
-    self.HasActed = false
 
     self.Energy = EnergyConfig.START_ENERGY
     self.UltimateCharge = 0
+
+    self.Random = Random.new()
 
     self.isActive = true
 
@@ -57,7 +60,6 @@ function MatchClass:SendTurnState()
         Phase = self.Phase,
         Turn = self.Turn,
         HasMoved = self.HasMoved,
-        HasActed = self.HasActed,
         Class = self.ClassName,
         Shotgun = self.King.ShotgunName,
         Ammo = self.King.Ammo,
@@ -142,11 +144,15 @@ function MatchClass:DamagePiece(piece, amount)
     return true
 end
 
-function MatchClass:CanAct()
+function MatchClass:CanAct(cost)
     if self.Phase ~= "PlayerTurn" then return false end
-    if self.HasActed then return false end
+    if self.Energy < cost then return false end
 
     return true
+end
+
+function MatchClass:SpendEnergy(cost)
+    self.Energy -= cost
 end
 
 -- Armies with a King are beaten by killing it, armies without one by clearing the board
@@ -188,15 +194,11 @@ function MatchClass:End(result)
     self.OnEnd(result)
 end
 
--- Ends the turn once both the movement and action events are used
+-- Actions are limited only by energy, so the turn ends through End Turn
 function MatchClass:FinishEvent()
     if self:CheckVictory() then return end
 
-    if self.HasMoved and self.HasActed then
-        self:StartEnemyTurn()
-    else
-        self:SendTurnState()
-    end
+    self:SendTurnState()
 end
 
 --MOVEMENT EVENT--
@@ -215,7 +217,7 @@ end
 --ACTION EVENTS--
 
 function MatchClass:Fire(targetX, targetY, mode)
-    if not self:CanAct() then return end
+    if not self:CanAct(ActionCost.Fire) then return end
     if not self.King:CanFire(mode) then return end
 
     local function IsEnemyTile(column, row)
@@ -252,43 +254,88 @@ function MatchClass:Fire(targetX, targetY, mode)
     end
 
     self.King:SpendAmmo(mode)
+    self:SpendEnergy(ActionCost.Fire)
 
-    self.HasActed = true
     self:Send("ShotFired", pellets, hitTiles, damaged, shotType)
     self:FinishEvent()
 end
 
 function MatchClass:Reload()
-    if not self:CanAct() then return end
+    if not self:CanAct(ActionCost.Reload) then return end
     if not self.King:Reload() then return end
 
-    self.HasActed = true
+    self:SpendEnergy(ActionCost.Reload)
     self:Send("Reloaded")
     self:FinishEvent()
 end
 
+--SPECIALS--
+
+function MatchClass:Special(targetX, targetY)
+    if self.ClassName == "Gunslinger" then
+        self:FanTheHammer(targetX, targetY)
+    end
+end
+
+-- Every shot travels the line and hits the first enemy still standing in it, or misses
+function MatchClass:FanTheHammer(targetX, targetY)
+    if not self:CanAct(ActionCost.Special) then return end
+
+    local fan = ClassConfig.Classes.Gunslinger.FanTheHammer
+    local _, lineTiles = ShotgunRules.GetPreciseShot(self.King.Column, self.King.Row, targetX, targetY, fan.Range)
+    if not lineTiles then return end
+
+    local lastTile = lineTiles[#lineTiles]
+    local shots = {}
+
+    for _ = 1, fan.Shots do
+        local target = nil
+
+        for _, tile in ipairs(lineTiles) do
+            local piece = self:GetPieceAt(tile.Column, tile.Row)
+
+            if piece and piece.Team ~= "White" then
+                target = piece
+                break
+            end
+        end
+
+        if target and self.Random:NextNumber() < fan.HitChance then
+            local column, row = target.Column, target.Row
+            self:DamagePiece(target, fan.Damage)
+
+            table.insert(shots, {Column = column, Row = row, Id = target.Id, Health = target.Health})
+        else
+            table.insert(shots, {Column = lastTile.Column, Row = lastTile.Row})
+        end
+    end
+
+    self:SpendEnergy(ActionCost.Special)
+    self:Send("FanFired", shots)
+    self:FinishEvent()
+end
+
 function MatchClass:Summon(pieceType, column, row)
-    if not self:CanAct() then return end
     if not table.find(PieceConfig.SUMMONABLE, pieceType) then return end
+
+    local cost = PieceConfig.Cost[pieceType]
+    if not self:CanAct(cost) then return end
+
     if not BoardRules.IsOnBoard(column, row) then return end
     if BoardRules.GetDistance(self.King.Column, self.King.Row, column, row) > BoardConfig.SUMMON_RANGE then return end
     if self:IsOccupied(column, row) then return end
 
-    local cost = PieceConfig.Cost[pieceType]
-    if self.Energy < cost then return end
-
     local maxActive = PieceConfig.MaxActive[pieceType]
     if maxActive and self:CountPieces(pieceType, "White") >= maxActive then return end
 
-    self.Energy -= cost
+    self:SpendEnergy(cost)
     self:AddPiece(pieceType, "White", column, row)
 
-    self.HasActed = true
     self:FinishEvent()
 end
 
 function MatchClass:Command(pieceId, column, row)
-    if not self:CanAct() then return end
+    if not self:CanAct(ActionCost.Command) then return end
 
     local piece = self.Pieces[pieceId]
     if not piece then return end
@@ -312,7 +359,7 @@ function MatchClass:Command(pieceId, column, row)
 
         self:DamagePiece(target, PieceConfig.Damage[piece.Type])
 
-        self.HasActed = true
+        self:SpendEnergy(ActionCost.Command)
         self:Send("PieceAttacked", piece.Id, target.Id, target.Health)
         self:FinishEvent()
         return
@@ -323,7 +370,7 @@ function MatchClass:Command(pieceId, column, row)
     piece.Column = column
     piece.Row = row
 
-    self.HasActed = true
+    self:SpendEnergy(ActionCost.Command)
     self:Send("PieceMoved", piece.Id, column, row)
     self:FinishEvent()
 end
@@ -369,7 +416,6 @@ function MatchClass:StartPlayerTurn()
     self.Phase = "PlayerTurn"
     self.Turn += 1
     self.HasMoved = false
-    self.HasActed = false
 
     self:GainEnergy()
     self:TickBleed("White")

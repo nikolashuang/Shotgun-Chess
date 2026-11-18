@@ -19,9 +19,8 @@ local function Update(state)
 
     if isMyTurn then
         local moves = state.HasMoved and 0 or 1
-        local actions = state.HasActed and 0 or 1
 
-        turnLabel.Text = string.format("Turn %d   Move %d   Action %d", state.Turn, moves, actions)
+        turnLabel.Text = string.format("Turn %d   Move %d", state.Turn, moves)
         turnLabel.TextColor3 = PLAYER_COLOR
     elseif state.Phase == "Over" then
         turnLabel.Text = "Match Over"

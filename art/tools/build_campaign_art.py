@@ -68,11 +68,20 @@ def build_nodes(ref):
     atlas.save(os.path.join(OUT, "NodeIcons.png"))
 
 
-# Removes the black background by flood filling dark pixels from the image border
+# Sources with transparency keep it, snapped to fully on or off so pixel edges stay hard.
+# Opaque sources have their black background removed by flood filling dark pixels from the image border
 def build_logo():
-    image = Image.open(LOGO).convert("RGB")
+    source = Image.open(LOGO)
+    image = source.convert("RGB")
     pixels = np.array(image).astype(int)
     height, width = pixels.shape[:2]
+
+    if "A" in source.getbands():
+        alpha = np.array(source.getchannel("A")) >= 128
+        rgba = np.dstack([pixels, np.where(alpha, 255, 0)]).astype(np.uint8)
+        save_logo(Image.fromarray(rgba, "RGBA"))
+        return
+
     dark = pixels.max(axis=2) < 48
 
     background = np.zeros((height, width), bool)
@@ -91,7 +100,10 @@ def build_logo():
                 stack.append((ny, nx))
 
     rgba = np.dstack([pixels, np.where(background, 0, 255)]).astype(np.uint8)
-    logo = Image.fromarray(rgba, "RGBA")
+    save_logo(Image.fromarray(rgba, "RGBA"))
+
+
+def save_logo(logo):
     logo = logo.crop(logo.getbbox())
 
     size = (LOGO_WIDTH, round(logo.height * LOGO_WIDTH / logo.width))
