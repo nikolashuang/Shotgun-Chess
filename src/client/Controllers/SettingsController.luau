@@ -1,7 +1,10 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local SoundService = game:GetService("SoundService")
+local UserInputService = game:GetService("UserInputService")
 
 local KeybindConfig = require(ReplicatedStorage.Shared.Player.KeybindConfig)
+local SettingsConfig = require(ReplicatedStorage.Shared.Player.SettingsConfig)
 local CrtController = require(script.Parent.CrtController)
 local ProfileController = require(script.Parent.ProfileController)
 
@@ -9,14 +12,22 @@ local ProfileRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Pr
 
 local WAITING_COLOR = Color3.fromHex("F1D4AC")
 local DEFAULT_COLOR = Color3.fromHex("9C574B")
+-- Slider settings, each driving the SoundGroup of the same name
+local VOLUMES = {"Sound", "Music"}
 
 local input = nil
+local overlay = nil
+local settingsPage = nil
+local keybindsPage = nil
 local rows = {}
-local crtButtons = {}
+local sliders = {}
+local volumes = {}
+local crtValue = nil
 local capturingAction = nil
+local draggingSlider = nil
 
--- Keybinds only last for the session until they are saved to a profile; the CRT filter toggle is saved
--- Every keybind panel (main menu and in-match) shows the same bindings
+-- Settings overlay shared by the main menu and matches: volumes, CRT filter and a keybinds page
+-- Keybinds only last for the session until they are saved to a profile; the other settings are saved
 local SettingsController = {}
 
 local function Refresh()
@@ -49,8 +60,8 @@ local function StartCapture(action)
     end)
 end
 
-local function BindPanel(panel)
-    local template = panel:WaitForChild("Template")
+local function BindKeybinds(page)
+    local template = page:WaitForChild("Template")
 
     for i, action in ipairs(KeybindConfig.ORDER) do
         local row = template:Clone()
@@ -58,7 +69,7 @@ local function BindPanel(panel)
         row.Label.Text = KeybindConfig.DisplayNames[action]
         row.LayoutOrder = i
         row.Visible = true
-        row.Parent = panel.List
+        row.Parent = page.List
 
         row.Key.Activated:Connect(function()
             if capturingAction == action then
@@ -71,32 +82,105 @@ local function BindPanel(panel)
         table.insert(rows, row)
     end
 
-    local resetButton = panel:WaitForChild("ResetButton")
-
-    resetButton.Activated:Connect(function()
+    page:WaitForChild("ResetButton").Activated:Connect(function()
         StopCapture()
         input.ResetBindings()
     end)
 
-    -- Same style as Reset, mirrored to the right side of the panel
-    local crtButton = resetButton:Clone()
-    crtButton.Name = "CrtButton"
-    crtButton.Position = UDim2.new(1 - resetButton.Position.X.Scale - resetButton.Size.X.Scale, 0, resetButton.Position.Y.Scale, 0)
-    crtButton.Parent = panel
-
-    crtButton.Activated:Connect(function()
-        CrtController.SetEnabled(not CrtController.isEnabled)
-        ProfileRemote:FireServer("SetSetting", "CRT", CrtController.isEnabled)
-    end)
-
-    table.insert(crtButtons, crtButton)
-
-    -- Closing the panel mid-capture shouldn't leave a key waiting
-    panel:GetPropertyChangedSignal("Visible"):Connect(function()
-        if not panel.Visible and capturingAction then
+    -- Closing the page mid-capture shouldn't leave a key waiting
+    page:GetPropertyChangedSignal("Visible"):Connect(function()
+        if not page.Visible and capturingAction then
             StopCapture()
         end
     end)
+end
+
+local function ShowPage(page)
+    settingsPage.Visible = page == settingsPage
+    keybindsPage.Visible = page == keybindsPage
+end
+
+local function SetVolume(name, value)
+    volumes[name] = value
+
+    local group = SoundService:FindFirstChild(name)
+    if group then
+        group.Volume = value
+    end
+
+    local row = sliders[name]
+    row.Track.Fill.Size = UDim2.fromScale(value, 1)
+    row.Track.Knob.Position = UDim2.fromScale(value, 0.5)
+    row.Value.Text = tostring(math.round(value * 100))
+end
+
+local function DragSlider(name, x)
+    local track = sliders[name].Track
+    local value = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+
+    SetVolume(name, math.round(value * 100) / 100)
+end
+
+-- Volumes save when the drag ends, not on every step
+local function BindSliders()
+    for _, name in ipairs(VOLUMES) do
+        sliders[name] = settingsPage:WaitForChild(name)
+
+        sliders[name].Track.InputBegan:Connect(function(inputObject)
+            if inputObject.UserInputType ~= Enum.UserInputType.MouseButton1 and inputObject.UserInputType ~= Enum.UserInputType.Touch then return end
+
+            draggingSlider = name
+            DragSlider(name, inputObject.Position.X)
+        end)
+
+        SetVolume(name, SettingsConfig.DEFAULTS[name])
+    end
+
+    UserInputService.InputChanged:Connect(function(inputObject)
+        if not draggingSlider then return end
+        if inputObject.UserInputType ~= Enum.UserInputType.MouseMovement and inputObject.UserInputType ~= Enum.UserInputType.Touch then return end
+
+        DragSlider(draggingSlider, inputObject.Position.X)
+    end)
+
+    UserInputService.InputEnded:Connect(function(inputObject)
+        if not draggingSlider then return end
+        if inputObject.UserInputType ~= Enum.UserInputType.MouseButton1 and inputObject.UserInputType ~= Enum.UserInputType.Touch then return end
+
+        ProfileRemote:FireServer("SetSetting", draggingSlider, volumes[draggingSlider])
+        draggingSlider = nil
+    end)
+end
+
+-- Both arrows flip the filter since it only has two states
+local function BindCrt()
+    local row = settingsPage:WaitForChild("Crt")
+    crtValue = row:WaitForChild("Value")
+
+    local function Toggle()
+        CrtController.SetEnabled(not CrtController.isEnabled)
+        ProfileRemote:FireServer("SetSetting", "CRT", CrtController.isEnabled)
+    end
+
+    row:WaitForChild("Previous").Activated:Connect(Toggle)
+    row:WaitForChild("Next").Activated:Connect(Toggle)
+
+    local function RefreshCrt(isEnabled)
+        crtValue.Text = isEnabled and "On" or "Off"
+    end
+
+    CrtController.OnChanged(RefreshCrt)
+    RefreshCrt(CrtController.isEnabled)
+end
+
+function SettingsController.Open()
+    ShowPage(settingsPage)
+    overlay.Enabled = true
+end
+
+function SettingsController.Close()
+    overlay.Enabled = false
+    ShowPage(nil)
 end
 
 local init = false
@@ -106,28 +190,37 @@ function SettingsController.Init(inputController)
 
     input = inputController
 
-    local playerGui = Players.LocalPlayer.PlayerGui
-    BindPanel(playerGui:WaitForChild("MainMenu"):WaitForChild("Root"):WaitForChild("SettingsPanel"))
-    BindPanel(playerGui:WaitForChild("GameHUD"):WaitForChild("PauseOverlay"):WaitForChild("KeybindsPanel"))
+    overlay = Players.LocalPlayer.PlayerGui:WaitForChild("SettingsOverlay")
+    settingsPage = overlay:WaitForChild("SettingsPage")
+    keybindsPage = overlay:WaitForChild("KeybindsPage")
+
+    BindKeybinds(keybindsPage)
+    BindSliders()
+    BindCrt()
+
+    settingsPage:WaitForChild("CloseButton").Activated:Connect(SettingsController.Close)
+    settingsPage:WaitForChild("KeybindsButton").Activated:Connect(function()
+        ShowPage(keybindsPage)
+    end)
+    keybindsPage:WaitForChild("BackButton").Activated:Connect(function()
+        ShowPage(settingsPage)
+    end)
 
     input.OnBindingsChanged = Refresh
     Refresh()
 
-    local function RefreshCrt(isEnabled)
-        for _, button in ipairs(crtButtons) do
-            button.Text = isEnabled and "CRT Filter: On" or "CRT Filter: Off"
-        end
-    end
-
-    CrtController.OnChanged(RefreshCrt)
-    RefreshCrt(CrtController.isEnabled)
-
-    -- The saved choice arrives with the profile
+    -- Saved choices arrive with the profile
     ProfileController.OnChanged(function()
-        local saved = ProfileController.Data.Settings.CRT
+        local saved = ProfileController.Data.Settings
 
-        if saved ~= nil and saved ~= CrtController.isEnabled then
-            CrtController.SetEnabled(saved)
+        if saved.CRT ~= nil and saved.CRT ~= CrtController.isEnabled then
+            CrtController.SetEnabled(saved.CRT)
+        end
+
+        for _, name in ipairs(VOLUMES) do
+            if typeof(saved[name]) == "number" then
+                SetVolume(name, saved[name])
+            end
         end
     end)
 end

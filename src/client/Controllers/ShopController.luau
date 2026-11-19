@@ -11,6 +11,9 @@ local LoadoutRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Lo
 local AFFORDABLE_COLOR = Color3.fromHex("F1D4AC")
 local OWNED_COLOR = Color3.fromHex("D49A77")
 local LOCKED_COLOR = Color3.fromHex("C8644F")
+local DONATE_NOTICE_TIME = 1.5
+-- Row width over height, so rows keep their shape at any screen size
+local ROW_ASPECT = 5
 
 local player = Players.LocalPlayer
 local rows = {}
@@ -37,13 +40,16 @@ local function Refresh()
 end
 
 -- Shotguns are bought with gold; the server checks the price and ownership
+-- Crates and Donate are placeholders until they're designed
 local init = false
 function ShopController.Init()
     if init then return end
     init = true
 
-    local panel = player.PlayerGui:WaitForChild("MainMenu"):WaitForChild("Root"):WaitForChild("ShopPanel")
-    local template = panel:WaitForChild("Template")
+    local root = player.PlayerGui:WaitForChild("ShopScreen"):WaitForChild("Root")
+    local template = root:WaitForChild("Template")
+    local list = root:WaitForChild("ShotgunList")
+    local gold = root:WaitForChild("Gold")
 
     for i, name in ipairs(ShotgunConfig.ORDER) do
         local weapon = ShotgunConfig.Shotguns[name]
@@ -55,7 +61,7 @@ function ShopController.Init()
         row.LayoutOrder = i
         AtlasImage.SetRect(row.Icon, SpriteConfig.Guns[name].Rect)
         row.Visible = true
-        row.Parent = panel.List
+        row.Parent = list
 
         row.Activated:Connect(function()
             if ProfileController.Data.Shotguns[name] then return end
@@ -67,9 +73,59 @@ function ShopController.Init()
         rows[name] = row
     end
 
+    -- AutomaticCanvasSize ignores the rows' aspect ratio sizing, so the canvas follows the layout instead
+    local layout = list:WaitForChild("UIListLayout")
+    local padding = list:WaitForChild("UIPadding")
+
+    local function FitCanvas()
+        local height = layout.AbsoluteContentSize.Y + padding.PaddingTop.Offset + padding.PaddingBottom.Offset
+
+        list.CanvasSize = UDim2.fromOffset(0, height)
+    end
+
+    list.AutomaticCanvasSize = Enum.AutomaticSize.None
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(FitCanvas)
+    FitCanvas()
+
+    -- Rows are sized from the list's width and the canvas from the rows, so the list always scrolls to the last gun
+    local layout = list:WaitForChild("UIListLayout")
+    local padding = list:WaitForChild("UIPadding")
+
+    local function Resize()
+        local rowHeight = list.AbsoluteSize.X * template.Size.X.Scale / ROW_ASPECT
+
+        for _, row in pairs(rows) do
+            row.Size = UDim2.new(template.Size.X.Scale, 0, 0, rowHeight)
+        end
+    end
+
+    local function UpdateCanvas()
+        local extra = padding.PaddingTop.Offset + padding.PaddingBottom.Offset
+        list.CanvasSize = UDim2.fromOffset(0, layout.AbsoluteContentSize.Y + extra)
+    end
+
+    list:GetPropertyChangedSignal("AbsoluteSize"):Connect(Resize)
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
+    Resize()
+    UpdateCanvas()
+
+    local donateLabel = root:WaitForChild("DonateButton"):WaitForChild("Label")
+    root.DonateButton.Activated:Connect(function()
+        donateLabel.Text = "Coming Soon"
+        task.delay(DONATE_NOTICE_TIME, function()
+            donateLabel.Text = "Donate"
+        end)
+    end)
+
+    local function UpdateGold()
+        gold.Text = (player:GetAttribute("Gold") or 0) .. " Gold"
+    end
+
     player:GetAttributeChangedSignal("Gold"):Connect(Refresh)
+    player:GetAttributeChangedSignal("Gold"):Connect(UpdateGold)
     ProfileController.OnChanged(Refresh)
     Refresh()
+    UpdateGold()
 end
 
 return ShopController

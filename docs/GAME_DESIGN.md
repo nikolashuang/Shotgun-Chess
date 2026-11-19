@@ -99,7 +99,7 @@ Shotguns are bought in the Shop with gold and equipped in the Armory. Only the P
 | Pump (starter) | — | 5 | 3 | 64° | 5→2 | Basic shotgun |
 | Double Barrel | 2000 | 4 | 2 *(placeholder)* | 64° | 5→3.5, x2 | Every shot fires both barrels: 2 shells, double damage |
 | Buck Barrel | 2100 | 4 | 3 | 64° | 5→3 | Knockback 1 tile |
-| Long Barrel | 3500 | 4 | 5 | 24° *(placeholder)* | 5→2 | Very tight cone |
+| Long Barrel | 3500 | 4 | 4 | 24° *(placeholder)* | 5→2 | Very tight cone |
 | Knife Shotty | 2400 | 5 | 3 | 64° | 5→2 | Alt mode: knife swing |
 
 **Knockback (Buck Barrel):** every enemy the shot hits and doesn't kill is pushed 1 tile straight away from the king (one of the 8 directions). If the tile is off the board or occupied, it stays put with no extra damage. Kings can't be knocked back. Enemies farther from the king are pushed first, so a line of enemies all move back together. The precise shot was removed (Nov 2026).

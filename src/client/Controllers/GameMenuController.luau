@@ -2,26 +2,23 @@ local Players = game:GetService("Players")
 
 local overlay = nil
 local pausePanel = nil
-local keybindsPanel = nil
 
--- In-match settings: resume, rebind keys, or leave to the main menu
+-- In-match menu: resume, open the settings overlay, or leave to the main menu
 local GameMenuController = {}
 
 local function Close()
-    keybindsPanel.Visible = false
     pausePanel.Visible = false
     overlay.Visible = false
 end
 
-local function ShowPage(page)
-    pausePanel.Visible = page == pausePanel
-    keybindsPanel.Visible = page == keybindsPanel
+local function Open()
+    pausePanel.Visible = true
     overlay.Visible = true
 end
 
 local init = false
 -- onReturn runs after the main menu is shown again
-function GameMenuController.Init(leaveMatch, onReturn)
+function GameMenuController.Init(leaveMatch, onReturn, openSettings, closeSettings)
     if init then return end
     init = true
 
@@ -31,28 +28,21 @@ function GameMenuController.Init(leaveMatch, onReturn)
 
     overlay = hud:WaitForChild("PauseOverlay")
     pausePanel = overlay:WaitForChild("PausePanel")
-    keybindsPanel = overlay:WaitForChild("KeybindsPanel")
 
-    hud:WaitForChild("SettingsButton").Activated:Connect(function()
+    hud:WaitForChild("MenuButton").Activated:Connect(function()
         if overlay.Visible then
             Close()
         else
-            ShowPage(pausePanel)
+            Open()
         end
     end)
 
     pausePanel:WaitForChild("ResumeButton").Activated:Connect(Close)
-
-    pausePanel:WaitForChild("KeybindsButton").Activated:Connect(function()
-        ShowPage(keybindsPanel)
-    end)
-
-    keybindsPanel:WaitForChild("BackButton").Activated:Connect(function()
-        ShowPage(pausePanel)
-    end)
+    pausePanel:WaitForChild("SettingsButton").Activated:Connect(openSettings)
 
     pausePanel:WaitForChild("MenuButton").Activated:Connect(function()
         Close()
+        closeSettings()
         leaveMatch()
         hud.Enabled = false
         menu.Enabled = true

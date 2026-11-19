@@ -157,16 +157,16 @@ local function CloseAllPanels(root)
     end
 end
 
-local function IsDuelsUnlocked()
+local function IsMultiplayerUnlocked()
     local level = Players.LocalPlayer:GetAttribute("Level") or ProgressionConfig.START_LEVEL
 
     return level >= ProgressionConfig.DUELS_UNLOCK_LEVEL
 end
 
-local function UpdateDuelsLock(button)
-    local isUnlocked = IsDuelsUnlocked()
+local function UpdateMultiplayerLock(button)
+    local isUnlocked = IsMultiplayerUnlocked()
 
-    button.Label.Text = isUnlocked and "Duels" or "Duels [Lv " .. ProgressionConfig.DUELS_UNLOCK_LEVEL .. "]"
+    button.Label.Text = isUnlocked and "Multiplayer" or "Multiplayer [Lv " .. ProgressionConfig.DUELS_UNLOCK_LEVEL .. "]"
     button.Label.TextTransparency = isUnlocked and 0 or 0.5
 end
 
@@ -229,25 +229,37 @@ local function BindBackground(background)
 end
 
 local init = false
-function MenuController.Init(startMatch)
+-- openSettings shows the settings overlay over whatever screen is open
+function MenuController.Init(openSettings)
     if init then return end
     init = true
 
     local player = Players.LocalPlayer
     local playerGui = player.PlayerGui
     local menu = playerGui:WaitForChild("MainMenu")
-    local hud = playerGui:WaitForChild("GameHUD")
-    local campaign = playerGui:WaitForChild("CampaignScreen")
     root = menu:WaitForChild("Root")
 
     BindBackground(menu:WaitForChild("Background"))
     BindProfile(menu:WaitForChild("Profile"))
 
-    local duelsButton = root:WaitForChild("DuelsButton")
+    local multiplayerButton = root:WaitForChild("MultiplayerButton")
     player:GetAttributeChangedSignal("Level"):Connect(function()
-        UpdateDuelsLock(duelsButton)
+        UpdateMultiplayerLock(multiplayerButton)
     end)
-    UpdateDuelsLock(duelsButton)
+    UpdateMultiplayerLock(multiplayerButton)
+
+    -- Options with a <Option>Screen ScreenGui open it in place of the menu; its Menu button comes back
+    local screens = {}
+
+    for _, option in ipairs({"Singleplayer", "Multiplayer", "Armory", "Shop"}) do
+        local screen = playerGui:WaitForChild(option .. "Screen")
+        screens[option] = screen
+
+        screen:WaitForChild("Root"):WaitForChild("BackButton").Activated:Connect(function()
+            screen.Enabled = false
+            menu.Enabled = true
+        end)
+    end
 
     for _, button in pairs(root:GetChildren()) do
         if not button:IsA("TextButton") then continue end
@@ -257,17 +269,17 @@ function MenuController.Init(startMatch)
         BindHover(button)
 
         button.Activated:Connect(function()
-            -- Campaign has its own screen; Duels starts a match once unlocked
-            if option == "Campaign" then
-                menu.Enabled = false
-                campaign.Enabled = true
+            if option == "Settings" then
+                openSettings()
                 return
-            elseif option == "Duels" then
-                if not IsDuelsUnlocked() then return end
+            end
 
+            if option == "Multiplayer" and not IsMultiplayerUnlocked() then return end
+
+            local screen = screens[option]
+            if screen then
                 menu.Enabled = false
-                hud.Enabled = true
-                startMatch("Duel")
+                screen.Enabled = true
                 return
             end
 

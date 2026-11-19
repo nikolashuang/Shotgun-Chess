@@ -76,6 +76,12 @@
     "SoundService": {
       "$properties": {
         "RespectFilteringEnabled": true
+      },
+      "Sound": {
+        "$className": "SoundGroup"
+      },
+      "Music": {
+        "$className": "SoundGroup"
       }
     }
   }

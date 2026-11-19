@@ -51,6 +51,7 @@ local screen = nil
 local stats = nil
 local header = nil
 local backButton = nil
+local singleplayer = nil
 
 local worldView = nil
 local worldCanvas = nil
@@ -152,7 +153,7 @@ end
 local function ShowView(isWorld)
     worldView.Visible = isWorld
     areaView.Visible = not isWorld
-    backButton.Label.Text = isWorld and "Menu" or "World Map"
+    backButton.Label.Text = isWorld and "Back" or "World Map"
 end
 
 --WORLD MAP--
@@ -572,7 +573,7 @@ function CampaignController.ReturnToMap(toWorld)
     screen.Enabled = true
 end
 
--- Back steps out one level: area map -> world map -> main menu
+-- Back steps out one level: area map -> world map -> singleplayer screen
 local function Back()
     if isAnimating then return end
 
@@ -582,7 +583,7 @@ local function Back()
     end
 
     screen.Enabled = false
-    menu.Enabled = true
+    singleplayer.Enabled = true
 end
 
 local function UpdateStats()
@@ -604,6 +605,7 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
     menu = playerGui:WaitForChild("MainMenu")
     hud = playerGui:WaitForChild("GameHUD")
     screen = playerGui:WaitForChild("CampaignScreen")
+    singleplayer = playerGui:WaitForChild("SingleplayerScreen")
 
     local root = screen:WaitForChild("Root")
     stats = root:WaitForChild("Stats")

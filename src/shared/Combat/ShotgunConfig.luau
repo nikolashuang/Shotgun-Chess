@@ -74,7 +74,7 @@ local ShotgunConfig = {
 
         LongBarrel = {
             DisplayName = "Long Barrel",
-            Description = "5 tile range with a very tight spread.",
+            Description = "4 tile range with a very tight spread.",
             Price = 3500,
 
             MaxAmmo = 4,

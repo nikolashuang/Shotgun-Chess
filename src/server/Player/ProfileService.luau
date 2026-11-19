@@ -209,6 +209,8 @@ function ProfileService.Init()
             local default = SettingsConfig.DEFAULTS[name]
             if default == nil then return end
             if typeof(value) ~= typeof(default) then return end
+            -- Number settings are volumes
+            if typeof(value) == "number" and not (value >= 0 and value <= 1) then return end
 
             profile.Data.Settings[name] = value
         end

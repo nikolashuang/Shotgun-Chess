@@ -306,7 +306,6 @@ function MatchClass:Fire(targetX, targetY, mode)
         end
     end
 
-    -- The knife can only be swung at an adjacent enemy
     if shotType == "Knife" and #targets == 0 then return end
 
     local weapon = self.King.Shotgun
@@ -360,8 +359,7 @@ function MatchClass:Fire(targetX, targetY, mode)
     self:FinishEvent()
 end
 
--- Pushes a piece straight away from the king, stopping at anything in the way; Kings can't be moved
--- Returns the new tile, or nil if the piece didn't move
+
 function MatchClass:KnockBack(piece, tiles)
     if piece.Type == "King" then return nil end
 
