@@ -166,6 +166,28 @@ function AbilityController.IsThrowingBolas()
     return board.IsSelected("Ultimate") and CanUltimate()
 end
 
+-- Abilities that are aimed by clicking enemies directly (High Noon's Bounty)
+function AbilityController.TargetsEnemies(action)
+    if not board then return false end
+
+    local state = board.GetTurnState()
+    if not state or state.Class ~= "Gunslinger" then return false end
+
+    return action == "Ultimate" and CanUltimate()
+end
+
+-- Ids of the enemies picked so far by an enemy-targeting ability
+function AbilityController.GetPickedEnemies(action)
+    local ids = {}
+    if not AbilityController.TargetsEnemies(action) then return ids end
+
+    for id in pairs(picks) do
+        table.insert(ids, id)
+    end
+
+    return ids
+end
+
 -- Area previews (smoke) follow the cursor
 function AbilityController.WantsHoverRefresh(action)
     local state = board.GetTurnState()

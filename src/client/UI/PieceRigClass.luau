@@ -6,6 +6,7 @@ local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 local AnimatedSpriteClass = require(script.Parent.AnimatedSpriteClass)
 local EffectSpriteClass = require(script.Parent.EffectSpriteClass)
+local SpeedController = require(script.Parent.Parent.Controllers.SpeedController)
 
 -- In tiles
 local HOP_HEIGHT = 0.35
@@ -142,6 +143,7 @@ function PieceRigClass.new(board, pieceType, team)
     self.MarkEffect = nil
 
     self:CreateHealthBar(board, pieceType, team)
+    self:CreateArrow()
 
     return self
 end
@@ -235,26 +237,37 @@ function PieceRigClass:SetMarked(isMarked)
     self.MarkEffect = mark
 end
 
--- Spinning arrow bobbing above the health bar while the piece is chosen for a command
-function PieceRigClass:SetArrow(isShown)
-    if not isShown then
-        if self.ArrowEffect then
-            self.ArrowEffect:Destroy()
-            self.ArrowEffect = nil
-        end
-        return
-    end
-
-    if self.ArrowEffect then return end
-
+-- Every rig keeps one hidden arrow so hovering only toggles it; a new one could draw a frame out of place
+function PieceRigClass:CreateArrow()
     local arrow = EffectSpriteClass.new("Arrow", self.Rig)
 
     arrow.Image.Size = UDim2.fromScale(arrow.Width, arrow.Height)
     arrow.Image.ZIndex = 4
     arrow.BasePosition = self:GetAboveBarPosition(arrow)
     arrow.BobHeight = ARROW_BOB
+    arrow:SetShown(false)
 
     self.ArrowEffect = arrow
+end
+
+-- Spinning arrow bobbing above the health bar while the piece is chosen, hovered or targeted
+-- color tints the gold sprite; nil keeps it gold
+function PieceRigClass:SetArrow(isShown, color)
+    local arrow = self.ArrowEffect
+    if not arrow then return end
+
+    if isShown then
+        arrow.BasePosition = self:GetAboveBarPosition(arrow)
+
+        -- A bounty mark already floats there, so the arrow sits on top of it
+        if self.MarkEffect then
+            arrow.BasePosition -= UDim2.fromScale(0, self.MarkEffect.Height + ARROW_GAP)
+        end
+
+        arrow.Image.ImageColor3 = color or Color3.new(1, 1, 1)
+    end
+
+    arrow:SetShown(isShown)
 end
 
 -- Draws a divider between every point of health so players can count the hits left
@@ -290,7 +303,7 @@ function PieceRigClass:SetHealth(health, maxHealth)
     self:DrawTicks()
 
     local fill = UDim2.fromScale(math.clamp(health / self.MaxHealth, 0, 1), 1)
-    TweenService:Create(self.HealthFill, TweenInfo.new(BAR_DRAIN_TIME), {Size = fill}):Play()
+    TweenService:Create(self.HealthFill, TweenInfo.new(SpeedController.Scale(BAR_DRAIN_TIME)), {Size = fill}):Play()
 end
 
 function PieceRigClass:ShowHealth()
@@ -326,7 +339,7 @@ function PieceRigClass:Hop(fromColumn, fromRow, toColumn, toRow, onLanded)
     end
 
     local hopAnim = SpriteConfig.Anims.Hop
-    local duration = hopAnim.Frames * hopAnim.FrameTime
+    local duration = SpeedController.Scale(hopAnim.Frames * hopAnim.FrameTime)
     local startTime = time()
 
     self.Sprite:Play("Hop")
@@ -378,7 +391,7 @@ function PieceRigClass:Lunge(column, row, onHit)
     self:Hop(homeColumn, homeRow, strikeColumn, strikeRow, function()
         onHit()
 
-        task.delay(LUNGE_PAUSE, function()
+        task.delay(SpeedController.Scale(LUNGE_PAUSE), function()
             if not self.Rig.Parent then return end
 
             self:Hop(strikeColumn, strikeRow, self.Column, self.Row)
@@ -422,7 +435,7 @@ end
 
 -- Classic chess knock over for a killed piece: falls away from the attacker, then crumbles
 function PieceRigClass:KnockOver(direction)
-    self:Tilt(0, 90 * direction, TOPPLE_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In, function()
+    self:Tilt(0, 90 * direction, SpeedController.Scale(TOPPLE_TIME), Enum.EasingStyle.Quad, Enum.EasingDirection.In, function()
         self:Die()
     end)
 end
@@ -441,7 +454,7 @@ function PieceRigClass:FadeOut()
     self.HideToken += 1
     TweenService:Create(self.HealthBar, TweenInfo.new(BAR_HIDE_TIME), {GroupTransparency = 1}):Play()
 
-    local fade = TweenService:Create(self.Sprite.Image, TweenInfo.new(DEATH_FADE_TIME), {ImageTransparency = 1})
+    local fade = TweenService:Create(self.Sprite.Image, TweenInfo.new(SpeedController.Scale(DEATH_FADE_TIME)), {ImageTransparency = 1})
 
     fade.Completed:Connect(function()
         self:Destroy()
@@ -465,8 +478,12 @@ end
 
 function PieceRigClass:Destroy()
     self:SetStunned(false)
-    self:SetArrow(false)
     self:SetMarked(false)
+
+    if self.ArrowEffect then
+        self.ArrowEffect:Destroy()
+        self.ArrowEffect = nil
+    end
 
     if self.HopConnection then
         self.HopConnection:Disconnect()

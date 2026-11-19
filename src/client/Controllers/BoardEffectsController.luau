@@ -5,6 +5,7 @@ local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 local EffectSpriteClass = require(script.Parent.Parent.UI.EffectSpriteClass)
 local PieceController = require(script.Parent.PieceController)
+local SpeedController = require(script.Parent.SpeedController)
 
 -- In tiles
 local SOUL_LIFT = 0.42
@@ -92,7 +93,7 @@ end
 
 -- Fades the effect out (optionally drifting to target) and destroys it
 local function FadeAndDestroy(effect, target, duration)
-    duration = duration or FADE_TIME
+    duration = SpeedController.Scale(duration or FADE_TIME)
 
     TweenService:Create(effect.Image, TweenInfo.new(duration), {ImageTransparency = 1}):Play()
     GlideTo(effect, target or effect.BasePosition, duration, function()
@@ -182,7 +183,7 @@ function BoardEffectsController.SpringTrap(trapId, pieceId, health)
     local trap = traps[trapId]
     traps[trapId] = nil
 
-    task.delay(TRAP_SNAP_DELAY, function()
+    task.delay(SpeedController.Scale(TRAP_SNAP_DELAY), function()
         PieceController.ApplyDamage(pieceId, health)
 
         if not trap then return end
@@ -191,7 +192,7 @@ function BoardEffectsController.SpringTrap(trapId, pieceId, health)
 
         local snap = NewEffect("TrapSnap", GetLayer("Overhead", 7), trap.Column, trap.Row, -TRAP_SNAP_LIFT)
         snap:PlayOnce(function()
-            task.delay(TRAP_HOLD_TIME, function()
+            task.delay(SpeedController.Scale(TRAP_HOLD_TIME), function()
                 FadeAndDestroy(snap, snap.BasePosition - UDim2.fromScale(0, TRAP_RISE / BoardConfig.SIZE), TRAP_FADE_TIME)
             end)
         end)
@@ -230,7 +231,7 @@ end
 -- One bolt per energy floats up from where it dropped
 function BoardEffectsController.ShowEnergy(column, row, amount)
     for i = 1, amount do
-        task.delay((i - 1) * BOLT_STAGGER, function()
+        task.delay(SpeedController.Scale((i - 1) * BOLT_STAGGER), function()
             local bolt = NewEffect("Bolt", GetLayer("Overhead", 7), column, row, -0.3)
             FadeAndDestroy(bolt, bolt.BasePosition - UDim2.fromScale(0, BOLT_RISE / BoardConfig.SIZE), BOLT_TIME)
         end)
@@ -250,7 +251,7 @@ function BoardEffectsController.ThrowBolas(pieceId)
     local bolas = NewEffect("Bolas", GetLayer("Overhead", 7), kingColumn, kingRow, -0.4)
     local target = ToBoardPosition(piece.Rig.Column, piece.Rig.Row) - UDim2.fromScale(0, 0.4 / BoardConfig.SIZE)
 
-    GlideTo(bolas, target, BOLAS_FLIGHT_TIME, function()
+    GlideTo(bolas, target, SpeedController.Scale(BOLAS_FLIGHT_TIME), function()
         bolas:Destroy()
         PieceController.SetStunned(pieceId, true, "Bolas")
     end)

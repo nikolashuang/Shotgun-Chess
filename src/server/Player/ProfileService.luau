@@ -89,6 +89,8 @@ function ProfileService.Sync(player)
     player:SetAttribute("Exp", exp)
     player:SetAttribute("Shotgun", data.Equipped.Shotgun)
     player:SetAttribute("Class", data.Equipped.Class)
+    -- Matches read this to shorten the wait for enemy animations
+    player:SetAttribute("GameSpeed", SettingsConfig.SPEEDS[data.Settings.Speed] or 1)
 
     ProfileRemote:FireClient(player, "Profile", {
         Shotguns = data.Shotguns,
@@ -211,8 +213,13 @@ function ProfileService.Init()
             if typeof(value) ~= typeof(default) then return end
             -- Number settings are volumes
             if typeof(value) == "number" and not (value >= 0 and value <= 1) then return end
+            if typeof(value) == "string" and not table.find(SettingsConfig.OPTIONS[name] or {}, value) then return end
 
             profile.Data.Settings[name] = value
+
+            if name == "Speed" then
+                player:SetAttribute("GameSpeed", SettingsConfig.SPEEDS[value])
+            end
         end
     end)
 

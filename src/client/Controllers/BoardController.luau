@@ -14,6 +14,7 @@ local AbilityController = require(script.Parent.AbilityController)
 local BoardEffectsController = require(script.Parent.BoardEffectsController)
 local ShotgunController = require(script.Parent.ShotgunController)
 local SummonPanelController = require(script.Parent.SummonPanelController)
+local SpeedController = require(script.Parent.SpeedController)
 
 local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BoardRemote")
 
@@ -44,6 +45,10 @@ local MOVE_OUTLINE_INSET = 3
 local HOVER_COLOR = Color3.fromHex("F1D4AC")
 local HOVER_INNER_COLOR = Color3.fromHex("332A35")
 local HOVER_THICKNESS = 3
+
+-- Arrow tints: gold over allies being commanded, red over enemies being targeted
+local ALLY_ARROW_COLOR = Color3.new(1, 1, 1)
+local ENEMY_ARROW_COLOR = Color3.fromRGB(245, 80, 100)
 
 local board = nil
 local actionPanel = nil
@@ -224,6 +229,32 @@ local function GetCommandTargets(piece)
     return targets
 end
 
+-- Arrows point at the commanded piece, the ally or enemy under the cursor, and enemies already picked
+local function UpdateArrows()
+    local arrows = {}
+    local selectedAction = actionPanel.SelectedAction
+
+    if commandPieceId then
+        arrows[commandPieceId] = ALLY_ARROW_COLOR
+    end
+
+    for _, id in pairs(AbilityController.GetPickedEnemies(selectedAction)) do
+        arrows[id] = ENEMY_ARROW_COLOR
+    end
+
+    local hoveredPiece = hoveredTile and PieceController.GetAt(hoveredTile:GetAttribute("Column"), hoveredTile:GetAttribute("Row"))
+
+    if hoveredPiece then
+        if hoveredPiece.Team == "White" and selectedAction == "Command" and CanAct(ActionCost.Command, "Command") then
+            arrows[hoveredPiece.Id] = ALLY_ARROW_COLOR
+        elseif hoveredPiece.Team == "Black" and AbilityController.TargetsEnemies(selectedAction) then
+            arrows[hoveredPiece.Id] = ENEMY_ARROW_COLOR
+        end
+    end
+
+    PieceController.SetArrows(arrows)
+end
+
 local function DrawPreview()
     ClearPreview()
 
@@ -239,7 +270,7 @@ local function DrawPreview()
         commandPieceId = nil
     end
 
-    PieceController.SetArrow(commandPieceId)
+    UpdateArrows()
 
     local isFanning = selectedAction == "Special" and turnState ~= nil and turnState.Class == "Gunslinger" and CanAct(ActionCost.Special, "Special")
     local isThrowing = AbilityController.IsThrowingBolas()
@@ -438,6 +469,7 @@ local function BindTile(tile)
     tile.MouseEnter:Connect(function()
         hoveredTile = tile
         SetHoveredRig(GetRigAt(column, row))
+        UpdateArrows()
 
         if AbilityController.WantsHoverRefresh(actionPanel.SelectedAction) then
             BoardController.RefreshPreview()
@@ -451,6 +483,7 @@ local function BindTile(tile)
 
         hoveredTile = nil
         SetHoveredRig(nil)
+        UpdateArrows()
         UpdateHoverOutline()
     end)
 
@@ -501,7 +534,7 @@ local function OnShotFired(pellets, hitTiles, damaged, shotType)
     end
 
     for blast = 1, blasts do
-        task.delay((blast - 1) * BLAST_INTERVAL, function()
+        task.delay(SpeedController.Scale((blast - 1) * BLAST_INTERVAL), function()
             if not kingRig then return end
 
             kingRig.Sprite:Play("Recoil")
@@ -525,10 +558,10 @@ end
 
 -- The Gunslinger swaps to a revolver for Fan the Hammer, then back to the shotgun
 local function OnFanFired(shots)
-    ShotgunController.ShowRevolver(#shots * FAN_SHOT_INTERVAL + REVOLVER_HOLD_TIME)
+    ShotgunController.ShowRevolver(SpeedController.Scale(#shots * FAN_SHOT_INTERVAL + REVOLVER_HOLD_TIME))
 
     for index, shot in ipairs(shots) do
-        task.delay((index - 1) * FAN_SHOT_INTERVAL, function()
+        task.delay(SpeedController.Scale((index - 1) * FAN_SHOT_INTERVAL), function()
             if not kingRig then return end
 
             kingRig.Sprite:Play("Recoil")

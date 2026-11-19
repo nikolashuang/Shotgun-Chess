@@ -541,7 +541,10 @@ function MatchClass:StartEnemyTurn()
 
         self:SendTurnState()
 
-        task.delay(MatchConfig.ENEMY_ACTION_TIME, function()
+        -- Only the wait for animations follows the player's speed setting, not the think time
+        local speed = self.Player:GetAttribute("GameSpeed") or 1
+
+        task.delay(MatchConfig.ENEMY_ACTION_TIME / speed, function()
             if not self.isActive then return end
             if self.Turn ~= turn then return end
 

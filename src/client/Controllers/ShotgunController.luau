@@ -9,6 +9,7 @@ local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
+local SpeedController = require(script.Parent.SpeedController)
 
 local HIT_COLOR = Color3.fromHex("C8644F")
 local TRACER_COLOR = Color3.fromHex("E9E3D6")
@@ -291,7 +292,7 @@ local function FlashTile(column, row)
     flash.ZIndex = 2
     flash.Parent = tile
 
-    task.delay(HIT_FLASH_TIME, function()
+    task.delay(SpeedController.Scale(HIT_FLASH_TIME), function()
         flash:Destroy()
     end)
 end
@@ -410,7 +411,7 @@ end
 local function KickImage(image)
     image.Position = UDim2.fromScale(0.5 - GUN_KICK / GUN_PIVOT_TILES, 0.5)
 
-    TweenService:Create(image, TweenInfo.new(GUN_KICK_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+    TweenService:Create(image, TweenInfo.new(SpeedController.Scale(GUN_KICK_TIME), Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
         Position = UDim2.fromScale(0.5, 0.5),
     }):Play()
 end
@@ -462,7 +463,7 @@ end
 
 -- Seconds until the shot reaches a point this far from the king
 function ShotgunController.GetTravelTime(distance)
-    return math.max(distance - MUZZLE_OFFSET, 0) / PELLET_SPEED
+    return math.max(distance - MUZZLE_OFFSET, 0) / (PELLET_SPEED * SpeedController.Speed)
 end
 
 -- Points an enemy King's gun at the middle of its pellets and kicks it back
@@ -524,7 +525,7 @@ function ShotgunController.PlayShot(pellets, hitTiles, onTileReached, originColu
     local connection = nil
 
     connection = RunService.RenderStepped:Connect(function()
-        local travelled = MUZZLE_OFFSET + (time() - startTime) * PELLET_SPEED
+        local travelled = MUZZLE_OFFSET + (time() - startTime) * PELLET_SPEED * SpeedController.Speed
         local isFlying = false
 
         for _, tracer in pairs(tracers) do

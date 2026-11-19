@@ -6,6 +6,7 @@ local UserInputService = game:GetService("UserInputService")
 local KeybindConfig = require(ReplicatedStorage.Shared.Player.KeybindConfig)
 local SettingsConfig = require(ReplicatedStorage.Shared.Player.SettingsConfig)
 local CrtController = require(script.Parent.CrtController)
+local SpeedController = require(script.Parent.SpeedController)
 local ProfileController = require(script.Parent.ProfileController)
 
 local ProfileRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("ProfileRemote")
@@ -173,6 +174,35 @@ local function BindCrt()
     RefreshCrt(CrtController.isEnabled)
 end
 
+-- Arrows step through the speed options and wrap around
+local function BindSpeed()
+    local row = settingsPage:WaitForChild("Speed")
+    local value = row:WaitForChild("Value")
+    local options = SettingsConfig.OPTIONS.Speed
+
+    local function Step(direction)
+        local index = table.find(options, SpeedController.Mode) or 1
+        local mode = options[(index - 1 + direction) % #options + 1]
+
+        SpeedController.SetMode(mode)
+        ProfileRemote:FireServer("SetSetting", "Speed", mode)
+    end
+
+    row:WaitForChild("Previous").Activated:Connect(function()
+        Step(-1)
+    end)
+    row:WaitForChild("Next").Activated:Connect(function()
+        Step(1)
+    end)
+
+    local function RefreshSpeed(mode)
+        value.Text = mode
+    end
+
+    SpeedController.OnChanged(RefreshSpeed)
+    RefreshSpeed(SpeedController.Mode)
+end
+
 function SettingsController.Open()
     ShowPage(settingsPage)
     overlay.Enabled = true
@@ -197,6 +227,7 @@ function SettingsController.Init(inputController)
     BindKeybinds(keybindsPage)
     BindSliders()
     BindCrt()
+    BindSpeed()
 
     settingsPage:WaitForChild("CloseButton").Activated:Connect(SettingsController.Close)
     settingsPage:WaitForChild("KeybindsButton").Activated:Connect(function()
@@ -215,6 +246,10 @@ function SettingsController.Init(inputController)
 
         if saved.CRT ~= nil and saved.CRT ~= CrtController.isEnabled then
             CrtController.SetEnabled(saved.CRT)
+        end
+
+        if saved.Speed and saved.Speed ~= SpeedController.Mode then
+            SpeedController.SetMode(saved.Speed)
         end
 
         for _, name in ipairs(VOLUMES) do

@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
+local SpeedController = require(script.Parent.Parent.Controllers.SpeedController)
 
 local activeSprites = {}
 
@@ -56,7 +57,9 @@ function AnimatedSpriteClass:Step(now)
     if not self.isPlaying then return end
 
     local info = SpriteConfig.Anims[self.Anim]
-    if now - self.LastFrame < info.FrameTime then return end
+    -- Looping idles keep their pace; only one-shot animations follow the speed setting
+    local frameTime = info.Looped and info.FrameTime or SpeedController.Scale(info.FrameTime)
+    if now - self.LastFrame < frameTime then return end
 
     self.LastFrame = now
 

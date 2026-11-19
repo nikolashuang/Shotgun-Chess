@@ -94,23 +94,28 @@ function PieceController.SetMarked(id, isMarked)
     piece.Rig:SetMarked(isMarked)
 end
 
--- Only one piece shows the command arrow at a time; nil hides it
-local arrowPieceId = nil
+-- Piece id -> arrow tint for every piece showing an arrow
+local arrows = {}
 
-function PieceController.SetArrow(id)
-    if id == arrowPieceId then return end
+-- Shows arrows on exactly the pieces in newArrows ({[id] = color}) and hides the rest
+function PieceController.SetArrows(newArrows)
+    for id in pairs(arrows) do
+        local piece = pieces[id]
 
-    local previous = pieces[arrowPieceId]
-    if previous then
-        previous.Rig:SetArrow(false)
+        if piece and not newArrows[id] then
+            piece.Rig:SetArrow(false)
+        end
     end
 
-    arrowPieceId = id
+    for id, color in pairs(newArrows) do
+        local piece = pieces[id]
 
-    local piece = pieces[id]
-    if piece then
-        piece.Rig:SetArrow(true)
+        if piece and arrows[id] ~= color then
+            piece.Rig:SetArrow(true, color)
+        end
     end
+
+    arrows = table.clone(newArrows)
 end
 
 function PieceController.Get(id)
@@ -143,7 +148,7 @@ function PieceController.Clear()
     end
 
     pieces = {}
-    arrowPieceId = nil
+    arrows = {}
 end
 
 local init = false
