@@ -17,7 +17,7 @@ local SettingsConfig = {
     -- Animation time is divided by this
     SPEEDS = {
         Normal = 1,
-        Fast = 1.5,
+        Fast = 2,
     },
 }
 
