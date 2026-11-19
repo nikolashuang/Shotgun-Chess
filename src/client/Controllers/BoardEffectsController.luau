@@ -13,6 +13,9 @@ local SOUL_BOB = 0.06
 local GHOST_SIZE = 1.05
 local GHOST_TRANSPARENCY = 0.35
 local GHOST_COLOR = Color3.fromHex("7FE3C8")
+-- The rival Reaper's souls burn red so they can't be mistaken for your own
+local RIVAL_SOUL_COLOR = Color3.fromHex("FF4A3A")
+local RIVAL_GHOST_COLOR = Color3.fromHex("E3887F")
 local BOLT_RISE = 0.7
 local TRAP_RISE = 0.9
 -- Raises the snap from the tile center onto the trapped piece's body
@@ -114,7 +117,7 @@ local function NewGhost(soul)
     ghost.ImageRectOffset = Vector2.new(SpriteConfig.Teams.White, rows.Idle)
     ghost.ImageRectSize = Vector2.new(SpriteConfig.CELL, SpriteConfig.CELL)
     ghost.ImageTransparency = GHOST_TRANSPARENCY
-    ghost.ImageColor3 = GHOST_COLOR
+    ghost.ImageColor3 = soul.IsRival and RIVAL_GHOST_COLOR or GHOST_COLOR
     ghost.ResampleMode = Enum.ResamplerMode.Pixelated
     ghost.AnchorPoint = Vector2.new(0.5, 0.5)
     ghost.Size = UDim2.fromScale(GHOST_SIZE / BoardConfig.SIZE, GHOST_SIZE / BoardConfig.SIZE)
@@ -125,12 +128,17 @@ local function NewGhost(soul)
     return ghost
 end
 
-function BoardEffectsController.AddSoul(id, pieceType, column, row)
-    local soul = {Id = id, Type = pieceType, Column = column, Row = row}
+-- isRival marks a soul belonging to the other player's Reaper
+function BoardEffectsController.AddSoul(id, pieceType, column, row, isRival)
+    local soul = {Id = id, Type = pieceType, Column = column, Row = row, IsRival = isRival == true}
 
     soul.Ghost = NewGhost(soul)
     soul.Effect = NewEffect("Soul", GetLayer("Souls", 3), column, row, -SOUL_LIFT)
     soul.Effect.Image.AnchorPoint = Vector2.new(0.5, 0.5)
+
+    if soul.IsRival then
+        soul.Effect.Image.ImageColor3 = RIVAL_SOUL_COLOR
+    end
     soul.Effect.BobHeight = SOUL_BOB / BoardConfig.SIZE
 
     souls[id] = soul
@@ -161,9 +169,10 @@ function BoardEffectsController.GetSouls()
     return souls
 end
 
+-- Your own souls only; the rival's can't be assimilated
 function BoardEffectsController.GetSoulAt(column, row)
     for _, soul in pairs(souls) do
-        if soul.Column == column and soul.Row == row then return soul end
+        if soul.Column == column and soul.Row == row and not soul.IsRival then return soul end
     end
 
     return nil

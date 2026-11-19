@@ -128,7 +128,7 @@ function HunterClass:InterceptPath(piece, column, row)
     return false
 end
 
--- payload.X, payload.Y is the aim; the bolas cover exactly what a Double Barrel shot would hit there
+-- payload.X, payload.Y is the aim; the bolas cover exactly what a HuntingStrike.Weapon shot would hit there
 function HunterClass:Ultimate(payload)
     if not ArgumentRules.IsFiniteNumber(payload.X) or not ArgumentRules.IsFiniteNumber(payload.Y) then return false end
 

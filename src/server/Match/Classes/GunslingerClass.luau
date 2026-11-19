@@ -6,7 +6,7 @@ local ArgumentRules = require(script.Parent.Parent.ArgumentRules)
 
 local GunslingerConfig = ClassConfig.Classes.Gunslinger
 
--- Deadeye is applied to the shotgun itself (ShotgunRules.GetWeapon); Fan the Hammer fires a revolver
+-- Deadly Rounds is applied to the shotgun itself (ShotgunRules.GetWeapon); Fan the Hammer fires a revolver
 -- down a line, High Noon's Bounty marks enemies that pay energy when they die
 local GunslingerClass = {}
 

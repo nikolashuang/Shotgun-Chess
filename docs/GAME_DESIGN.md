@@ -97,16 +97,16 @@ Shotguns are bought in the Shop with gold and equipped in the Armory. Only the P
 | Shotgun | Price | Ammo | Range | Arc | Damage | Notes |
 |---|---|---|---|---|---|---|
 | Pump (starter) | — | 5 | 3 | 64° | 5→2 | Basic shotgun |
-| Double Barrel | 2000 | 4 | 2 *(placeholder)* | 64° | 5→3.5, x2 | Every shot fires both barrels: 2 shells, double damage |
+| Double Barrel | 2000 | 2 | 2 *(placeholder)* | 64° | 5→3.5, x2 | Every shot fires both barrels: 2 shells, double damage. Holds one shot, so it reloads after every blast (Nov 2026) |
 | Buck Barrel | 2100 | 4 | 3 | 64° | 5→3 | Knockback 1 tile |
-| Long Barrel | 3500 | 4 | 4 | 24° *(placeholder)* | 5→2 | Very tight cone |
+| Long Barrel | 3500 | 4 | 4 | 24° *(placeholder)* | 5→1 | Very tight cone; falloff nerfed to 1 at max range (Nov 2026) |
 | Knife Shotty | 2400 | 5 | 3 | 64° | 5→2 | Alt mode: knife swing |
 
 **Knockback (Buck Barrel):** every enemy the shot hits and doesn't kill is pushed 1 tile straight away from the king (one of the 8 directions). If the tile is off the board or occupied, it stays put with no extra damage. Kings can't be knocked back. Enemies farther from the king are pushed first, so a line of enemies all move back together. The precise shot was removed (Nov 2026).
 
 **Alt modes** — right click while aiming switches between normal and alt; left click fires.
 
-- **Knife swing (Knife Shotty):** hits 2 adjacent tiles — the tile it points at plus its neighbor on the cursor's side. Needs an enemy in one of them. 6 damage and bleed (1 damage per turn for 2 turns, ticking at the start of the bleeding piece's turn; reapplying refreshes it). Costs 1 energy like any shot but no ammo, so it works at 0 ammo.
+- **Knife swing (Knife Shotty):** hits 2 adjacent tiles — the tile it points at plus its neighbor on the cursor's side. Needs an enemy in one of them. 5 damage and bleed (1 damage per turn for 3 turns, ticking at the start of the bleeding piece's turn; reapplying refreshes it). Costs 1 energy like any shot but no ammo, so it works at 0 ammo.
 - Point blank applies to normal shots of every shotgun.
 
 ## Classes
@@ -120,23 +120,23 @@ Chosen in the Armory alongside the shotgun. All numbers live in `ClassConfig`; e
 - Numbers marked *placeholder* aren't in the design doc.
 
 ### Reaper
-- **Passive [Reap]:** every enemy that dies leaves a soul on its tile: a black orb in greenish-blue flame with a faint ghost of its piece. Queens leave souls too (Nov 2026: they used to be excluded). Kings end the match, so they never do.
-- **Special [Assimilate]:** pick a soul; it's used up and the king's move this turn uses that piece's movement (Knight jumps, Rook/Bishop/Queen slides, Pawn steps forward). Only before the king has moved; unused, it expires at the end of the turn.
+- **Passive [Reap]:** every piece that dies leaves a soul on its tile, allies included (Nov 2026): a black orb in greenish-blue flame with a faint ghost of its piece. Queens leave souls too. Kings end the match, so they never do. When your rival is a Reaper, you see their souls in red flame; your own stay blue.
+- **Special [Assimilate]:** pick a soul; it's used up and the king's move this turn uses that piece's movement (Knight jumps, Rook/Bishop/Queen slides, Pawn steps forward). It's a bonus move that doesn't count as the king's movement, so it works after the king has already moved (Nov 2026); unused, it expires at the end of the turn.
 - **Ultimate [Reaper's High]:** absorb every soul on the board. Heal 2 HP per soul (up to 15) and +1 damage per soul on every hit of the next shot. Needs at least one soul.
 
 ### Hunter
 - **Passive [Collector]:** each enemy death has a 25% chance to give +1 energy, shown as a lightning bolt floating up. *(+1 is a placeholder.)*
 - **Special [Trap Layout]:** place 3 bear traps on empty tiles within 2 of the king *(range placeholder)*; click 3 tiles (fewer if there aren't 3 free). Only the player sees them. An enemy that moves or is knocked onto one takes 3 damage and is stunned 1 turn. Any move or attack whose line crosses a trap stops on the trap's square and springs it, cancelling the rest of the move or attack, so traps also shield the king and allies. Knights jump over traps they cross and are only caught by landing on one; enemy Kings are affected. The trap clamps shut over the piece, floats up and fades.
-- **Ultimate [Hunting Strike]:** aimed and thrown exactly like a Double Barrel shot: same cone, range, line of sight and point blank (`HuntingStrike.Weapon`), previewed with the same arc. Every non-King enemy in the hit tiles is stunned for 3 turns and deals no damage; a bolas flies to each one and stays wrapped around it while it's stunned. Kings are immune. Only throws if it would catch at least one non-King enemy, so the charge isn't wasted. (Replaced the old 5-tile radius in Nov 2026.)
+- **Ultimate [Hunting Strike]:** aimed and thrown exactly like a Pump shot (Nov 2026: was Double Barrel): same 3-tile cone, range, line of sight and point blank (`HuntingStrike.Weapon`), previewed with the same arc. Every non-King enemy in the hit tiles is stunned for 3 turns and deals no damage; a bolas flies to each one and stays wrapped around it while it's stunned. Kings are immune. Only throws if it would catch at least one non-King enemy, so the charge isn't wasted. (Replaced the old 5-tile radius in Nov 2026.)
 
 ### Gunslinger
-- **Passive [Deadeye]:** every shotgun's cone is 25% narrower and reaches 1 tile further *(placeholder numbers)*. Applied to the weapon itself (`ShotgunRules.GetWeapon(name, "Gunslinger")`), so the aim preview matches.
+- **Passive [Deadly Rounds]** (Nov 2026, replaced Deadeye): no body blocking for any shotgun; blasts pass through every piece. Each target takes -0.5 damage for every enemy the blast passed through on the way to it. Point blank shots go through the adjacent enemy and on in a straight line to max range. Applied to the weapon itself (`ShotgunRules.GetWeapon(name, "Gunslinger")` sets `Pierces`), so the aim preview matches.
 - **Special [Fan the Hammer]:** the king pulls out a revolver (shown while aiming and firing) and fires 6 shots down a 3-tile straight line (snapped to the 8 chess directions). Each shot has a 60% chance to hit and deals 1.5 damage. Shots don't pierce: each hits the first living enemy in the line, so once that enemy dies the remaining shots go to the next one.
 - **Ultimate [High Noon's Bounty]:** click 2 enemies (Kings allowed; 1 if only one is left) to mark them with a red X. Each marked enemy pays 2 energy when it dies, however it dies. Marks last until the enemy dies.
 
 ### Outlaw
 - **Passive [Opportunist]:** +1 damage on shotgun hits against an enemy with no other enemy next to it *(definition of "isolated" is a placeholder)*.
-- **Special [Conceal]:** throw a smoke bomb at any tile up to 3 away; a 3x3 cloud centers there for 2 enemy turns. Enemies can't attack or shoot anything inside it, the player's king included (pellets still stop on it). Hovering previews the cloud.
+- **Special [Conceal]:** throw a smoke bomb at any tile up to 3 away; a 3x3 cloud centers there for 1 enemy turn (Nov 2026: was 2). Enemy pieces can't attack anything inside it, the player's king included. Shotgun blasts into it have a 50% chance to hit, rolled separately for each target (pellets still stop on it). Hovering previews the cloud.
 - **Ultimate [Ambush]:** jump the king to any empty tile next to an enemy (`Ambush.MaxEnemyDistance`, 1). Doesn't use the turn's move. +2 damage on every hit of the next shot.
 
 ### Health Bars

@@ -238,7 +238,7 @@ local function DrawArc()
         local pointBlankAngle = math.atan2(pointBlankRow - 0.5 - originY, pointBlankColumn - 0.5 - originX)
 
         UpdatePreviewTiles("PointBlank" .. BoardRules.GetTileName(pointBlankColumn, pointBlankRow), function()
-            return {{Column = pointBlankColumn, Row = pointBlankRow}}
+            return select(2, ShotgunRules.GetFireResult(column, row, targetX, targetY, weapon, "Normal", isBlockingTile))
         end)
         AimGun(pointBlankAngle)
         HideDots(1)
@@ -248,7 +248,8 @@ local function DrawArc()
     local previewKey = string.format("%d,%d,%.3f,%.2f", column, row, angle, radius)
 
     UpdatePreviewTiles(previewKey, function()
-        return select(2, ShotgunRules.GetShot(originX, originY, angle, radius, isBlockingTile, weapon))
+        local isBlocking = not weapon.Pierces and isBlockingTile or nil
+        return select(2, ShotgunRules.GetShot(originX, originY, angle, radius, isBlocking, weapon))
     end)
     AimGun(angle)
 

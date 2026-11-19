@@ -39,10 +39,10 @@ local ShotgunConfig = {
 
         DoubleBarrel = {
             DisplayName = "Double Barrel",
-            Description = "Fires both barrels: double damage, uses 2 shells. Shorter range.",
+            Description = "Fires both barrels: double damage. Holds one shot, so reload after every blast. Shorter range.",
             Price = 2000,
 
-            MaxAmmo = 4,
+            MaxAmmo = 2,
             AmmoPerShot = 2,
             Blasts = 2,
 
@@ -74,7 +74,7 @@ local ShotgunConfig = {
 
         LongBarrel = {
             DisplayName = "Long Barrel",
-            Description = "4 tile range with a very tight spread.",
+            Description = "4 tile range with a very tight spread. Damage drops to 1 at max range.",
             Price = 3500,
 
             MaxAmmo = 4,
@@ -85,12 +85,12 @@ local ShotgunConfig = {
             ArcDegrees = 24,
             PelletCount = 5,
             MaxDamage = 5,
-            MinDamage = 2,
+            MinDamage = 1,
         },
 
         KnifeShotty = {
             DisplayName = "Knife Shotty",
-            Description = "Right click to swing at adjacent enemies: 6 damage and bleed. Works with no ammo.",
+            Description = "Right click to swing at adjacent enemies: 5 damage and 3 turns of bleed. Works with no ammo.",
             Price = 2400,
 
             MaxAmmo = 5,
@@ -105,9 +105,9 @@ local ShotgunConfig = {
 
             AltMode = "Knife",
             Knife = {
-                Damage = 6,
+                Damage = 5,
                 BleedDamage = 1,
-                BleedTurns = 2,
+                BleedTurns = 3,
             },
         },
     },

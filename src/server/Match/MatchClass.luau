@@ -48,6 +48,8 @@ function MatchClass.new(player, shotgunName, className, enemies, aiRating)
 
     self.Pieces = {}
     self.NextPieceId = 1
+    -- Reaper souls, numbered across both sides so the rival's never clash with your own
+    self.NextSoulId = 1
 
     self.Sides = {}
 
@@ -350,6 +352,10 @@ function MatchClass:DamagePiece(piece, amount, attacker)
         self:CallAbility(attacker, "OnEnemyKilled", piece)
     end
 
+    for _, side in pairs(self.Sides) do
+        self:CallAbility(side, "OnPieceKilled", piece)
+    end
+
     return true
 end
 
@@ -372,6 +378,13 @@ function MatchClass:IsProtected(column, row, attacker)
     local defender = attacker and self:GetOpponent(attacker) or self.Sides.White
 
     return self:CallAbility(defender, "IsProtected", column, row) == true
+end
+
+-- Chance a shotgun blast lands on the tile; lower inside the Outlaw's smoke
+function MatchClass:GetShotHitChance(column, row, attacker)
+    local defender = attacker and self:GetOpponent(attacker) or self.Sides.White
+
+    return self:CallAbility(defender, "GetShotHitChance", column, row) or 1
 end
 
 -- Called whenever a piece or king ends up on a new tile; the other team's traps can catch it
@@ -529,15 +542,15 @@ end
 
 --MOVEMENT EVENT--
 
--- Assimilate (Reaper) swaps the king's step for another piece's movement for this move
+-- Assimilate (Reaper) gives a bonus move with another piece's movement; it doesn't use up the turn's move
 function MatchClass:Move(side, column, row)
     if not self:IsSideTurn(side) then return end
-    if side.HasMoved then return end
     if side.King:IsStunned() then return end
     if self:IsOccupied(column, row) then return end
 
     local king = side.King
     local moveType = self:CallAbility(side, "GetMoveType")
+    if side.HasMoved and not moveType then return end
 
     if moveType then
         local function IsBlocked(blockColumn, blockRow)
@@ -551,7 +564,10 @@ function MatchClass:Move(side, column, row)
         return
     end
 
-    side.HasMoved = true
+    if not moveType then
+        side.HasMoved = true
+    end
+
     self:CallAbility(side, "OnKingMoved")
     self:SendKingMoved(side, "KingMoved")
     self:OnUnitMoved(king)
@@ -576,8 +592,15 @@ function MatchClass:Fire(side, targetX, targetY, mode)
 
     local targets = {}
 
+    -- Knife swings can't reach into smoke; shotgun blasts into it roll to hit for each target
+    local function IsHit(column, row)
+        if shotType == "Knife" then return not self:IsProtected(column, row, side) end
+
+        return self.Random:NextNumber() < self:GetShotHitChance(column, row, side)
+    end
+
     for _, tile in pairs(hitTiles) do
-        if IsEnemyTile(tile.Column, tile.Row) and not self:IsProtected(tile.Column, tile.Row, side) then
+        if IsEnemyTile(tile.Column, tile.Row) and IsHit(tile.Column, tile.Row) then
             table.insert(targets, self:GetPieceAt(tile.Column, tile.Row))
         end
     end
@@ -597,9 +620,15 @@ function MatchClass:Fire(side, targetX, targetY, mode)
 
     -- Bonuses are worked out before anyone is hit, so a kill can't change whether a neighbor counts as isolated
     local bonuses = {}
+    local originX, originY = ShotgunRules.GetKingOrigin(king.Column, king.Row)
 
     for _, piece in ipairs(targets) do
         bonuses[piece] = side.NextShotBonus + (self:CallAbility(side, "GetHitBonus", piece) or 0)
+
+        -- Piercing blasts (Deadly Rounds) lose damage for every enemy they pass through on the way
+        if weapon.Pierces and shotType ~= "Knife" then
+            bonuses[piece] -= ShotgunRules.CountBlockers(originX, originY, piece.Column, piece.Row, IsEnemyTile) * weapon.PierceDamageLoss
+        end
     end
 
     side.NextShotBonus = 0
@@ -607,7 +636,7 @@ function MatchClass:Fire(side, targetX, targetY, mode)
     for _, piece in ipairs(targets) do
         local column, row = piece.Column, piece.Row
         local distance = BoardRules.GetDistance(king.Column, king.Row, column, row)
-        self:DamagePiece(piece, ShotgunRules.GetHitDamage(weapon, shotType, distance) + bonuses[piece], side)
+        self:DamagePiece(piece, math.max(ShotgunRules.GetHitDamage(weapon, shotType, distance) + bonuses[piece], 0), side)
 
         if shotType == "Knife" and piece:IsAlive() then
             piece:ApplyBleed(weapon.Knife.BleedDamage, weapon.Knife.BleedTurns)
@@ -1008,7 +1037,7 @@ function MatchClass:EnemyShoot(piece, aimX, aimY)
     local damaged = {}
 
     for _, tile in pairs(hitTiles) do
-        if IsWhiteTile(tile.Column, tile.Row) and not self:IsProtected(tile.Column, tile.Row) then
+        if IsWhiteTile(tile.Column, tile.Row) and self.Random:NextNumber() < self:GetShotHitChance(tile.Column, tile.Row) then
             local distance = BoardRules.GetDistance(piece.Column, piece.Row, tile.Column, tile.Row)
             local health, targetId = self:DamageWhiteTile(tile.Column, tile.Row, ShotgunRules.GetHitDamage(weapon, shotType, distance))
 

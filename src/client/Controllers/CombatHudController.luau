@@ -16,6 +16,7 @@ local ALT_MODE_NAMES = {
 local DIVIDER_COLOR = Color3.fromHex("271F29")
 -- In pixels
 local DIVIDER_WIDTH = 2
+local HEALTH_DIVIDER_WIDTH = 1
 
 local fireLabel = nil
 local gunIcon = nil
@@ -28,6 +29,11 @@ local energyBar = nil
 local energyCount = nil
 local dividerCount = 0
 local shotgunName = nil
+local kingHealthText = nil
+local kingHealthBar = nil
+local kingHealthFill = nil
+local kingMaxHealth = 1
+local kingDividerCount = 0
 
 local CombatHudController = {}
 
@@ -61,27 +67,30 @@ local function UpdateAmmo(ammo, maxAmmo)
     end
 end
 
--- Divider lines split the bar into one segment per energy
+-- Divider lines split a bar into one segment per point
+local function DrawDividers(bar, fill, count, width)
+    for _, child in pairs(bar:GetChildren()) do
+        if child.Name == "Divider" then
+            child:Destroy()
+        end
+    end
+
+    for i = 1, count - 1 do
+        local divider = Instance.new("Frame")
+        divider.Name = "Divider"
+        divider.BorderSizePixel = 0
+        divider.BackgroundColor3 = DIVIDER_COLOR
+        divider.AnchorPoint = Vector2.new(0.5, 0)
+        divider.Position = UDim2.fromScale(i / count, 0)
+        divider.Size = UDim2.new(0, width, 1, 0)
+        divider.ZIndex = fill.ZIndex + 1
+        divider.Parent = bar
+    end
+end
+
 local function UpdateEnergy(energy, maxEnergy)
     if dividerCount ~= maxEnergy then
-        for _, child in pairs(energyBar:GetChildren()) do
-            if child.Name == "Divider" then
-                child:Destroy()
-            end
-        end
-
-        for i = 1, maxEnergy - 1 do
-            local divider = Instance.new("Frame")
-            divider.Name = "Divider"
-            divider.BorderSizePixel = 0
-            divider.BackgroundColor3 = DIVIDER_COLOR
-            divider.AnchorPoint = Vector2.new(0.5, 0)
-            divider.Position = UDim2.fromScale(i / maxEnergy, 0)
-            divider.Size = UDim2.new(0, DIVIDER_WIDTH, 1, 0)
-            divider.ZIndex = energyFill.ZIndex + 1
-            divider.Parent = energyBar
-        end
-
+        DrawDividers(energyBar, energyFill, maxEnergy, DIVIDER_WIDTH)
         dividerCount = maxEnergy
     end
 
@@ -102,6 +111,26 @@ local function Update(state)
 
     chargeFill.Size = UDim2.fromScale(state.UltimateCharge / state.MaxUltimateCharge, 1)
     chargeText.Text = string.format("%d/%d", state.UltimateCharge, state.MaxUltimateCharge)
+
+    CombatHudController.SetKingHealth(state.KingHealth, state.KingMaxHealth)
+end
+
+-- The king portrait's health beside the turn bar; maxHealth can be left out after the first call
+function CombatHudController.SetKingHealth(health, maxHealth)
+    if not kingHealthFill then return end
+
+    kingMaxHealth = maxHealth or kingMaxHealth
+
+    if kingDividerCount ~= kingMaxHealth then
+        DrawDividers(kingHealthBar, kingHealthFill, kingMaxHealth, HEALTH_DIVIDER_WIDTH)
+        kingDividerCount = kingMaxHealth
+    end
+
+    -- Revolver hits deal half points
+    local shown = health % 1 == 0 and string.format("%d", health) or string.format("%.1f", health)
+
+    kingHealthFill.Size = UDim2.fromScale(math.clamp(health / kingMaxHealth, 0, 1), 1)
+    kingHealthText.Text = string.format("%s/%d", shown, kingMaxHealth)
 end
 
 local init = false
@@ -124,6 +153,11 @@ function CombatHudController.Init()
     energyBar = energyPanel:WaitForChild("EnergyBar")
     energyFill = energyBar:WaitForChild("Fill")
     energyCount = energyPanel:WaitForChild("EnergyCount")
+
+    local kingHealth = root:WaitForChild("TurnBar"):WaitForChild("KingHealth")
+    kingHealthText = kingHealth:WaitForChild("HealthText")
+    kingHealthBar = kingHealth:WaitForChild("HealthBar")
+    kingHealthFill = kingHealthBar:WaitForChild("Fill")
 
     ShotgunController.OnModeChanged = UpdateFireLabel
 

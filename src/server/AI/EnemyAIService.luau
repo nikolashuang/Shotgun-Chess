@@ -349,10 +349,12 @@ local function AddShots(context, piece, options)
                 for _, tile in pairs(hitTiles) do
                     local hitTarget = context.Targets[GetKey(tile.Column, tile.Row)]
 
-                    -- Nothing inside the Outlaw's smoke can be hit
-                    if hitTarget and not context.Match:IsProtected(tile.Column, tile.Row) then
+                    -- Blasts into the Outlaw's smoke only land part of the time, so they count for less
+                    local hitChance = context.Match:GetShotHitChance(tile.Column, tile.Row)
+
+                    if hitTarget and hitChance > 0 then
                         local distance = BoardRules.GetDistance(piece.Column, piece.Row, tile.Column, tile.Row)
-                        table.insert(hits, {Target = hitTarget, Damage = ShotgunRules.GetHitDamage(weapon, shotType, distance)})
+                        table.insert(hits, {Target = hitTarget, Damage = ShotgunRules.GetHitDamage(weapon, shotType, distance) * hitChance})
                     end
                 end
 

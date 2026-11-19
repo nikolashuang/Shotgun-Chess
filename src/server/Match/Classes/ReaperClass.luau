@@ -5,7 +5,7 @@ local ArgumentRules = require(script.Parent.Parent.ArgumentRules)
 
 local ReaperConfig = ClassConfig.Classes.Reaper
 
--- Reap leaves a soul where each enemy dies; Assimilate spends one to move like its piece,
+-- Reap leaves a soul where any piece dies; Assimilate spends one to move like its piece,
 -- Reaper's High absorbs them all for healing and next-shot damage
 local ReaperClass = {}
 
@@ -18,7 +18,6 @@ function ReaperClass.new(side)
     self.Match = side.Match
 
     self.Souls = {}
-    self.NextSoulId = 1
 
     -- Piece type the king moves like for the rest of this turn
     self.AssimilatedType = nil
@@ -36,20 +35,27 @@ function ReaperClass:CountSouls()
     return count
 end
 
-function ReaperClass:OnEnemyKilled(piece)
+-- The rival sees this Reaper's souls too (in red); soul ids are shared across the match so they never clash
+function ReaperClass:OnPieceKilled(piece)
     if ReaperConfig.NO_SOUL[piece.Type] then return end
 
-    local soul = {Id = self.NextSoulId, Type = piece.Type, Column = piece.Column, Row = piece.Row}
-    self.NextSoulId += 1
+    local match = self.Match
+    local soul = {Id = match.NextSoulId, Type = piece.Type, Column = piece.Column, Row = piece.Row}
+    match.NextSoulId += 1
     self.Souls[soul.Id] = soul
 
     self.Side:Send("SoulAdded", soul.Id, soul.Type, soul.Column, soul.Row)
+    match:SendTo(match:GetOpponent(self.Side), "SoulAdded", soul.Id, soul.Type, soul.Column, soul.Row, true)
 end
 
--- payload.SoulId; only before the king has moved this turn
+function ReaperClass:RemoveSouls(ids, isAbsorbed)
+    self.Side:Send("SoulsRemoved", ids, isAbsorbed)
+    self.Match:SendTo(self.Match:GetOpponent(self.Side), "SoulsRemoved", ids)
+end
+
+-- payload.SoulId; the bonus move doesn't use up the king's own move, so it works before or after it
 function ReaperClass:Special(payload)
     if not ArgumentRules.IsWholeNumber(payload.SoulId) then return false end
-    if self.Side.HasMoved then return false end
 
     local soul = self.Souls[payload.SoulId]
     if not soul then return false end
@@ -57,7 +63,7 @@ function ReaperClass:Special(payload)
     self.Souls[soul.Id] = nil
     self.AssimilatedType = soul.Type
 
-    self.Side:Send("SoulsRemoved", {soul.Id})
+    self:RemoveSouls({soul.Id})
 
     return true
 end
@@ -92,7 +98,7 @@ function ReaperClass:Ultimate()
     side.King:Heal(high.HealPerSoul * count)
     side.NextShotBonus += high.DamagePerSoul * count
 
-    side:Send("SoulsRemoved", absorbed, true)
+    self:RemoveSouls(absorbed, true)
     side:Send("KingHealed", side.King.Health)
     self.Match:ShowDamage(side.King, side)
 

@@ -22,17 +22,17 @@ local function GetNeighbor(column, row, directionIndex)
     return column + math.round(math.cos(direction)), row + math.round(math.sin(direction))
 end
 
--- className tunes the shotgun for class passives (Gunslinger's Deadeye); nil gives the base weapon
+-- className tunes the shotgun for class passives (Gunslinger's Deadly Rounds); nil gives the base weapon
 function ShotgunRules.GetWeapon(shotgunName, className)
     local weapon = ShotgunConfig.Shotguns[shotgunName]
     if not weapon or className ~= "Gunslinger" then return weapon end
 
     classWeapons[shotgunName] = classWeapons[shotgunName] or (function()
-        local deadeye = ClassConfig.Classes.Gunslinger.Deadeye
+        local deadlyRounds = ClassConfig.Classes.Gunslinger.DeadlyRounds
         local tuned = table.clone(weapon)
 
-        tuned.ArcDegrees = weapon.ArcDegrees * deadeye.ArcScale
-        tuned.MaxRange = weapon.MaxRange + deadeye.RangeBonus
+        tuned.Pierces = true
+        tuned.PierceDamageLoss = deadlyRounds.DamageLossPerEnemy
 
         return tuned
     end)()
@@ -103,6 +103,11 @@ end
 
 -- True when the line from the origin to the tile's center crosses no blocking tile on the way
 function ShotgunRules.HasLineOfSight(originX, originY, column, row, isBlocking)
+    return ShotgunRules.CountBlockers(originX, originY, column, row, isBlocking) == 0
+end
+
+-- Number of different blocking tiles the line from the origin to the tile's center crosses on the way
+function ShotgunRules.CountBlockers(originX, originY, column, row, isBlocking)
     local targetX = column - 0.5
     local targetY = row - 0.5
     local deltaX = targetX - originX
@@ -112,6 +117,8 @@ function ShotgunRules.HasLineOfSight(originX, originY, column, row, isBlocking)
 
     local startColumn = math.floor(originX) + 1
     local startRow = math.floor(originY) + 1
+    local counted = {}
+    local count = 0
 
     for i = 1, stepCount - 1 do
         local x = originX + deltaX * i / stepCount
@@ -122,10 +129,15 @@ function ShotgunRules.HasLineOfSight(originX, originY, column, row, isBlocking)
         local isEndpoint = (stepColumn == column and stepRow == row) or (stepColumn == startColumn and stepRow == startRow)
         local isInside = x % 1 > margin and x % 1 < 1 - margin and y % 1 > margin and y % 1 < 1 - margin
 
-        if not isEndpoint and isInside and isBlocking(stepColumn, stepRow) then return false end
+        local key = stepColumn * 100 + stepRow
+
+        if not isEndpoint and isInside and not counted[key] and isBlocking(stepColumn, stepRow) then
+            counted[key] = true
+            count += 1
+        end
     end
 
-    return true
+    return count
 end
 
 -- isBlocking(column, row) returns true for tiles that stop pellets
@@ -304,14 +316,26 @@ function ShotgunRules.GetFireResult(kingColumn, kingRow, targetX, targetY, weapo
 
     local pointBlankColumn, pointBlankRow = ShotgunRules.GetPointBlankTarget(kingColumn, kingRow, targetX, targetY, isBlocking)
     if pointBlankColumn then
-        local pellets, hitTiles = ShotgunRules.GetPointBlankShot(originX, originY, pointBlankColumn, pointBlankRow, weapon)
+        local pellets, hitTiles = nil, nil
+
+        -- Piercing blasts go through the adjacent enemy and on in a straight line to max range
+        if weapon.Pierces then
+            hitTiles = select(2, ShotgunRules.GetPreciseShot(kingColumn, kingRow, pointBlankColumn - 0.5, pointBlankRow - 0.5, weapon.MaxRange))
+
+            local last = hitTiles[#hitTiles]
+            pellets = ShotgunRules.GetPointBlankShot(originX, originY, last.Column, last.Row, weapon)
+        else
+            pellets, hitTiles = ShotgunRules.GetPointBlankShot(originX, originY, pointBlankColumn, pointBlankRow, weapon)
+        end
+
         return pellets, hitTiles, "PointBlank"
     end
 
     local angle, radius = ShotgunRules.GetAim(originX, originY, targetX, targetY, weapon)
     if not angle then return nil end
 
-    local pellets, hitTiles = ShotgunRules.GetShot(originX, originY, angle, radius, isBlocking, weapon)
+    -- Piercing blasts aren't shielded or stopped by anything
+    local pellets, hitTiles = ShotgunRules.GetShot(originX, originY, angle, radius, not weapon.Pierces and isBlocking or nil, weapon)
 
     return pellets, hitTiles, "Spread"
 end

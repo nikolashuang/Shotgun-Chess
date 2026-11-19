@@ -14,6 +14,7 @@ local AbilityController = require(script.Parent.AbilityController)
 local BoardEffectsController = require(script.Parent.BoardEffectsController)
 local ShotgunController = require(script.Parent.ShotgunController)
 local SummonPanelController = require(script.Parent.SummonPanelController)
+local CombatHudController = require(script.Parent.CombatHudController)
 local SpeedController = require(script.Parent.SpeedController)
 
 local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BoardRemote")
@@ -91,8 +92,11 @@ local function CanAct(cost, action)
     return turnState.Energy >= cost
 end
 
+-- Assimilate's bonus move is still open after the king's own move
 local function CanMove()
-    return IsMyTurn() and not turnState.HasMoved
+    if not IsMyTurn() then return false end
+
+    return not turnState.HasMoved or (turnState.Ability ~= nil and turnState.Ability.Assimilate ~= nil)
 end
 
 local function SetOverlay(tile, color, transparency)
@@ -579,6 +583,7 @@ local function DamageKing(health)
     if not kingRig then return end
 
     kingRig:SetHealth(health)
+    CombatHudController.SetKingHealth(health)
     kingRig.Sprite:Play("Hit")
     kingRig:ShowHealth()
     kingRig:HideHealth()
@@ -601,6 +606,7 @@ local function OnKingHealed(health)
     if not kingRig then return end
 
     kingRig:SetHealth(health)
+    CombatHudController.SetKingHealth(health)
     kingRig:ShowHealth()
     kingRig:HideHealth()
 end

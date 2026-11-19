@@ -84,9 +84,11 @@ local function GetBestShot(match, side, column, row)
                 for _, tile in pairs(hitTiles) do
                     local target = match:GetPieceAt(tile.Column, tile.Row)
 
-                    if target and target.Team == side.EnemyTeam and not match:IsProtected(tile.Column, tile.Row, side) then
+                    local hitChance = match:GetShotHitChance(tile.Column, tile.Row, side)
+
+                    if target and target.Team == side.EnemyTeam and hitChance > 0 then
                         local distance = BoardRules.GetDistance(column, row, tile.Column, tile.Row)
-                        value += GetValue(side, target, ShotgunRules.GetHitDamage(weapon, shotType, distance))
+                        value += GetValue(side, target, ShotgunRules.GetHitDamage(weapon, shotType, distance)) * hitChance
                     end
                 end
 

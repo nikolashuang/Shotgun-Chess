@@ -59,6 +59,11 @@ function OutlawClass:IsProtected(column, row)
     return BoardRules.GetDistance(smoke.Column, smoke.Row, column, row) <= OutlawConfig.Conceal.Radius
 end
 
+-- Shotgun blasts into the smoke only land some of the time
+function OutlawClass:GetShotHitChance(column, row)
+    return self:IsProtected(column, row) and OutlawConfig.Conceal.ShotHitChance or 1
+end
+
 function OutlawClass:OnEnemyTurnEnd()
     if not self.Smoke then return end
 

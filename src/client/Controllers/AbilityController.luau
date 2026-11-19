@@ -117,10 +117,10 @@ local function DrawSpecial(className)
             end
         end)
     elseif className == "Reaper" then
-        if board.GetTurnState().HasMoved then return end
-
         for _, soul in pairs(BoardEffectsController.GetSouls()) do
-            board.HighlightTile(soul.Column, soul.Row, CHOICE_COLOR, 0.45, true)
+            if not soul.IsRival then
+                board.HighlightTile(soul.Column, soul.Row, CHOICE_COLOR, 0.45, true)
+            end
         end
     end
 end
@@ -243,7 +243,7 @@ local function ClickSpecial(className, column, row)
     end
 end
 
--- Bolas only go out when the Double Barrel spread would catch an enemy they can stun
+-- Bolas only go out when the Hunting Strike spread would catch an enemy they can stun
 -- (not campaign Kings; duels, which have a clock, let them stun the rival King)
 local function ClickHuntingStrike()
     local canStunKing = board.GetTurnState().Clock ~= nil
