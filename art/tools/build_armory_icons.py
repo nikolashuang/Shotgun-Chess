@@ -1,5 +1,5 @@
 # Run inside Blender (Text Editor > Run Script) with art/ShotgunChessSprites.blend open.
-# Builds one small drawing per class ability (plus the Siege card's castle) in a temporary scene,
+# Builds one small drawing per class ability (plus the Siege, Duels, Practice, Queue and Challenge cards) in a temporary scene,
 # renders each one to art/armory/icons/<Name>.png, writes the scene to art/ArmoryIcons.blend
 # and removes it again so the sprite file is left as it was. build_armory_art.py outlines and packs the renders.
 import bpy, bmesh, math, os
@@ -383,6 +383,66 @@ def siege(icon):
     icon.cube(toon("Rust", *RUST), (0.22, 0, 1.0), (0.4, 0.04, 0.25))
 
 
+
+# One shotgun drawn flat in the X/Z plane: barrels toward direction (degrees), stock behind
+def shotgun(icon, angle, double=False):
+    steel = toon("Steel", *STEEL)
+    wood = toon("Wood", *WOOD)
+    a = math.radians(angle)
+    d = Vector((math.cos(a), 0, math.sin(a)))
+    n = Vector((-math.sin(a), 0, math.cos(a)))
+
+    offsets = (-0.06, 0.06) if double else (0,)
+    for o in offsets:
+        icon.rod(steel, -d * 0.1 + n * o, d * 1.05 + n * o, 0.065, vertices=8)
+    icon.rod(steel, -d * 0.4, -d * 0.05, 0.12, vertices=8)
+    icon.rod(wood, -d * 0.4 - n * 0.02, -d * 1.05 - n * 0.16, 0.14, vertices=8)
+    icon.rod(wood, d * 0.2 - n * 0.13, d * 0.5 - n * 0.13, 0.09, vertices=8)
+
+
+def duels(icon):
+    shotgun(icon, 45, double=True)
+    shotgun(icon, 135, double=True)
+
+
+def practice(icon):
+    wood = toon("Wood", *WOOD)
+    straw = toon("Straw", *BRASS)
+    icon.rod(wood, (0, 0.2, -1.3), (0, 0.2, 0.75), 0.07)
+    icon.rod(wood, (-0.8, 0.2, 0.2), (0.8, 0.2, 0.2), 0.06)
+    icon.ball(straw, (0, 0, -0.1), 0.5, scale=(1.05, 0.6, 1.4))
+    icon.ball(straw, (0, 0, 0.82), 0.3)
+    icon.cylinder(wood, (0, 0.2, -1.3), 0.35, 0.12, 12)
+    red = glow("Target", TARGET)
+    icon.torus(red, (0, -0.35, -0.05), 0.28, 0.05, rotation=(FACE, 0, 0), segments=20)
+    icon.ball(red, (0, -0.4, -0.05), 0.08)
+
+
+def queue(icon):
+    wood = toon("Wood", *WOOD)
+    glass = toon("Glass", *SMOKE)
+    sand = toon("Sand", *GOLD)
+    for z in (-0.98, 0.98):
+        icon.cylinder(wood, (0, 0, z), 0.68, 0.14, 14)
+    for x in (-0.58, 0.58):
+        icon.rod(wood, (x, 0.3, -0.95), (x, 0.3, 0.95), 0.05)
+    icon.cylinder(glass, (0, 0, -0.47), 0.48, 0.82, 14, top=0.06)
+    icon.cylinder(glass, (0, 0, 0.47), 0.06, 0.82, 14, top=0.48)
+    icon.cylinder(sand, (0, -0.6, -0.72), 0.36, 0.3, 14, top=0.05)
+    icon.cylinder(sand, (0, -0.6, 0.3), 0.06, 0.3, 14, top=0.26)
+    icon.rod(sand, (0, -0.6, 0.15), (0, -0.6, -0.6), 0.025)
+
+
+def challenge(icon):
+    paper = toon("Paper", *CREAM)
+    ink = toon("Ink", *DARK)
+    icon.cube(paper, (0, 0, -0.05), (1.7, 0.06, 1.15))
+    icon.rod(ink, (-0.82, -0.05, 0.48), (0, -0.05, -0.12), 0.025)
+    icon.rod(ink, (0.82, -0.05, 0.48), (0, -0.05, -0.12), 0.025)
+    icon.cylinder(toon("Wax", *RUST), (0, -0.1, -0.12), 0.3, 0.08, 14, rotation=(90, 0, 0))
+    icon.star(glow("Spark", SPARK), (0, -0.16, -0.12), 0.16, 0.07, 0.04, rotation=(FACE, 0, 0))
+
+
 def setup_scene():
     old = bpy.data.scenes.get(SCENE_NAME)
     if old:
@@ -466,6 +526,7 @@ BUILDERS = [
     ("GunslingerPassive", deadeye), ("GunslingerSpecial", fan_the_hammer), ("GunslingerUltimate", bounty),
     ("OutlawPassive", opportunist), ("OutlawSpecial", conceal), ("OutlawUltimate", ambush),
     ("Siege", siege),
+    ("Duels", duels), ("Practice", practice), ("Queue", queue), ("Challenge", challenge),
 ]
 
 ONLY = globals().get("ONLY")

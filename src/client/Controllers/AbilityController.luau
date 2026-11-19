@@ -243,8 +243,10 @@ local function ClickSpecial(className, column, row)
     end
 end
 
--- Bolas only go out when the Double Barrel spread would catch a non-King enemy
+-- Bolas only go out when the Double Barrel spread would catch an enemy they can stun
+-- (not campaign Kings; duels, which have a clock, let them stun the rival King)
 local function ClickHuntingStrike()
+    local canStunKing = board.GetTurnState().Clock ~= nil
     local kingColumn, kingRow = board.GetKingTile()
     local targetX, targetY = board.GetAimPosition()
     local weapon = ShotgunRules.GetWeapon(Classes.Hunter.HuntingStrike.Weapon)
@@ -253,7 +255,7 @@ local function ClickHuntingStrike()
     for _, tile in pairs(hitTiles or {}) do
         local enemy = PieceController.GetAt(tile.Column, tile.Row)
 
-        if enemy and enemy.Team == "Black" and enemy.Type ~= "King" then
+        if enemy and enemy.Team == "Black" and (enemy.Type ~= "King" or canStunKing) then
             Send("Ultimate", {X = targetX, Y = targetY})
             return
         end

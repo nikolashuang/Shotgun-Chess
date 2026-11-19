@@ -28,8 +28,14 @@ local capturingAction = nil
 local draggingSlider = nil
 
 -- Settings overlay shared by the main menu and matches: volumes, CRT filter and a keybinds page
--- Keybinds only last for the session until they are saved to a profile; the other settings are saved
+-- Every setting, keybinds included, is saved in the profile
 local SettingsController = {}
+
+local keybindsLoaded = false
+
+local function SaveKeybinds()
+    ProfileRemote:FireServer("SetKeybinds", input.GetBindingNames())
+end
 
 local function Refresh()
     for _, row in pairs(rows) do
@@ -53,8 +59,8 @@ local function StartCapture(action)
     Refresh()
 
     input.CaptureNextKey(function(keyCode)
-        if keyCode ~= Enum.KeyCode.Escape then
-            input.SetBinding(action, keyCode)
+        if keyCode ~= Enum.KeyCode.Escape and input.SetBinding(action, keyCode) then
+            SaveKeybinds()
         end
 
         StopCapture()
@@ -86,6 +92,7 @@ local function BindKeybinds(page)
     page:WaitForChild("ResetButton").Activated:Connect(function()
         StopCapture()
         input.ResetBindings()
+        SaveKeybinds()
     end)
 
     -- Closing the page mid-capture shouldn't leave a key waiting
@@ -243,6 +250,12 @@ function SettingsController.Init(inputController)
     -- Saved choices arrive with the profile
     ProfileController.OnChanged(function()
         local saved = ProfileController.Data.Settings
+
+        -- Only the first profile sets the keys, so a later sync can't undo a rebind still on its way to the server
+        if not keybindsLoaded and ProfileController.Data.Keybinds then
+            keybindsLoaded = true
+            input.LoadBindings(ProfileController.Data.Keybinds)
+        end
 
         if saved.CRT ~= nil and saved.CRT ~= CrtController.isEnabled then
             CrtController.SetEnabled(saved.CRT)

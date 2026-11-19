@@ -83,6 +83,20 @@ end
 
 -- Errors on data that would break progression, including a King that can be reached without its Queen
 function CampaignRules.Validate()
+    for armyName, army in pairs(CampaignConfig.Armies) do
+        local bishops = 0
+        local colors = {}
+
+        for _, enemy in ipairs(army) do
+            if enemy.Type == "Bishop" then
+                bishops += 1
+                colors[(enemy.Column + enemy.Row) % 2] = true
+            end
+        end
+
+        Check(bishops < 2 or (colors[0] and colors[1]), armyName .. " Bishops must cover both square colors")
+    end
+
     for _, regionId in ipairs(CampaignConfig.ORDER) do
         local region = CampaignConfig.Regions[regionId]
         Check(region, regionId .. " is in ORDER but has no region data")

@@ -12,10 +12,11 @@ local OutlawClass = {}
 
 OutlawClass.__index = OutlawClass
 
-function OutlawClass.new(match)
+function OutlawClass.new(side)
     local self = setmetatable({}, OutlawClass)
 
-    self.Match = match
+    self.Side = side
+    self.Match = side.Match
 
     -- {Column, Row, Turns} of the smoke cloud's center, or nil
     self.Smoke = nil
@@ -41,11 +42,11 @@ function OutlawClass:Special(payload)
     if not BoardRules.IsOnBoard(column, row) then return false end
 
     local conceal = OutlawConfig.Conceal
-    local king = self.Match.King
+    local king = self.Side.King
     if BoardRules.GetDistance(king.Column, king.Row, column, row) > conceal.Range then return false end
 
     self.Smoke = {Column = column, Row = row, Turns = conceal.Turns}
-    self.Match:Send("SmokeChanged", column, row, conceal.Radius)
+    self.Match:SendAll("SmokeChanged", column, row, conceal.Radius)
 
     return true
 end
@@ -65,7 +66,7 @@ function OutlawClass:OnEnemyTurnEnd()
     if self.Smoke.Turns > 0 then return end
 
     self.Smoke = nil
-    self.Match:Send("SmokeChanged", nil)
+    self.Match:SendAll("SmokeChanged", nil)
 end
 
 -- Any empty tile next to an enemy
@@ -74,7 +75,7 @@ function OutlawClass:IsAmbushTile(column, row)
     if self.Match:IsOccupied(column, row) then return false end
 
     for _, piece in pairs(self.Match.Pieces) do
-        if piece.Team == "Black" and BoardRules.GetDistance(column, row, piece.Column, piece.Row) <= OutlawConfig.Ambush.MaxEnemyDistance then
+        if piece.Team == self.Side.EnemyTeam and BoardRules.GetDistance(column, row, piece.Column, piece.Row) <= OutlawConfig.Ambush.MaxEnemyDistance then
             return true
         end
     end
@@ -88,11 +89,12 @@ function OutlawClass:Ultimate(payload)
     if not ArgumentRules.IsTile(column, row) then return false end
     if not self:IsAmbushTile(column, row) then return false end
 
-    local match = self.Match
-    match.King:SetTile(column, row)
-    match.NextShotBonus += OutlawConfig.Ambush.Damage
+    local side = self.Side
+    side.King:SetTile(column, row)
+    side.NextShotBonus += OutlawConfig.Ambush.Damage
 
-    match:Send("KingAmbushed", column, row)
+    self.Match:SendKingMoved(side, "KingAmbushed")
+    self.Match:OnUnitMoved(side.King)
 
     return true
 end

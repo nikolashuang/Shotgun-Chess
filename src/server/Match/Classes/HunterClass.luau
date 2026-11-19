@@ -14,10 +14,11 @@ local HunterClass = {}
 
 HunterClass.__index = HunterClass
 
-function HunterClass.new(match)
+function HunterClass.new(side)
     local self = setmetatable({}, HunterClass)
 
-    self.Match = match
+    self.Side = side
+    self.Match = side.Match
 
     self.Traps = {}
     self.NextTrapId = 1
@@ -37,8 +38,8 @@ function HunterClass:OnEnemyKilled(piece)
     local collector = HunterConfig.Collector
     if self.Match.Random:NextNumber() >= collector.Chance then return end
 
-    self.Match:AddEnergy(collector.Energy)
-    self.Match:Send("EnergyDropped", piece.Column, piece.Row, collector.Energy)
+    self.Side:AddEnergy(collector.Energy)
+    self.Side:Send("EnergyDropped", piece.Column, piece.Row, collector.Energy)
 end
 
 -- payload.Tiles is a list of {Column, Row}: up to Traps.Count empty, trap-free tiles near the king
@@ -47,7 +48,7 @@ function HunterClass:Special(payload)
     if typeof(tiles) ~= "table" then return false end
     if #tiles < 1 or #tiles > TrapConfig.Count then return false end
 
-    local king = self.Match.King
+    local king = self.Side.King
     local seen = {}
 
     for _, tile in ipairs(tiles) do
@@ -74,7 +75,8 @@ function HunterClass:Special(payload)
         table.insert(placed, trap)
     end
 
-    self.Match:Send("TrapsPlaced", placed)
+    -- Traps stay hidden from the other player
+    self.Side:Send("TrapsPlaced", placed)
 
     return true
 end
@@ -87,11 +89,12 @@ function HunterClass:OnEnemyMoved(piece)
     self.Traps[trap.Id] = nil
 
     local match = self.Match
-    match:DamagePiece(piece, TrapConfig.Damage)
-    match:Send("TrapSprung", trap.Id, piece.Id, piece.Health)
+    match:DamagePiece(piece, TrapConfig.Damage, self.Side)
+    self.Side:Send("TrapSprung", trap.Id, piece.Id, piece.Health)
+    match:ShowDamage(piece, self.Side)
 
     if piece:IsAlive() then
-        match:StunPiece(piece, TrapConfig.StunTurns, "Stars")
+        match:StunPiece(piece, TrapConfig.StunTurns, "Stars", self.Side)
     end
 end
 
@@ -115,7 +118,7 @@ function HunterClass:InterceptPath(piece, column, row)
             piece.Column = trap.Column
             piece.Row = trap.Row
 
-            self.Match:Send("PieceMoved", piece.Id, trap.Column, trap.Row)
+            self.Match:SendAll("PieceMoved", piece.Id, trap.Column, trap.Row)
             self:OnEnemyMoved(piece)
 
             return true
@@ -131,11 +134,12 @@ function HunterClass:Ultimate(payload)
 
     local strike = HunterConfig.HuntingStrike
     local match = self.Match
-    local king = match.King
+    local side = self.Side
+    local king = side.King
 
     local function IsEnemyTile(column, row)
         local piece = match:GetPieceAt(column, row)
-        return piece ~= nil and piece.Team ~= "White"
+        return piece ~= nil and piece.Team ~= side.Team
     end
 
     local weapon = ShotgunRules.GetWeapon(strike.Weapon)
@@ -147,7 +151,8 @@ function HunterClass:Ultimate(payload)
     for _, tile in pairs(hitTiles) do
         local piece = match:GetPieceAt(tile.Column, tile.Row)
 
-        if piece and piece.Team == "Black" and piece.Type ~= "King" then
+        -- Boss Kings shrug off bolas in the campaign; in duels the rival King can be stunned
+        if piece and piece.Team == side.EnemyTeam and (piece.Type ~= "King" or match.isDuel) then
             table.insert(targets, piece)
         end
     end
@@ -157,7 +162,7 @@ function HunterClass:Ultimate(payload)
 
     -- The client throws a bolas at each piece stunned with the "Bolas" look
     for _, piece in ipairs(targets) do
-        self.Match:StunPiece(piece, strike.StunTurns, "Bolas")
+        match:StunPiece(piece, strike.StunTurns, "Bolas", side)
     end
 
     return true

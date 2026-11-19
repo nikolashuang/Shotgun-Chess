@@ -635,10 +635,11 @@ local function GetHoveredTile()
 end
 
 -- Enemy Kings fight with a shotgun like the player's king, so they hold one
-local function OnPieceAdded(id, pieceType, team, column, row)
+-- shotgunName is the rival's real shotgun in duels; campaign Kings leave it out
+local function OnPieceAdded(id, pieceType, team, column, row, _health, _maxHealth, shotgunName)
     if pieceType ~= "King" or team ~= "Black" then return end
 
-    ShotgunController.AttachEnemyGun(PieceController.Get(id).Rig.Rig, column, row)
+    ShotgunController.AttachEnemyGun(PieceController.Get(id).Rig.Rig, column, row, shotgunName)
 end
 
 local function OnEnemyShotFired(shooterId, pellets, hitTiles, damaged)
@@ -734,6 +735,11 @@ function BoardController.Init(actionPanelController)
         if action == "MatchStarted" then
             PieceController.Clear()
             BoardEffectsController.Clear()
+
+            -- The king rig carries over between matches, so a stun from the last one comes off
+            if kingRig then
+                kingRig:SetStunned(false)
+            end
         elseif action == "KingMoved" then
             PlaceKing(...)
         elseif action == "PieceAdded" then
@@ -749,6 +755,11 @@ function BoardController.Init(actionPanelController)
             OnFanFired(...)
         elseif action == "PieceStunned" then
             OnPieceStunned(...)
+        elseif action == "KingStunned" then
+            -- Duels only: the player's own King is stunned (stars, or wrapped in bolas)
+            if kingRig then
+                kingRig:SetStunned(...)
+            end
         elseif action == "PieceMarked" then
             PieceController.SetMarked(...)
         elseif action == "SoulAdded" then
@@ -808,7 +819,7 @@ function BoardController.LeaveMatch()
     BoardController.RefreshPreview()
 end
 
--- mode is "Duel" or "Campaign" (with the region and node ids)
+-- mode is "Campaign" (with the region and node ids); duels are started by the server
 function BoardController.StartMatch(mode, regionId, nodeId)
     BoardRemote:FireServer("StartMatch", mode, regionId, nodeId)
 end

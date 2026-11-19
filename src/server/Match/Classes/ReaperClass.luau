@@ -11,10 +11,11 @@ local ReaperClass = {}
 
 ReaperClass.__index = ReaperClass
 
-function ReaperClass.new(match)
+function ReaperClass.new(side)
     local self = setmetatable({}, ReaperClass)
 
-    self.Match = match
+    self.Side = side
+    self.Match = side.Match
 
     self.Souls = {}
     self.NextSoulId = 1
@@ -42,13 +43,13 @@ function ReaperClass:OnEnemyKilled(piece)
     self.NextSoulId += 1
     self.Souls[soul.Id] = soul
 
-    self.Match:Send("SoulAdded", soul.Id, soul.Type, soul.Column, soul.Row)
+    self.Side:Send("SoulAdded", soul.Id, soul.Type, soul.Column, soul.Row)
 end
 
 -- payload.SoulId; only before the king has moved this turn
 function ReaperClass:Special(payload)
     if not ArgumentRules.IsWholeNumber(payload.SoulId) then return false end
-    if self.Match.HasMoved then return false end
+    if self.Side.HasMoved then return false end
 
     local soul = self.Souls[payload.SoulId]
     if not soul then return false end
@@ -56,7 +57,7 @@ function ReaperClass:Special(payload)
     self.Souls[soul.Id] = nil
     self.AssimilatedType = soul.Type
 
-    self.Match:Send("SoulsRemoved", {soul.Id})
+    self.Side:Send("SoulsRemoved", {soul.Id})
 
     return true
 end
@@ -79,6 +80,7 @@ function ReaperClass:Ultimate()
     if count == 0 then return false end
 
     local high = ReaperConfig.ReapersHigh
+    local side = self.Side
     local absorbed = {}
 
     for id in pairs(self.Souls) do
@@ -87,11 +89,12 @@ function ReaperClass:Ultimate()
 
     self.Souls = {}
 
-    self.Match.King:Heal(high.HealPerSoul * count)
-    self.Match.NextShotBonus += high.DamagePerSoul * count
+    side.King:Heal(high.HealPerSoul * count)
+    side.NextShotBonus += high.DamagePerSoul * count
 
-    self.Match:Send("SoulsRemoved", absorbed, true)
-    self.Match:Send("KingHealed", self.Match.King.Health)
+    side:Send("SoulsRemoved", absorbed, true)
+    side:Send("KingHealed", side.King.Health)
+    self.Match:ShowDamage(side.King, side)
 
     return true
 end

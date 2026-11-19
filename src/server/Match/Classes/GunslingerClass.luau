@@ -12,10 +12,11 @@ local GunslingerClass = {}
 
 GunslingerClass.__index = GunslingerClass
 
-function GunslingerClass.new(match)
+function GunslingerClass.new(side)
     local self = setmetatable({}, GunslingerClass)
 
-    self.Match = match
+    self.Side = side
+    self.Match = side.Match
     self.Marks = {}
 
     return self
@@ -26,8 +27,9 @@ function GunslingerClass:Special(payload)
     if not ArgumentRules.IsFiniteNumber(payload.X) or not ArgumentRules.IsFiniteNumber(payload.Y) then return false end
 
     local match = self.Match
+    local side = self.Side
     local fan = GunslingerConfig.FanTheHammer
-    local _, lineTiles = ShotgunRules.GetPreciseShot(match.King.Column, match.King.Row, payload.X, payload.Y, fan.Range)
+    local _, lineTiles = ShotgunRules.GetPreciseShot(side.King.Column, side.King.Row, payload.X, payload.Y, fan.Range)
     if not lineTiles then return false end
 
     local lastTile = lineTiles[#lineTiles]
@@ -39,7 +41,7 @@ function GunslingerClass:Special(payload)
         for _, tile in ipairs(lineTiles) do
             local piece = match:GetPieceAt(tile.Column, tile.Row)
 
-            if piece and piece.Team ~= "White" then
+            if piece and piece.Team ~= side.Team and not match:IsProtected(tile.Column, tile.Row, side) then
                 target = piece
                 break
             end
@@ -47,7 +49,8 @@ function GunslingerClass:Special(payload)
 
         if target and match.Random:NextNumber() < fan.HitChance then
             local column, row = target.Column, target.Row
-            match:DamagePiece(target, fan.Damage)
+            match:DamagePiece(target, fan.Damage, side)
+            match:ShowDamage(target, side)
 
             table.insert(shots, {Column = column, Row = row, Id = target.Id, Health = target.Health})
         else
@@ -55,7 +58,7 @@ function GunslingerClass:Special(payload)
         end
     end
 
-    match:Send("FanFired", shots)
+    side:Send("FanFired", shots)
 
     return true
 end
@@ -70,7 +73,7 @@ function GunslingerClass:Ultimate(payload)
 
     for _, id in ipairs(targets) do
         local piece = ArgumentRules.IsWholeNumber(id) and self.Match.Pieces[id]
-        if not piece or piece.Team ~= "Black" then return false end
+        if not piece or piece.Team ~= self.Side.EnemyTeam then return false end
         if table.find(pieces, piece) then return false end
 
         table.insert(pieces, piece)
@@ -78,7 +81,7 @@ function GunslingerClass:Ultimate(payload)
 
     for _, piece in ipairs(pieces) do
         self.Marks[piece.Id] = true
-        self.Match:Send("PieceMarked", piece.Id, true)
+        self.Side:Send("PieceMarked", piece.Id, true)
     end
 
     return true
@@ -90,8 +93,8 @@ function GunslingerClass:OnEnemyKilled(piece)
     self.Marks[piece.Id] = nil
 
     local energy = GunslingerConfig.Bounty.Energy
-    self.Match:AddEnergy(energy)
-    self.Match:Send("EnergyDropped", piece.Column, piece.Row, energy)
+    self.Side:AddEnergy(energy)
+    self.Side:Send("EnergyDropped", piece.Column, piece.Row, energy)
 end
 
 function GunslingerClass:GetState()

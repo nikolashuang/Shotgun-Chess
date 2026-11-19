@@ -34,6 +34,7 @@ local CampaignConfig = {
     -- Placeholder enemy layouts (black pieces) until encounters are designed
     -- An army with a King is won by killing the King, otherwise by clearing the board
     -- Every King army (boss fight) also fields a Queen
+    -- Two or more Bishops must cover both square colors so no color is safe from them
     Armies = {
         TutorialPawns = {
             {Type = "Pawn", Column = 5, Row = 4},
@@ -72,7 +73,7 @@ local CampaignConfig = {
             {Type = "Pawn", Column = 5, Row = 4},
             {Type = "Pawn", Column = 7, Row = 4},
             {Type = "Bishop", Column = 3, Row = 6},
-            {Type = "Bishop", Column = 9, Row = 6},
+            {Type = "Bishop", Column = 9, Row = 7},
         },
 
         Warband = {

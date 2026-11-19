@@ -422,10 +422,11 @@ function ShotgunController.AttachGun(rig)
 end
 
 -- Enemy Kings hold their shotgun pointed at the player's king until they fire
-function ShotgunController.AttachEnemyGun(rig, column, row)
-    local sprite = SpriteConfig.Guns[ShotgunConfig.ENEMY_KING]
+-- shotgunName picks the sprite (a duel rival's own shotgun); campaign Kings use ENEMY_KING
+function ShotgunController.AttachEnemyGun(rig, column, row, shotgunName)
+    local sprite = SpriteConfig.Guns[shotgunName] or SpriteConfig.Guns[ShotgunConfig.ENEMY_KING]
     local pivot, image = NewGun(rig, sprite)
-    enemyGuns[rig] = {Pivot = pivot, Image = image}
+    enemyGuns[rig] = {Pivot = pivot, Image = image, Sprite = sprite}
 
     local angle = math.pi
     local kingColumn, kingRow = getKingPosition()
@@ -479,7 +480,7 @@ local function FireEnemyGun(rig, originX, originY, pellets)
     end
 
     local angle = math.atan2(sumY / #pellets - originY, sumX / #pellets - originX)
-    PoseGun(gun.Pivot, gun.Image, SpriteConfig.Guns[ShotgunConfig.ENEMY_KING], angle)
+    PoseGun(gun.Pivot, gun.Image, gun.Sprite, angle)
     KickImage(gun.Image)
 end
 

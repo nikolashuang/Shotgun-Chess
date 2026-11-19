@@ -2,15 +2,21 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
+local PieceClass = require(script.Parent.PieceClass)
 
 local KingClass = {}
 
 KingClass.__index = KingClass
 
-function KingClass.new(player, column, row, shotgunName, className)
+function KingClass.new(player, column, row, shotgunName, className, team)
     local self = setmetatable({}, KingClass)
 
     self.Player = player
+
+    -- In duels kings also sit in the match's pieces under an Id, so the other side can target them
+    self.Id = nil
+    self.Type = "King"
+    self.Team = team or "White"
 
     self.Column = column
     self.Row = row
@@ -22,8 +28,22 @@ function KingClass.new(player, column, row, shotgunName, className)
     self.Shotgun = ShotgunRules.GetWeapon(shotgunName, className)
     self.Ammo = self.Shotgun.MaxAmmo
 
+    self.BleedDamage = 0
+    self.BleedTurns = 0
+
+    self.StunTurns = 0
+    self.isStunShown = false
+
     return self
 end
+
+-- Bleed and stun work the same as on pieces
+KingClass.ApplyBleed = PieceClass.ApplyBleed
+KingClass.IsBleeding = PieceClass.IsBleeding
+KingClass.TickBleed = PieceClass.TickBleed
+KingClass.Stun = PieceClass.Stun
+KingClass.IsStunned = PieceClass.IsStunned
+KingClass.TickStun = PieceClass.TickStun
 
 -- Returns the health actually lost
 function KingClass:TakeDamage(amount)

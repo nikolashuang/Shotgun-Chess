@@ -255,6 +255,9 @@ function MenuController.Init(openSettings)
         local screen = playerGui:WaitForChild(option .. "Screen")
         screens[option] = screen
 
+        -- Screens with their own sub-views (Multiplayer) step back through them themselves
+        if screen:GetAttribute("HandlesBack") then continue end
+
         screen:WaitForChild("Root"):WaitForChild("BackButton").Activated:Connect(function()
             screen.Enabled = false
             menu.Enabled = true

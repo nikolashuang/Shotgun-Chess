@@ -60,6 +60,31 @@ function InputController.ResetBindings()
     RefreshLabels()
 end
 
+-- Action -> Enum.KeyCode name for every action, as saved in the profile
+function InputController.GetBindingNames()
+    local names = {}
+
+    for action, keyCode in pairs(bindings) do
+        names[action] = keyCode.Name
+    end
+
+    return names
+end
+
+-- saved holds only the actions moved off their default key
+function InputController.LoadBindings(saved)
+    for action, keyName in pairs(KeybindConfig.Defaults) do
+        local savedName = saved[action]
+        local isKey, keyCode = pcall(function()
+            return Enum.KeyCode[savedName]
+        end)
+
+        bindings[action] = (savedName and isKey) and keyCode or Enum.KeyCode[keyName]
+    end
+
+    RefreshLabels()
+end
+
 -- The next key press goes to the callback instead of triggering an action
 function InputController.CaptureNextKey(callback)
     captureCallback = callback

@@ -5,6 +5,7 @@ local Players = game:GetService("Players")
 local ProgressionConfig = require(ReplicatedStorage.Shared.Player.ProgressionConfig)
 local ProgressionRules = require(ReplicatedStorage.Shared.Player.ProgressionRules)
 local SettingsConfig = require(ReplicatedStorage.Shared.Player.SettingsConfig)
+local KeybindConfig = require(ReplicatedStorage.Shared.Player.KeybindConfig)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 
 local ProfileRemote = ReplicatedStorage.Remotes.ProfileRemote
@@ -32,6 +33,8 @@ local function NewData()
             Class = nil,
         },
         Settings = table.clone(SettingsConfig.DEFAULTS),
+        -- Action -> Enum.KeyCode name, only for actions moved off their default key
+        Keybinds = {},
     }
 end
 
@@ -54,6 +57,35 @@ local function Reconcile(data)
     end
 
     return data
+end
+
+-- keybinds is action -> Enum.KeyCode name; returns only the ones that differ from the defaults,
+-- or nil if anything is invalid (unknown action or key, reserved key, or a key bound twice)
+local function ValidateKeybinds(keybinds)
+    if typeof(keybinds) ~= "table" then return nil end
+
+    local saved = {}
+    local used = {}
+
+    for _, action in ipairs(KeybindConfig.ORDER) do
+        local keyName = keybinds[action] or KeybindConfig.Defaults[action]
+        if typeof(keyName) ~= "string" then return nil end
+        if table.find(KeybindConfig.RESERVED, keyName) then return nil end
+        if used[keyName] then return nil end
+
+        local isKey = pcall(function()
+            return Enum.KeyCode[keyName]
+        end)
+        if not isKey then return nil end
+
+        used[keyName] = true
+
+        if keyName ~= KeybindConfig.Defaults[action] then
+            saved[action] = keyName
+        end
+    end
+
+    return saved
 end
 
 local function LoadData(player)
@@ -97,6 +129,7 @@ function ProfileService.Sync(player)
         Classes = data.Classes,
         Nodes = data.Nodes,
         Settings = data.Settings,
+        Keybinds = data.Keybinds,
     })
 end
 
@@ -220,6 +253,14 @@ function ProfileService.Init()
             if name == "Speed" then
                 player:SetAttribute("GameSpeed", SettingsConfig.SPEEDS[value])
             end
+        elseif action == "SetKeybinds" then
+            local profile = Profiles[player]
+            if not profile then return end
+
+            local keybinds = ValidateKeybinds(name)
+            if not keybinds then return end
+
+            profile.Data.Keybinds = keybinds
         end
     end)
 

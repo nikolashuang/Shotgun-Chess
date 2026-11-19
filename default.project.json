@@ -22,6 +22,9 @@
         },
         "DevRemote": {
           "$className": "RemoteEvent"
+        },
+        "DuelRemote": {
+          "$className": "RemoteEvent"
         }
       }
     },

@@ -6,6 +6,9 @@ local MatchConfig = {
     ENEMY_THINK_TIME = 0.6,
     ENEMY_ACTION_TIME = 1.2,
 
+    -- Seconds a stunned duel King's turn is shown before it is skipped
+    STUN_SKIP_TIME = 1.5,
+
     TEST_DUMMIES = {
         {Type = "Pawn", Column = 5, Row = 3},
         {Type = "Knight", Column = 7, Row = 3},

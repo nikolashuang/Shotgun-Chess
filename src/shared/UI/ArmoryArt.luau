@@ -1,6 +1,6 @@
--- Ability drawings rendered by art/tools/build_armory_icons.py and packed by build_armory_art.py
+-- Ability and menu card drawings rendered by art/tools/build_armory_icons.py and packed by build_armory_art.py
 local ArmoryArt = {
-    ICONS = "rbxassetid://108407538092446",
+    ICONS = "rbxassetid://81321436293664",
     -- Pixels per icon (64 px render plus a 1 px outline each side), packed left to right, top to bottom
     TILE = 66,
     COLUMNS = 4,
@@ -11,7 +11,7 @@ local ArmoryArt = {
         "HunterPassive", "HunterSpecial", "HunterUltimate",
         "GunslingerPassive", "GunslingerSpecial", "GunslingerUltimate",
         "OutlawPassive", "OutlawSpecial", "OutlawUltimate",
-        "Siege",
+        "Siege", "Duels", "Practice", "Queue", "Challenge",
     },
 }
 

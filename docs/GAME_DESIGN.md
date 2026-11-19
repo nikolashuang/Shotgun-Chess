@@ -156,6 +156,7 @@ World map, bottom to top: **King's Training** (tutorial) → **Hunter Forest** (
 - Art pipeline: `art/tools/build_islands.py` (run inside Blender with the sprite file open) builds the islands, chains and padlock from primitives and renders them to `art/campaign/islands/`, saving the scene as `art/CampaignIslands.blend`. `art/tools/build_campaign_art.py` then outlines them, makes the gray versions and packs `Islands.png`, draws the parchment (`Paper.png`), and cuts the node icons and logo from `art/reference/`.
 - Node types (from the reference legend): **Battle**, **Rest Site**, **Treasure Hunt**, **Queen Fight** (the elite), **Boss Fight** (King).
 - Every Boss Fight army fields a Queen alongside the enemy King.
+- Any army with two or more Bishops starts them on both square colors, so neither color is safe.
 - A node opens once any node linking to it is cleared. Taking one branch doesn't lock the others.
 - Every region ends Queen → King, and nothing else links to the King. `CampaignRules.Validate` errors at server start if this is broken.
 - Rest and Treasure nodes clear as soon as they're entered and can't be revisited. Rest sites currently do nothing, because health doesn't carry between battles yet.
@@ -175,15 +176,31 @@ Base rewards, multiplied by the region's `RewardScale` (Training 0.5, Forest 1, 
 | Queen Fight | 400 | 200 |
 | Boss Fight | 750 | 350 |
 
-First clears pay in full. Battle replays pay `REPLAY_REWARD_SCALE` (20%). Clearing every node in the campaign once gives about 16,100 Gold and 7,185 XP (level 12); Duels at level 20 still needs replays. Nodes can override rewards with their own `Reward` table.
+First clears pay in full. Battle replays pay `REPLAY_REWARD_SCALE` (20%). Clearing every node in the campaign once gives about 16,100 Gold and 7,185 XP (level 12), which is past the level 10 Duels unlock. Nodes can override rewards with their own `Reward` table.
 
 ### Progression
 
 - Gold buys shotguns. XP raises the account level. Each level needs 100 more XP than the last: 100 for level 2, 200 for level 3, and so on (`ProgressionRules.GetExpToLevel`).
-- **Duels unlock at level 20** (`ProgressionConfig.DUELS_UNLOCK_LEVEL`, 19,000 total XP), checked on the server.
+- **Duels unlock at level 10** (`ProgressionConfig.DUELS_UNLOCK_LEVEL`, 4,500 total XP), checked on the server.
 - Back steps out one level at a time: area map → world map → main menu.
-- **Dev panel:** a Developer button on the main menu, shown only to the accounts in `DevConfig.USER_IDS` (Snoothe3rd). It can unlock everything (all shotguns, classes, campaign nodes and level 20), add 1000 Gold, or reset the profile. The server checks the account on every request.
-- Saved in a DataStore (`PlayerProfile_v1`): gold, XP, owned shotguns, unlocked classes, cleared nodes, equipped loadout and settings. If the profile can't load (e.g. Studio API access off), a temporary profile is used and never saved.
+- **Dev panel:** a Developer button on the main menu, shown only to the accounts in `DevConfig.USER_IDS` (Snoothe3rd). It can unlock everything (all shotguns, classes, campaign nodes and level 10), add 1000 Gold, or reset the profile. The server checks the account on every request.
+- Saved in a DataStore (`PlayerProfile_v1`): gold, XP, owned shotguns, unlocked classes, cleared nodes, equipped loadout, settings and keybinds. If the profile can't load (e.g. Studio API access off), a temporary profile is used and never saved.
+
+## Multiplayer (PvP Duels)
+
+Unlocks at level 10. Uses the same rules as the campaign (`MatchClass`), with two human sides instead of the AI.
+
+- **Screens:** Multiplayer opens on a **Duels** card (room for more multiplayer modes beside it). Duels opens two cards: **Queue** (searches in place, click again to cancel; pairs the two players who have waited longest) and **Challenge** (the player list on its own screen). Back steps out one screen at a time. Card drawings come from `art/tools/build_armory_icons.py` (sheet in `ArmoryArt`).
+- **Practice** (the last card on the **Singleplayer** screen, after Campaign and Siege; no level needed): Choose Difficulty picks the AI rating (500–2500 in steps of 500, `DuelConfig.PRACTICE_RATINGS`) and the AI king's shotgun and class. It's a normal duel (coin flip for White, 5:00 clock) against `PracticeAIService`, with no rewards.
+- **Practice AI (simple for now):** each turn it moves the king to the tile with the best shot (or toward your King), then shoots; with no shot it attacks with a piece if it can. It reloads when empty, saves energy for a randomly picked piece and summons it near its king, and uses spare energy to push a piece forward. The rating is its chance of picking a worse move (`AIConfig.Ratings`). It doesn't use class specials or ultimates yet. Smarter player techniques get added over time.
+- **Challenges:** a challenge shows the target an Accept/Decline popup on any menu screen for 30 seconds (`DuelConfig.CHALLENGE_TIMEOUT`). Players already in a match show as Busy.
+- **Setup:** kings only, no starting pieces. A coin flip picks White, who moves first from F1; Black starts on the mirrored tile (G12). Each player brings their equipped shotgun and class.
+- **View:** the server turns the board 180° for Black, so both players see themselves at the bottom as White.
+- **Chess clock:** 5:00 per player (`DuelConfig.CLOCK`), running only on that player's turn. Shown next to End Turn.
+- **Winning:** kill the enemy King, or the enemy's clock reaches 0. Leaving the match (Back to Menu or quitting) forfeits.
+- **Kings on the board:** in duels each king is a target for the other side's shots, commands, traps, bleed and stuns. Kings still can't be knocked back. Hunting Strike's bolas stun the rival King in duels (campaign boss Kings are immune). **A stunned King skips its whole turn:** it shows as "Stunned - Turn Skipped" for a moment (`MatchConfig.STUN_SKIP_TIME`), its clock doesn't run, and play passes on. A King that walks into a trap loses the rest of that turn and the whole next one; bolas (3 turns) skip three.
+- **Stuns** count the stunned piece's own turns, not including the turn it was stunned on, and wear off at the end of the last one. Smoke protects its owner's units from the other player's shots and commands.
+- **Rewards (placeholder):** win 150 Gold + 100 XP, loss 50 Gold + 30 XP, forfeit nothing (`DuelConfig`).
 
 ## Visual Style
 
@@ -211,7 +228,7 @@ First clears pay in full. Battle replays pay `REPLAY_REWARD_SCALE` (20%). Cleari
 
 ## Controls
 
-Default keybinds, rebindable in **Settings** (session only until settings are saved to a profile):
+Default keybinds, rebindable in **Settings** and saved in the profile (`Keybinds`, only the actions moved off their default key):
 
 | Action | Key |
 |---|---|
@@ -247,6 +264,8 @@ Not yet specified in the design doc. Do not implement guesses without confirming
 - What Treasure Hunts find beyond gold and XP (items, upgrades)
 - The replay reward fraction (20% placeholder)
 - Exact ranges/arcs for Double Barrel and Long Barrel
+- Duel reward amounts and ranked play; whether bolas should skip 3 King turns or fewer
+- Duels with two Outlaws show only the most recent smoke cloud on each screen
 
 ## Prototype Test Setup
 

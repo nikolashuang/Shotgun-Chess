@@ -6,7 +6,7 @@ local ProgressionConfig = {
 
     START_GOLD = 0,
 
-    DUELS_UNLOCK_LEVEL = 20,
+    DUELS_UNLOCK_LEVEL = 10,
 }
 
 return ProgressionConfig
