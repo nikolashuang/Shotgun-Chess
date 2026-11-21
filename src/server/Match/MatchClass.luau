@@ -625,6 +625,9 @@ function MatchClass:Fire(side, targetX, targetY, mode)
     for _, piece in ipairs(targets) do
         bonuses[piece] = side.NextShotBonus + (self:CallAbility(side, "GetHitBonus", piece) or 0)
 
+        -- Gun Maintenance adds to each blast, so a Double Barrel gets it twice
+        bonuses[piece] += king.DamageBonus * (shotType == "Knife" and 1 or weapon.Blasts)
+
         -- Piercing blasts (Deadly Rounds) lose damage for every enemy they pass through on the way
         if weapon.Pierces and shotType ~= "Knife" then
             bonuses[piece] -= ShotgunRules.CountBlockers(originX, originY, piece.Column, piece.Row, IsEnemyTile) * weapon.PierceDamageLoss

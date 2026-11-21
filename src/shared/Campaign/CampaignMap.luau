@@ -5,6 +5,15 @@ local CampaignMap = {}
 -- Column 1 is the single start node. Every route fights 3 times, then hits one Rest and one Treasure
 local PATTERN = {"Fight", "Fight", "Fight", "Break", "Break", "Fight", "Fight", "Fight", "Break", "Break"}
 
+-- Normal battles on every route, numbered 1 to FIGHTS in each Combat node's Fight
+CampaignMap.FIGHTS = 0
+
+for _, kind in ipairs(PATTERN) do
+    if kind == "Fight" then
+        CampaignMap.FIGHTS += 1
+    end
+end
+
 local START_X = 0.04
 local COLUMN_SPACING = 0.08
 local QUEEN_X = 0.85
@@ -53,7 +62,7 @@ function CampaignMap.Build(map)
         return (random:NextNumber() * 2 - 1) * amount
     end
 
-    nodes.Start = {Type = "Combat", Army = map.Armies[1], Position = {START_X, 0.5}, Links = {}}
+    nodes.Start = {Type = "Combat", Fight = 1, Position = {START_X, 0.5}, Links = {}}
 
     for column = 2, #PATTERN do
         local kind = PATTERN[column]
@@ -68,7 +77,7 @@ function CampaignMap.Build(map)
             local y = GetLaneY(lane, lanes) + Jitter(JITTER_Y)
 
             if kind == "Fight" then
-                nodes[nodeId] = {Type = "Combat", Army = map.Armies[fightIndex], Position = {x, y}, Links = {}}
+                nodes[nodeId] = {Type = "Combat", Fight = fightIndex, Position = {x, y}, Links = {}}
             else
                 nodes[nodeId] = {Type = GetBreakType(column, lane, flip), Position = {x, y}, Links = {}}
             end
@@ -77,8 +86,8 @@ function CampaignMap.Build(map)
         end
     end
 
-    nodes.Queen = {Type = "Queen", Army = map.QueenArmy, Position = {QUEEN_X, 0.5}, Links = {"King"}}
-    nodes.King = {Type = "King", Army = map.KingArmy, Position = {KING_X, 0.5}, Links = {}}
+    nodes.Queen = {Type = "Queen", Position = {QUEEN_X, 0.5}, Links = {"King"}}
+    nodes.King = {Type = "King", Position = {KING_X, 0.5}, Links = {}}
 
     for lane = 1, lanes do
         table.insert(nodes.Start.Links, GetNodeId(2, lane))

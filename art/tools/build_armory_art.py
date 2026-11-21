@@ -16,6 +16,7 @@ ORDER = [
     "GunslingerPassive", "GunslingerSpecial", "GunslingerUltimate",
     "OutlawPassive", "OutlawSpecial", "OutlawUltimate",
     "Siege", "Duels", "Practice", "Queue", "Challenge",
+    "Pouch",
 ]
 # Render size plus a 1 pixel outline on each side
 TILE = 66

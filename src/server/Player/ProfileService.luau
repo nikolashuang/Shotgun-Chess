@@ -7,6 +7,7 @@ local ProgressionRules = require(ReplicatedStorage.Shared.Player.ProgressionRule
 local SettingsConfig = require(ReplicatedStorage.Shared.Player.SettingsConfig)
 local KeybindConfig = require(ReplicatedStorage.Shared.Player.KeybindConfig)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
+local CampaignRules = require(ReplicatedStorage.Shared.Campaign.CampaignRules)
 
 local ProfileRemote = ReplicatedStorage.Remotes.ProfileRemote
 
@@ -17,7 +18,7 @@ local AUTOSAVE_INTERVAL = 120
 local store = nil
 local Profiles = {}
 
--- Persistent player data: gold, exp, owned shotguns, unlocked classes, cleared campaign nodes and loadout
+-- Persistent player data: gold, exp, owned shotguns, unlocked classes, campaign progress and runs, and loadout
 -- Gold, Level and Exp are mirrored to player attributes; the rest is sent to the client as a snapshot
 local ProfileService = {}
 
@@ -28,6 +29,8 @@ local function NewData()
         Shotguns = {[ShotgunConfig.STARTER] = true},
         Classes = {},
         Nodes = {},
+        -- Region -> the campaign run in progress there
+        Runs = {},
         Equipped = {
             Shotgun = ShotgunConfig.STARTER,
             Class = nil,
@@ -96,7 +99,16 @@ local function LoadData(player)
             return store:GetAsync(tostring(player.UserId))
         end)
 
-        if ok then return Reconcile(result or NewData()) end
+        if ok then
+            local data = Reconcile(result or NewData())
+
+            -- A run left mid-region picks up again from its last Rest Site
+            for regionId, run in pairs(data.Runs) do
+                data.Runs[regionId] = CampaignRules.Rewind(run)
+            end
+
+            return data
+        end
 
         warn("[ProfileService] Load failed for " .. player.Name .. ": " .. tostring(result))
         task.wait(1)
@@ -128,6 +140,7 @@ function ProfileService.Sync(player)
         Shotguns = data.Shotguns,
         Classes = data.Classes,
         Nodes = data.Nodes,
+        Runs = CampaignRules.GetClientRuns(data.Runs),
         Settings = data.Settings,
         Keybinds = data.Keybinds,
     })

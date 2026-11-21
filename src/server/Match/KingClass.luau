@@ -27,6 +27,8 @@ function KingClass.new(player, column, row, shotgunName, className, team)
     self.ShotgunName = shotgunName
     self.Shotgun = ShotgunRules.GetWeapon(shotgunName, className)
     self.Ammo = self.Shotgun.MaxAmmo
+    -- Added to every shotgun hit (campaign Gun Maintenance)
+    self.DamageBonus = 0
 
     self.BleedDamage = 0
     self.BleedTurns = 0

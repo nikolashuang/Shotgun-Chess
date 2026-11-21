@@ -1,6 +1,6 @@
--- Ability and menu card drawings rendered by art/tools/build_armory_icons.py and packed by build_armory_art.py
+-- Ability, menu card and campaign pouch drawings rendered by art/tools/build_armory_icons.py and packed by build_armory_art.py
 local ArmoryArt = {
-    ICONS = "rbxassetid://81321436293664",
+    ICONS = "rbxassetid://101811508933391",
     -- Pixels per icon (64 px render plus a 1 px outline each side), packed left to right, top to bottom
     TILE = 66,
     COLUMNS = 4,
@@ -12,6 +12,7 @@ local ArmoryArt = {
         "GunslingerPassive", "GunslingerSpecial", "GunslingerUltimate",
         "OutlawPassive", "OutlawSpecial", "OutlawUltimate",
         "Siege", "Duels", "Practice", "Queue", "Challenge",
+        "Pouch",
     },
 }
 

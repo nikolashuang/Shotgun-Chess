@@ -3,8 +3,8 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
 local ProgressionConfig = require(ReplicatedStorage.Shared.Player.ProgressionConfig)
-local ProgressionRules = require(ReplicatedStorage.Shared.Player.ProgressionRules)
 local MenuArt = require(ReplicatedStorage.Shared.UI.MenuArt)
+local PlayerCard = require(script.Parent.Parent.UI.PlayerCard)
 
 local HOVER_OFFSET = 0.02
 local HOVER_TIME = 0.12
@@ -170,43 +170,6 @@ local function UpdateMultiplayerLock(button)
     button.Label.TextTransparency = isUnlocked and 0 or 0.5
 end
 
--- Level, Exp and Gold are player attributes set by the server profile
-local function BindProfile(profile)
-    local player = Players.LocalPlayer
-
-    profile.Username.Text = player.Name
-
-    task.spawn(function()
-        local ok, image = pcall(function()
-            return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
-        end)
-
-        if ok then
-            profile.AvatarFrame.Avatar.Image = image
-        end
-    end)
-
-    local function UpdateProgress()
-        local level = player:GetAttribute("Level") or ProgressionConfig.START_LEVEL
-        local exp = player:GetAttribute("Exp") or 0
-        local needed = ProgressionRules.GetExpToLevel(level)
-
-        profile.Level.Text = "Lv " .. level
-        profile.Exp.Text = string.format("%d/%d XP", exp, needed)
-        profile.ExpBar.Fill.Size = UDim2.fromScale(math.clamp(exp / needed, 0, 1), 1)
-    end
-
-    local function UpdateGold()
-        profile.Gold.Text = (player:GetAttribute("Gold") or 0) .. " Gold"
-    end
-
-    player:GetAttributeChangedSignal("Level"):Connect(UpdateProgress)
-    player:GetAttributeChangedSignal("Exp"):Connect(UpdateProgress)
-    player:GetAttributeChangedSignal("Gold"):Connect(UpdateGold)
-    UpdateProgress()
-    UpdateGold()
-end
-
 
 -- Background art covers the whole screen at any aspect ratio, cropping toward its Focus point
 local function BindBackground(background)
@@ -229,8 +192,8 @@ local function BindBackground(background)
 end
 
 local init = false
--- openSettings shows the settings overlay over whatever screen is open
-function MenuController.Init(openSettings)
+-- openSettings shows the settings overlay over whatever screen is open, openPatchNotes the patch notes overlay
+function MenuController.Init(openSettings, openPatchNotes)
     if init then return end
     init = true
 
@@ -240,7 +203,7 @@ function MenuController.Init(openSettings)
     root = menu:WaitForChild("Root")
 
     BindBackground(menu:WaitForChild("Background"))
-    BindProfile(menu:WaitForChild("Profile"))
+    PlayerCard.Bind(menu:WaitForChild("Profile"))
 
     local multiplayerButton = root:WaitForChild("MultiplayerButton")
     player:GetAttributeChangedSignal("Level"):Connect(function()
@@ -264,6 +227,11 @@ function MenuController.Init(openSettings)
         end)
     end
 
+    -- Every screen keeps Settings beside its Menu button at the bottom right; Singleplayer wires its own
+    for _, name in ipairs({"MultiplayerScreen", "ArmoryScreen", "ShopScreen", "CampaignScreen"}) do
+        playerGui:WaitForChild(name):WaitForChild("Root"):WaitForChild("SettingsButton").Activated:Connect(openSettings)
+    end
+
     for _, button in pairs(root:GetChildren()) do
         if not button:IsA("TextButton") then continue end
 
@@ -274,6 +242,9 @@ function MenuController.Init(openSettings)
         button.Activated:Connect(function()
             if option == "Settings" then
                 openSettings()
+                return
+            elseif option == "PatchNotes" then
+                openPatchNotes()
                 return
             end
 

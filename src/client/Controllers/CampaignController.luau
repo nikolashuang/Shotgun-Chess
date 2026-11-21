@@ -5,7 +5,9 @@ local TweenService = game:GetService("TweenService")
 local CampaignConfig = require(ReplicatedStorage.Shared.Campaign.CampaignConfig)
 local CampaignRules = require(ReplicatedStorage.Shared.Campaign.CampaignRules)
 local CampaignArt = require(ReplicatedStorage.Shared.Campaign.CampaignArt)
+local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
+local ArmoryArt = require(ReplicatedStorage.Shared.UI.ArmoryArt)
 local ProfileController = require(script.Parent.ProfileController)
 
 local CampaignRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CampaignRemote")
@@ -17,6 +19,23 @@ local LOCKED_COLOR = Color3.fromHex("7A6E73")
 local INK_COLOR = Color3.fromHex("332A35")
 -- Routes not walked yet are drawn faint on the paper
 local FAINT_INK_TRANSPARENCY = 0.6
+
+-- Treasure Hunt board colors per region: light tiles, dark tiles
+local TREASURE_COLORS = {
+    Training = {Color3.fromHex("D9C9A3"), Color3.fromHex("B8A47E")},
+    Forest = {Color3.fromHex("7E9A5C"), Color3.fromHex("5E7A44")},
+    Cliffside = {Color3.fromHex("C99A6B"), Color3.fromHex("A67A50")},
+    Outskirts = {Color3.fromHex("C2A878"), Color3.fromHex("9E8558")},
+    Gravehollow = {Color3.fromHex("6E6378"), Color3.fromHex("534A5E")},
+}
+local DUG_COLOR = Color3.fromHex("4A3B33")
+local TREASURE_COLOR = Color3.fromHex("F1D4AC")
+
+local REST_RESULTS = {
+    Rest = "You rest by the fire. Health restored.",
+    Train = "You train. +2 max health.",
+    Maintenance = "You clean your shotgun. +1 damage.",
+}
 
 local LEGEND_ORDER = {"Combat", "Rest", "Treasure", "Queen", "King"}
 
@@ -48,7 +67,6 @@ local PULSE_TIME = 0.6
 local menu = nil
 local hud = nil
 local screen = nil
-local stats = nil
 local header = nil
 local backButton = nil
 local singleplayer = nil
@@ -60,6 +78,16 @@ local scene = nil
 local map = nil
 local info = nil
 local playButton = nil
+local runInfo = nil
+local pouch = nil
+
+local restPanel = nil
+local treasurePanel = nil
+local treasureGrid = nil
+local tileTemplate = nil
+local treasureTiles = {}
+-- Waiting on the server's answer to a dig
+local isDigging = false
 
 local islandTemplate = nil
 local nodeTemplate = nil
@@ -86,6 +114,12 @@ local CampaignController = {}
 
 local function GetCleared()
     return ProfileController.Data.Nodes
+end
+
+local function GetRun(regionId)
+    local runs = ProfileController.Data.Runs
+
+    return runs and runs[regionId]
 end
 
 local function ClearChildren(container)
@@ -137,23 +171,51 @@ local function SetAtlasRect(image, column, row)
 end
 
 local function FormatReward(regionId, nodeId)
-    local isFirstClear = not CampaignRules.IsCleared(GetCleared(), regionId, nodeId)
-    local gold, exp = CampaignRules.GetReward(regionId, nodeId, isFirstClear)
-    if gold == 0 and exp == 0 then return "No reward" end
+    local node = CampaignConfig.Regions[regionId].Nodes[nodeId]
+    if node.Type == "Treasure" then return "Up to " .. CampaignConfig.Treasure.Rewards[1] .. " Gold" end
+    if node.Type == "Rest" then return "Checkpoint" end
 
-    local text = string.format("%d Gold   %d XP", gold, exp)
+    local gold, exp = CampaignRules.GetReward(regionId, nodeId)
 
-    if not isFirstClear then
-        text ..= "  (replay)"
+    return string.format("%d Gold   %d XP to pouch", gold, exp)
+end
+
+-- Health, upgrades and pouch of the run in progress
+local function UpdateRunInfo(regionId)
+    local run = GetRun(regionId)
+    local isReplay = CampaignRules.IsRegionComplete(GetCleared(), regionId)
+    local replayText = isReplay and "   (Replay: pouch pays 20%)" or ""
+
+    pouch.Gold.Text = string.format("%d Gold", run and run.Gold or 0)
+    pouch.Exp.Text = string.format("%d XP", run and run.Exp or 0)
+
+    if not run or #run.Path == 0 then
+        runInfo.Text = "New run" .. replayText
+        return
     end
 
-    return text
+    local parts = {string.format("Health %d/%d", run.Health, run.MaxHealth)}
+
+    if run.DamageBonus > 0 then
+        table.insert(parts, string.format("+%d Damage", run.DamageBonus))
+    end
+
+    if run.HasCheckpoint then
+        table.insert(parts, "Checkpoint saved")
+    end
+
+    runInfo.Text = table.concat(parts, "     ") .. replayText
 end
 
 local function ShowView(isWorld)
     worldView.Visible = isWorld
     areaView.Visible = not isWorld
     backButton.Label.Text = isWorld and "Back" or "World Map"
+
+    if isWorld then
+        restPanel.Visible = false
+        treasurePanel.Visible = false
+    end
 end
 
 --WORLD MAP--
@@ -379,8 +441,7 @@ local function SelectNode(nodeId)
 
     local region = CampaignConfig.Regions[currentRegion]
     local node = region.Nodes[nodeId]
-    local state = CampaignRules.GetNodeState(GetCleared(), currentRegion, nodeId)
-    local isBattle = CampaignRules.IsBattle(node)
+    local state = CampaignRules.GetNodeState(GetRun(currentRegion), currentRegion, nodeId)
 
     local text = CampaignConfig.TypeNames[node.Type] .. "\n" .. FormatReward(currentRegion, nodeId)
 
@@ -390,19 +451,19 @@ local function SelectNode(nodeId)
 
     if state == "Locked" then
         text ..= "\nLocked"
-    elseif state == "Cleared" and not isBattle then
+    elseif state == "Cleared" then
         text ..= "\nVisited"
     end
 
     info.Text = text
+    playButton.Visible = state == "Available" and not restPanel.Visible and not treasurePanel.Visible
 
-    -- Only battles can be replayed
-    playButton.Visible = state == "Available" or (state == "Cleared" and isBattle)
-
-    if not isBattle then
-        playButton.Label.Text = node.Type == "Rest" and "Rest" or "Search"
+    if node.Type == "Rest" then
+        playButton.Label.Text = "Rest"
+    elseif node.Type == "Treasure" then
+        playButton.Label.Text = "Dig"
     else
-        playButton.Label.Text = state == "Cleared" and "Replay" or "Fight"
+        playButton.Label.Text = "Fight"
     end
 end
 
@@ -445,20 +506,23 @@ function CampaignController.ShowRegion(regionId)
     currentRegion = regionId
 
     local region = CampaignConfig.Regions[regionId]
-    local cleared = GetCleared()
+    local run = GetRun(regionId)
+    local path = run and run.Path or {}
 
     header.Text = region.DisplayName
     info.Text = region.Subtitle .. "\nSelect a node"
     playButton.Visible = false
     ShowView(false)
+    UpdateRunInfo(regionId)
 
     ClearChildren(map)
     nodeButtons = {}
 
     for nodeId, node in pairs(region.Nodes) do
-        local isOpen = CampaignRules.IsCleared(cleared, regionId, nodeId)
-
         for _, link in ipairs(node.Links) do
+            -- Only the route this run walked is inked in
+            local isOpen = table.find(path, nodeId) ~= nil and table.find(path, link) ~= nil
+
             for _, dot in ipairs(DrawPath(map, node.Position, region.Nodes[link].Position, isOpen and ACCENT_COLOR or INK_COLOR)) do
                 dot.BackgroundTransparency = isOpen and 0 or FAINT_INK_TRANSPARENCY
             end
@@ -466,7 +530,7 @@ function CampaignController.ShowRegion(regionId)
     end
 
     for nodeId, node in pairs(region.Nodes) do
-        NewNodeButton(nodeId, node, CampaignRules.GetNodeState(cleared, regionId, nodeId))
+        NewNodeButton(nodeId, node, CampaignRules.GetNodeState(run, regionId, nodeId))
     end
 
     if selectedNode and region.Nodes[selectedNode] then
@@ -507,13 +571,109 @@ local function Redraw()
     end
 end
 
+--REST AND TREASURE--
+
+local function ShowRestPanel()
+    restPanel.Visible = true
+    playButton.Visible = false
+end
+
+local function ChooseRest(choice)
+    if not currentRegion or not selectedNode then return end
+
+    restPanel.Visible = false
+    CampaignRemote:FireServer("Rest", currentRegion, selectedNode, choice)
+end
+
+local function GetTileColor(column, row)
+    local colors = TREASURE_COLORS[currentRegion] or TREASURE_COLORS.Training
+
+    return colors[(column + row) % 2 + 1]
+end
+
+local function MarkDug(column, row)
+    for _, tile in ipairs(CampaignRules.GetDigTiles(column, row)) do
+        local button = treasureTiles[tile[1] .. "," .. tile[2]]
+        button.BackgroundColor3 = DUG_COLOR
+    end
+end
+
+local function SetDigsLeft(digsLeft)
+    treasurePanel.Digs.Text = digsLeft == 1 and "1 dig left" or (digsLeft .. " digs left")
+end
+
+local function Dig(column, row)
+    if isDigging or treasurePanel.CloseButton.Visible then return end
+
+    isDigging = true
+    CampaignRemote:FireServer("Dig", currentRegion, selectedNode, column, row)
+end
+
+-- Row 1 is drawn at the bottom, like the battle board
+local function BuildTreasureBoard(digs)
+    ClearChildren(treasureGrid)
+    treasureTiles = {}
+
+    local size = BoardConfig.SIZE
+
+    for column = 1, size do
+        for row = 1, size do
+            local tile = tileTemplate:Clone()
+            tile.Name = column .. "," .. row
+            tile.Position = UDim2.fromScale((column - 1) / size, (size - row) / size)
+            tile.Size = UDim2.fromScale(1 / size, 1 / size)
+            tile.BackgroundColor3 = GetTileColor(column, row)
+            tile.Visible = true
+            tile.Parent = treasureGrid
+
+            tile.Activated:Connect(function()
+                Dig(column, row)
+            end)
+
+            treasureTiles[tile.Name] = tile
+        end
+    end
+
+    for _, dug in ipairs(digs) do
+        MarkDug(dug[1], dug[2])
+    end
+
+    SetDigsLeft(CampaignConfig.Treasure.DIGS - #digs)
+    treasurePanel.Message.Text = "Pick a tile to dig. Each dig uncovers a 3x3 area."
+    treasurePanel.CloseButton.Visible = false
+    treasurePanel.Visible = true
+    playButton.Visible = false
+    isDigging = false
+end
+
+local function ShowDig(result)
+    isDigging = false
+    MarkDug(result.Column, result.Row)
+    SetDigsLeft(result.DigsLeft)
+
+    if not result.Done then
+        treasurePanel.Message.Text = "Nothing here. Keep digging."
+        return
+    end
+
+    local treasureTile = treasureTiles[result.TreasureColumn .. "," .. result.TreasureRow]
+    treasureTile.BackgroundColor3 = TREASURE_COLOR
+    treasureTile.Mark.Text = "$"
+    treasureTile.Mark.TextColor3 = DUG_COLOR
+
+    treasurePanel.CloseButton.Visible = true
+end
+
 local function Play()
     if not currentRegion or not selectedNode then return end
 
     local node = CampaignConfig.Regions[currentRegion].Nodes[selectedNode]
 
-    if not CampaignRules.IsBattle(node) then
-        CampaignRemote:FireServer("ResolveNode", currentRegion, selectedNode)
+    if node.Type == "Rest" then
+        ShowRestPanel()
+        return
+    elseif node.Type == "Treasure" then
+        CampaignRemote:FireServer("StartTreasure", currentRegion, selectedNode)
         return
     end
 
@@ -530,30 +690,39 @@ local function ShowResult(summary)
 
     if summary.Victory then
         if summary.Gold > 0 or summary.Exp > 0 then
-            table.insert(lines, string.format("+%d Gold", summary.Gold))
-            table.insert(lines, string.format("+%d XP", summary.Exp))
+            table.insert(lines, string.format("+%d Gold  +%d XP to pouch", summary.Gold, summary.Exp))
+        end
+
+        -- Beating a King opens the pouch and sends the player to the world map to see the next island unlock
+        if summary.RegionComplete then
+            table.insert(lines, string.format("Pouch opened: +%d Gold  +%d XP", summary.PaidGold, summary.PaidExp))
+
+            if summary.Replay then
+                table.insert(lines, "Replay: pouch paid 20%")
+            end
+
+            lastMatchRegion = nil
         end
 
         if summary.Class then
             table.insert(lines, ClassConfig.Classes[summary.Class].DisplayName .. " class unlocked")
         end
-
-        if not summary.FirstClear then
-            table.insert(lines, "Replay reward")
-        end
-
-        -- Beating a King sends the player to the world map to see the next island unlock
-        if summary.RegionComplete then
-            lastMatchRegion = nil
-        end
+    elseif summary.Checkpoint then
+        table.insert(lines, "Back to your last Rest Site")
     else
-        table.insert(lines, "Progress kept")
+        table.insert(lines, "Region restarted, pouch lost")
     end
 
     -- Rest and treasure resolve on the map, battle results show over the board
     if not hud.Enabled then
-        local title = summary.Type == "Rest" and "You rest by the fire." or "Treasure found!"
-        info.Text = title .. "\n" .. table.concat(lines, "   ")
+        if summary.Type == "Rest" then
+            info.Text = (REST_RESULTS[summary.Choice] or "") .. "\nCheckpoint saved"
+        else
+            local title = summary.Found and "Treasure found!" or "No luck. A few coins for your trouble."
+            treasurePanel.Message.Text = title .. "\n" .. table.concat(lines, "\n")
+            info.Text = title
+        end
+
         playButton.Visible = false
         return
     end
@@ -586,12 +755,6 @@ local function Back()
     singleplayer.Enabled = true
 end
 
-local function UpdateStats()
-    local player = Players.LocalPlayer
-
-    stats.Text = string.format("Lv %d   %d Gold", player:GetAttribute("Level") or 1, player:GetAttribute("Gold") or 0)
-end
-
 local init = false
 function CampaignController.Init(startMatchCallback, leaveMatchCallback)
     if init then return end
@@ -608,7 +771,6 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
     singleplayer = playerGui:WaitForChild("SingleplayerScreen")
 
     local root = screen:WaitForChild("Root")
-    stats = root:WaitForChild("Stats")
     header = root:WaitForChild("Header")
     backButton = root:WaitForChild("BackButton")
 
@@ -620,6 +782,30 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
     scene = areaView:WaitForChild("Scene")
     scene.Image = CampaignArt.PAPER
     map = areaView:WaitForChild("Map")
+
+    runInfo = areaView:WaitForChild("RunInfo")
+    pouch = areaView:WaitForChild("Pouch")
+    ArmoryArt.SetIcon(pouch:WaitForChild("Icon"), "Pouch")
+
+    restPanel = areaView:WaitForChild("RestPanel")
+    treasurePanel = areaView:WaitForChild("TreasurePanel")
+    treasureGrid = treasurePanel:WaitForChild("Grid")
+    tileTemplate = treasurePanel:WaitForChild("TileTemplate")
+
+    for choice in pairs(REST_RESULTS) do
+        restPanel:WaitForChild(choice).Activated:Connect(function()
+            ChooseRest(choice)
+        end)
+    end
+
+    restPanel:WaitForChild("CloseButton").Activated:Connect(function()
+        restPanel.Visible = false
+        playButton.Visible = true
+    end)
+
+    treasurePanel:WaitForChild("CloseButton").Activated:Connect(function()
+        treasurePanel.Visible = false
+    end)
 
     local infoBar = areaView:WaitForChild("InfoBar")
     info = infoBar:WaitForChild("Info")
@@ -640,11 +826,17 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
 
     local returnToWorld = false
 
-    CampaignRemote.OnClientEvent:Connect(function(action, summary)
-        if action ~= "Result" then return end
-
-        returnToWorld = summary.RegionComplete == true
-        ShowResult(summary)
+    CampaignRemote.OnClientEvent:Connect(function(action, data)
+        if action == "Treasure" then
+            if data.Region == currentRegion and data.Node == selectedNode then
+                BuildTreasureBoard(data.Digs)
+            end
+        elseif action == "Dig" then
+            ShowDig(data)
+        elseif action == "Result" then
+            returnToWorld = data.RegionComplete == true
+            ShowResult(data)
+        end
     end)
 
     resultPanel:WaitForChild("ContinueButton").Activated:Connect(function()
@@ -670,10 +862,6 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
     worldCanvas:GetPropertyChangedSignal("AbsoluteSize"):Connect(Redraw)
     map:GetPropertyChangedSignal("AbsoluteSize"):Connect(Redraw)
     ProfileController.OnChanged(Redraw)
-
-    player:GetAttributeChangedSignal("Level"):Connect(UpdateStats)
-    player:GetAttributeChangedSignal("Gold"):Connect(UpdateStats)
-    UpdateStats()
 end
 
 return CampaignController

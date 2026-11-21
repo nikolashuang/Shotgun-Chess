@@ -11,6 +11,7 @@ ProfileController.Data = {
     Shotguns = {},
     Classes = {},
     Nodes = {},
+    Runs = {},
     Settings = {},
 }
 

@@ -4,14 +4,14 @@ local CampaignConfig = {
     -- Bottom to top on the world map
     ORDER = {"Training", "Forest", "Cliffside", "Outskirts", "Gravehollow"},
 
-    -- First clears pay the full reward, replays pay this fraction of it
+    -- Replaying a region that was already completed pays this fraction of its pouch
     REPLAY_REWARD_SCALE = 0.2,
 
-    -- Base rewards per node type, multiplied by the region's RewardScale
-    -- A node's own Reward table replaces the base reward
+    -- Base rewards per node type, multiplied by the region's RewardScale and collected in the run's pouch
+    -- A node's own Reward table replaces the base reward; Treasure gold comes from Treasure.Rewards instead
     Rewards = {
         Combat = {Gold = 100, Exp = 50},
-        Treasure = {Gold = 150, Exp = 25},
+        Treasure = {Gold = 0, Exp = 0},
         Rest = {Gold = 0, Exp = 0},
         Queen = {Gold = 400, Exp = 200},
         King = {Gold = 750, Exp = 350},
@@ -25,105 +25,58 @@ local CampaignConfig = {
         King = "Boss Fight",
     },
 
-    -- Armies are pushed toward the far end so their closest piece starts on this row
-    ARMY_FRONT_ROW = 8,
-
     -- Enemy AI rating for every campaign battle (a key of AIConfig.Ratings); elite scaling comes later
     AI_RATING = 1000,
 
-    -- Placeholder enemy layouts (black pieces) until encounters are designed
-    -- An army with a King is won by killing the King, otherwise by clearing the board
-    -- Every King army (boss fight) also fields a Queen
-    -- Two or more Bishops must cover both square colors so no color is safe from them
-    Armies = {
-        TutorialPawns = {
-            {Type = "Pawn", Column = 5, Row = 4},
-            {Type = "Pawn", Column = 7, Row = 4},
-        },
+    -- Enemy armies are rolled from a point budget every battle
+    Encounter = {
+        Points = {Pawn = 1, Knight = 3, Bishop = 3, Rook = 5, Queen = 9},
+        -- Picked at random to spend the budget before pawns fill what's left
+        MAJORS = {"Rook", "Knight", "Bishop"},
 
-        TutorialMixed = {
-            {Type = "Pawn", Column = 5, Row = 3},
-            {Type = "Knight", Column = 7, Row = 3},
-            {Type = "Bishop", Column = 3, Row = 4},
-            {Type = "Rook", Column = 9, Row = 4},
-        },
+        -- Each normal battle along a route adds this to the region's StartPoints
+        POINTS_PER_FIGHT = 3,
+        -- Queen battle = last normal battle + QUEEN_BONUS, King battle = Queen battle + KING_BONUS
+        QUEEN_BONUS = 9,
+        KING_BONUS = 6,
 
-        TutorialQueen = {
-            {Type = "Pawn", Column = 5, Row = 5},
-            {Type = "Pawn", Column = 7, Row = 5},
-            {Type = "Queen", Column = 6, Row = 7},
-        },
+        RESERVED_PAWNS = 2,
+        MAX_PAWNS = 12,
 
-        TutorialKing = {
-            {Type = "Pawn", Column = 5, Row = 5},
-            {Type = "Pawn", Column = 7, Row = 5},
-            {Type = "Knight", Column = 4, Row = 7},
-            {Type = "Queen", Column = 7, Row = 8},
-            {Type = "King", Column = 6, Row = 8},
-        },
+        -- Enemies spawn on rows FIRST_ROW to the back row; 12 pawns form a wall on FIRST_ROW
+        FIRST_ROW = 9,
+        QUEEN_TILE = {6, 12},
+        KING_TILE = {7, 12},
+    },
 
-        Patrol = {
-            {Type = "Pawn", Column = 4, Row = 4},
-            {Type = "Pawn", Column = 6, Row = 5},
-            {Type = "Pawn", Column = 8, Row = 4},
-            {Type = "Knight", Column = 6, Row = 7},
-        },
+    Rest = {
+        TRAIN_HEALTH = 2,
+        -- Added to every shotgun hit, fall-off damage included
+        MAINTENANCE_DAMAGE = 1,
+    },
 
-        Skirmish = {
-            {Type = "Pawn", Column = 5, Row = 4},
-            {Type = "Pawn", Column = 7, Row = 4},
-            {Type = "Bishop", Column = 3, Row = 6},
-            {Type = "Bishop", Column = 9, Row = 7},
-        },
-
-        Warband = {
-            {Type = "Pawn", Column = 5, Row = 4},
-            {Type = "Pawn", Column = 7, Row = 4},
-            {Type = "Knight", Column = 4, Row = 6},
-            {Type = "Knight", Column = 8, Row = 6},
-            {Type = "Rook", Column = 6, Row = 8},
-        },
-
-        QueenGuard = {
-            {Type = "Pawn", Column = 5, Row = 5},
-            {Type = "Pawn", Column = 7, Row = 5},
-            {Type = "Rook", Column = 3, Row = 7},
-            {Type = "Rook", Column = 9, Row = 7},
-            {Type = "Queen", Column = 6, Row = 8},
-        },
-
-        KingGuard = {
-            {Type = "Pawn", Column = 4, Row = 5},
-            {Type = "Pawn", Column = 6, Row = 5},
-            {Type = "Pawn", Column = 8, Row = 5},
-            {Type = "Knight", Column = 5, Row = 7},
-            {Type = "Bishop", Column = 7, Row = 7},
-            {Type = "Rook", Column = 3, Row = 9},
-            {Type = "Rook", Column = 9, Row = 9},
-            {Type = "Queen", Column = 7, Row = 10},
-            {Type = "King", Column = 6, Row = 10},
-        },
+    Treasure = {
+        DIGS = 5,
+        -- Each dig uncovers a DIG_SIZE x DIG_SIZE square centered on the picked tile
+        DIG_SIZE = 3,
+        -- Gold for finding the treasure on dig 1, 2, 3...
+        Rewards = {200, 175, 150, 125, 100},
+        CONSOLATION = 25,
     },
 
     -- Requires lists regions that must be completed first; completing a region means beating its King
-    -- Nodes are built from Map by CampaignMap: Lanes across, Seed picks the layout (changing it reshuffles saved progress)
-    -- Armies lists the army for each fight column, Start first
+    -- Nodes are built from Map by CampaignMap: Lanes across, Seed picks the layout (changing it reshuffles the map)
+    -- StartPoints is the first battle's point budget
     Regions = {
         Training = {
             DisplayName = "King's Training",
             Subtitle = "Tutorial / Practice Grounds",
             Requires = {},
             RewardScale = 0.5,
+            StartPoints = 6,
             Start = "Start",
             Final = "King",
-
-            Map = {
-                Lanes = 3,
-                Seed = 11,
-                Armies = {"TutorialPawns", "TutorialPawns", "TutorialPawns", "TutorialMixed", "TutorialMixed", "Patrol"},
-                QueenArmy = "TutorialQueen",
-                KingArmy = "TutorialKing",
-            },
+            Map = {Lanes = 3, Seed = 11},
         },
 
         Forest = {
@@ -132,16 +85,10 @@ local CampaignConfig = {
             Requires = {"Training"},
             Class = "Hunter",
             RewardScale = 1,
+            StartPoints = 8,
             Start = "Start",
             Final = "King",
-
-            Map = {
-                Lanes = 4,
-                Seed = 23,
-                Armies = {"Patrol", "Patrol", "Patrol", "Skirmish", "Skirmish", "Warband"},
-                QueenArmy = "QueenGuard",
-                KingArmy = "KingGuard",
-            },
+            Map = {Lanes = 4, Seed = 23},
         },
 
         Cliffside = {
@@ -150,16 +97,10 @@ local CampaignConfig = {
             Requires = {"Forest"},
             Class = "Outlaw",
             RewardScale = 1.5,
+            StartPoints = 10,
             Start = "Start",
             Final = "King",
-
-            Map = {
-                Lanes = 4,
-                Seed = 37,
-                Armies = {"Patrol", "Skirmish", "Skirmish", "Warband", "Warband", "Warband"},
-                QueenArmy = "QueenGuard",
-                KingArmy = "KingGuard",
-            },
+            Map = {Lanes = 4, Seed = 37},
         },
 
         Outskirts = {
@@ -168,16 +109,10 @@ local CampaignConfig = {
             Requires = {"Cliffside"},
             Class = "Gunslinger",
             RewardScale = 2,
+            StartPoints = 12,
             Start = "Start",
             Final = "King",
-
-            Map = {
-                Lanes = 4,
-                Seed = 41,
-                Armies = {"Skirmish", "Skirmish", "Warband", "Warband", "Warband", "QueenGuard"},
-                QueenArmy = "QueenGuard",
-                KingArmy = "KingGuard",
-            },
+            Map = {Lanes = 4, Seed = 41},
         },
 
         Gravehollow = {
@@ -186,16 +121,10 @@ local CampaignConfig = {
             Requires = {"Outskirts"},
             Class = "Reaper",
             RewardScale = 2.5,
+            StartPoints = 14,
             Start = "Start",
             Final = "King",
-
-            Map = {
-                Lanes = 4,
-                Seed = 53,
-                Armies = {"Warband", "Warband", "Warband", "QueenGuard", "QueenGuard", "QueenGuard"},
-                QueenArmy = "QueenGuard",
-                KingArmy = "KingGuard",
-            },
+            Map = {Lanes = 4, Seed = 53},
         },
     },
 }

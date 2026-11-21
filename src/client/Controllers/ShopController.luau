@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 local AtlasImage = require(script.Parent.Parent.UI.AtlasImage)
+local PlayerCard = require(script.Parent.Parent.UI.PlayerCard)
 local ProfileController = require(script.Parent.ProfileController)
 
 local LoadoutRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("LoadoutRemote")
@@ -46,10 +47,10 @@ function ShopController.Init()
     if init then return end
     init = true
 
-    local root = player.PlayerGui:WaitForChild("ShopScreen"):WaitForChild("Root")
+    local screen = player.PlayerGui:WaitForChild("ShopScreen")
+    local root = screen:WaitForChild("Root")
     local template = root:WaitForChild("Template")
     local list = root:WaitForChild("ShotgunList")
-    local gold = root:WaitForChild("Gold")
 
     for i, name in ipairs(ShotgunConfig.ORDER) do
         local weapon = ShotgunConfig.Shotguns[name]
@@ -117,15 +118,11 @@ function ShopController.Init()
         end)
     end)
 
-    local function UpdateGold()
-        gold.Text = (player:GetAttribute("Gold") or 0) .. " Gold"
-    end
-
     player:GetAttributeChangedSignal("Gold"):Connect(Refresh)
-    player:GetAttributeChangedSignal("Gold"):Connect(UpdateGold)
     ProfileController.OnChanged(Refresh)
     Refresh()
-    UpdateGold()
+
+    PlayerCard.Bind(screen:WaitForChild("Profile"))
 end
 
 return ShopController

@@ -8,6 +8,7 @@ local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 local ArmoryArt = require(ReplicatedStorage.Shared.UI.ArmoryArt)
 local AtlasImage = require(script.Parent.Parent.UI.AtlasImage)
+local PlayerCard = require(script.Parent.Parent.UI.PlayerCard)
 local ProfileController = require(script.Parent.ProfileController)
 
 local LoadoutRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("LoadoutRemote")
@@ -178,6 +179,8 @@ function ArmoryController.Init()
 
     local screen = player.PlayerGui:WaitForChild("ArmoryScreen")
     local root = screen:WaitForChild("Root")
+    PlayerCard.Bind(screen:WaitForChild("Profile"))
+
     local classBox = root:WaitForChild("ClassBox")
     local shotgunBox = root:WaitForChild("ShotgunBox")
 

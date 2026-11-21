@@ -443,6 +443,25 @@ def challenge(icon):
     icon.star(glow("Spark", SPARK), (0, -0.16, -0.12), 0.16, 0.07, 0.04, rotation=(FACE, 0, 0))
 
 
+# Leather coin pouch tied with a gold cord, a coin leaning on the front
+def pouch(icon):
+    leather = toon("Leather", *LEATHER)
+    cord = toon("Gold", *GOLD)
+
+    icon.ball(leather, (0, 0, -0.32), 0.72, scale=(1, 0.8, 0.86), segments=16)
+    icon.cylinder(leather, (0, 0, 0.36), 0.26, 0.3, 14)
+    icon.cylinder(leather, (0, 0, 0.66), 0.24, 0.3, 14, top=0.46)
+    icon.torus(cord, (0, 0, 0.42), 0.3, 0.07, rotation=(12, 0, 0), segments=18)
+    icon.rod(cord, (0.22, -0.2, 0.38), (0.5, -0.25, 0.1), 0.05)
+    icon.ball(cord, (0.52, -0.26, 0.07), 0.08)
+
+    coin = toon("PouchCoin", "6A4A1E", "C8954A", "E0B05A")
+    stamp = toon("CoinStamp", "6A4A1E", "A8844A", "D4A050")
+    face = (FACE, 0, 0)
+    icon.cylinder(coin, (-0.42, -0.62, -0.72), 0.3, 0.08, 20, rotation=face)
+    icon.star(stamp, (-0.42, -0.67, -0.72), 0.16, 0.07, 0.03, rotation=face)
+
+
 def setup_scene():
     old = bpy.data.scenes.get(SCENE_NAME)
     if old:
@@ -527,6 +546,7 @@ BUILDERS = [
     ("OutlawPassive", opportunist), ("OutlawSpecial", conceal), ("OutlawUltimate", ambush),
     ("Siege", siege),
     ("Duels", duels), ("Practice", practice), ("Queue", queue), ("Challenge", challenge),
+    ("Pouch", pouch),
 ]
 
 ONLY = globals().get("ONLY")
