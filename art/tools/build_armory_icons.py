@@ -13,10 +13,12 @@ CREATED_MATERIALS = set()
 
 SIZE = 64
 ORTHO_SCALE = 2.9
+# Icons rendered wider than the usual square, at the same pixels per unit: (width, height)
+RENDER_SIZES = {"RestUpgrade": (88, 48)}
 # Most icons are drawn flat-on like the gun sprites; these keep the angled 3D camera
 CAMERA_PITCH_2D = 90
 CAMERA_PITCH_3D = 72
-THREE_D = {"Siege"}
+THREE_D = {"Siege", "RestBandage", "RestTrain", "RestUpgrade"}
 
 
 def linear(hex_color):
@@ -493,6 +495,72 @@ def pouch(icon):
     icon.star(stamp, (-0.42, -0.67, -0.72), 0.16, 0.07, 0.03, rotation=face)
 
 
+# Rest Site cards, seen from the angled camera like Siege so they read as small 3D scenes
+# Leans the whole drawing in the picture plane (around Y), then turns it three-quarters on (around Z)
+def lean(icon, tilt, spin):
+    matrix = Euler((0, math.radians(tilt), math.radians(spin)), "YZX").to_matrix().to_4x4()
+    for obj in icon.collection.objects:
+        obj.matrix_basis = matrix @ obj.matrix_basis
+
+
+# A fat roll of bandage cloth lying on the diagonal, strapped twice and patched on top
+def rest_bandage(icon):
+    cloth = toon("Bandage", "8A8290", "D8D2C6", "F2EEE6")
+    seam = toon("BandageSeam", "5A5260", "8A8290", "B5AEB5")
+    strap = toon("Strap", *LEATHER)
+    steel = toon("Buckle", *STEEL)
+    side = (0, 90, 0)
+
+    icon.cylinder(cloth, (0, 0, 0), 0.56, 1.8, 24, rotation=side)
+    # The rolled-up layers on the end facing the viewer
+    for r in (0.14, 0.27, 0.4, 0.52):
+        icon.torus(seam, (0.9, 0, 0), r, 0.03, rotation=side, segments=24)
+    icon.cylinder(seam, (0.9, 0, 0), 0.07, 0.04, 10, rotation=side)
+
+    for x in (-0.42, 0.5):
+        icon.torus(strap, (x, 0, 0), 0.57, 0.06, rotation=side, segments=24)
+        icon.cube(steel, (x, -0.6, 0.05), (0.2, 0.06, 0.16))
+
+    # A stitched patch on the shoulder of the roll facing the viewer, built on top and rolled forward
+    before = set(icon.collection.objects)
+    patch = toon("Patch", "8A8290", "C8C2B8", "E9E3D6")
+    icon.cube(patch, (0.05, 0, 0.56), (0.46, 0.46, 0.05))
+    ink = toon("Stitch", *DARK)
+    for o in (-0.09, 0.09):
+        icon.rod(ink, (0.05 + o, -0.18, 0.6), (0.05 + o, 0.18, 0.6), 0.025, vertices=4)
+        icon.rod(ink, (-0.13, o, 0.6), (0.23, o, 0.6), 0.025, vertices=4)
+    roll_forward = Euler((math.radians(50), 0, 0)).to_matrix().to_4x4()
+    for obj in set(icon.collection.objects) - before:
+        obj.matrix_basis = roll_forward @ obj.matrix_basis
+    lean(icon, -24, -32)
+
+
+# One heavy dumbbell, tipped up on the diagonal
+def rest_train(icon):
+    iron = toon("Iron", *DARK)
+    plate = toon("Plate", *STEEL)
+    grip = toon("Grip", *SMOKE)
+    side = (0, 90, 0)
+
+    icon.cylinder(iron, (0, 0, 0), 0.07, 2.2, 10, rotation=side)
+    icon.cylinder(grip, (0, 0, 0), 0.1, 0.7, 12, rotation=side)
+    for sign in (-1, 1):
+        icon.cylinder(iron, (sign * 0.42, 0, 0), 0.16, 0.08, 14, rotation=side)
+        icon.cylinder(plate, (sign * 0.56, 0, 0), 0.58, 0.18, 22, rotation=side)
+        icon.cylinder(plate, (sign * 0.76, 0, 0), 0.46, 0.16, 22, rotation=side)
+        icon.cylinder(iron, (sign * 0.9, 0, 0), 0.14, 0.1, 14, rotation=side)
+    lean(icon, -22, -34)
+
+
+# Turned three-quarters on; build_rest_cards.py turns it into blueprint linework
+def rest_upgrade(icon):
+    shotgun(icon, 0)
+    for obj in icon.collection.objects:
+        obj.location *= 1.7
+        obj.scale *= 1.7
+    icon.turn(spin=-30)
+
+
 def setup_scene():
     old = bpy.data.scenes.get(SCENE_NAME)
     if old:
@@ -578,6 +646,7 @@ BUILDERS = [
     ("Siege", siege),
     ("Duels", duels), ("Practice", practice), ("Queue", queue), ("Challenge", challenge),
     ("Pouch", pouch),
+    ("RestBandage", rest_bandage), ("RestTrain", rest_train), ("RestUpgrade", rest_upgrade),
 ]
 
 ONLY = globals().get("ONLY")
@@ -598,6 +667,9 @@ for icon in icons:
         other.collection.hide_render = other is not icon
 
     aim(scene, icon.name in THREE_D)
+    width, height = RENDER_SIZES.get(icon.name, (SIZE, SIZE))
+    scene.render.resolution_x, scene.render.resolution_y = width, height
+    scene.camera.data.ortho_scale = ORTHO_SCALE * max(width, height) / SIZE
     scene.render.filepath = os.path.join(OUT, icon.name + ".png")
     bpy.ops.render.render(write_still=True, scene=scene.name)
 

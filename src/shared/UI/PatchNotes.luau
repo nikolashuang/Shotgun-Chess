@@ -15,8 +15,9 @@ local PatchNotes = {
                 "Fallen Knight: beat him and he fights beside you for the rest of the run. He moves like a King and a Knight, acts on his own, and keeps his wounds between battles.",
                 "Ambush: take the hit or fight your way out.",
                 "Queen's Altar: trade health for max health or shotgun damage.",
-                "Rest Sites now show your King resting by a campfire with his party, or with the Fallen Knight once he joins.",
+                "Rest Sites now have their own screen: your King rests by a campfire with his party, or with the Fallen Knight once he joins, and you pick Rest, Train or Upgrade Shotgun from illustrated cards.",
                 "Leaving in the middle of a region now saves your run exactly where you were.",
+                "Rest Sites, Treasure Hunts and Mystery encounters now give XP too.",
             },
         },
         {

@@ -15,6 +15,23 @@ COLUMNS = 4
 OUTLINE = (0x1E, 0x18, 0x20, 255)
 # Night scene lit by the fire: everything that isn't flame is warmed and dimmed a little
 FIRELIGHT = (1.0, 0.82, 0.66)
+# The Fallen Knight's aura is see-through so the camp shows through it
+AURA_ALPHA = 150
+
+
+# Aura teal is green-heavy; the knight's own steel is always bluer than it is green
+def is_aura(r, g, b):
+    return g > r + 30 and g >= b - 6
+
+
+def fade_aura(image):
+    px = image.load()
+    for y in range(image.height):
+        for x in range(image.width):
+            r, g, b, a = px[x, y]
+            if a and is_aura(r, g, b):
+                px[x, y] = (r, g, b, AURA_ALPHA)
+    return image
 
 
 # Flames glow on their own and the Fallen Knight's cool teal stays cold, so neither gets the warm light
@@ -42,6 +59,8 @@ def outline(image):
         for x in range(w):
             if solid[y][x]:
                 op[x, y] = px[x, y][:3] + (255,)
+            elif px[x, y][3]:
+                op[x, y] = px[x, y]
     for y in range(h):
         for x in range(w):
             if solid[y][x]: continue
@@ -59,7 +78,14 @@ sheet = Image.new("RGBA", (fw * COLUMNS, fh * rows_per_version * len(VERSIONS)),
 
 for v, version in enumerate(VERSIONS):
     for i in range(FRAMES):
-        frame = outline(light(Image.open(os.path.join(FRAMES_DIR, f"{version}_{i}.png")).convert("RGBA")))
+        frame = outline(fade_aura(light(Image.open(os.path.join(FRAMES_DIR, f"{version}_{i}.png")).convert("RGBA"))))
+        # The aura pass (rendered without the knight) goes behind him at AURA_ALPHA so no aura pixel is ever solid
+        aura_path = os.path.join(FRAMES_DIR, f"{version}Aura_{i}.png")
+        if os.path.exists(aura_path):
+            aura = Image.open(aura_path).convert("RGBA")
+            aura.putalpha(aura.getchannel("A").point(lambda a: AURA_ALPHA if a >= 128 else 0))
+            aura.alpha_composite(frame)
+            frame = aura
         sheet.paste(frame, ((i % COLUMNS) * fw, (v * rows_per_version + i // COLUMNS) * fh))
 
 sheet.save(OUT)

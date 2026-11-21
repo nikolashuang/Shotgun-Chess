@@ -465,28 +465,34 @@ def pose_smoke(t):
     smoke_obj.hide_render = False
 
 
-# Fallen Knight aura: blue-green flame tongues licking up around the piece, drawn behind its sprite
+# Fallen Knight aura: a blue-green flame wrapped close around the piece, drawn behind its sprite
+# Every tongue burns straight up from the knight's outline, so the fire hugs him instead of spiking outward
 AURA_FRAMES = 6
 aura_mats = [flat("AuraFlame", "2E9C8E"), flat("AuraLight", "7FE3C8"), flat("AuraDeep", "1F6F72")]
-# (angle around the piece in degrees, 0 is straight up; flame length; colour index)
-AURA_TONGUES = [(-165, 0.4, 2), (-140, 0.5, 0), (-115, 0.6, 1), (-90, 0.65, 0), (-65, 0.7, 1), (-40, 0.75, 0), (-18, 0.85, 1), (0, 0.9, 0),
-                (18, 0.85, 1), (40, 0.75, 0), (65, 0.7, 1), (90, 0.65, 0), (115, 0.6, 1), (140, 0.5, 0), (165, 0.4, 2)]
+# Right half of the outline (x, z of the tongue's base, flame height, colour index); the left half mirrors it
+AURA_TONGUES = [(0.82, 0.1, 0.65, 2), (0.86, 0.5, 0.7, 0), (0.82, 0.9, 0.75, 1), (0.7, 1.3, 0.8, 0), (0.5, 1.7, 0.85, 1), (0.24, 2.0, 0.95, 0)]
+AURA_PEAK = (0.0, 2.15, 1.1, 1)
+# A solid wall of flame behind the whole knight so the aura has no hollow middle: (z of the base, height, radius, colour index)
+AURA_BODY = [(0.0, 1.9, 1.0, 0), (0.7, 1.9, 0.85, 0), (1.4, 1.4, 0.65, 1)]
 
 
 def build_aura(t):
     def build(bm):
-        for i, (angle, length, index) in enumerate(AURA_TONGUES):
+        tongues = [(x * side, z, h, c) for x, z, h, c in AURA_TONGUES for side in (-1, 1)] + [AURA_PEAK]
+        for i, (z, height, radius, index) in enumerate(AURA_BODY):
+            h = height * (0.92 + 0.08 * math.sin((t + i * 0.3) * 2 * math.pi))
+            cone(bm, (0, 0.6, z + h / 2), h, radius, index, 8)
+
+        for i, (x, z, height, index) in enumerate(tongues):
             phase = math.sin((t + i * 0.37) * 2 * math.pi)
-            a = math.radians(angle)
-            # Tongues sit on an oval hugging the knight (about 1.5 wide and 2.4 tall) and point outward, curling up
-            x, z = 0.98 * math.sin(a), 1.05 + 1.25 * math.cos(a)
-            h = length * 1.25 * (0.8 + 0.25 * phase)
-            lean = angle * 0.55 + 10 * phase
-            cone(bm, (x, 0.4, z), h, 0.2, index, 5, rot("Y", lean))
-        # Sparks drifting up beside the knight
+            h = height * (0.78 + 0.25 * phase)
+            # A slight outward lean and sway, like flames licking up the knight's sides
+            lean = (8 if x > 0 else -8 if x < 0 else 0) + 7 * phase
+            cone(bm, (x, 0.4, z + h / 2), h, 0.26, index, 5, rot("Y", lean))
+        # Sparks drifting up off the flame
         for i in range(3):
             y = (t + i / 3) % 1
-            ball(bm, (-0.7 + i * 0.7, 0.3, 0.4 + y * 2.2), 0.06, 1, 1)
+            ball(bm, (-0.5 + i * 0.5, 0.3, 1.2 + y * 1.6), 0.05, 1, 1)
     return build
 
 

@@ -11,9 +11,9 @@ local CampaignConfig = {
     -- A node's own Reward table replaces the base reward; Treasure gold comes from Treasure.Rewards instead
     Rewards = {
         Combat = {Gold = 100, Exp = 50},
-        Treasure = {Gold = 0, Exp = 0},
-        Rest = {Gold = 0, Exp = 0},
-        Mystery = {Gold = 0, Exp = 0},
+        Treasure = {Gold = 0, Exp = 20},
+        Rest = {Gold = 0, Exp = 20},
+        Mystery = {Gold = 0, Exp = 25},
         Queen = {Gold = 400, Exp = 200},
         King = {Gold = 750, Exp = 350},
     },

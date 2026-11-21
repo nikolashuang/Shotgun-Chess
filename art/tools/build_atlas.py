@@ -6,7 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRAMES = os.path.join(ROOT, "frames")
 OUT_PNG = os.path.join(ROOT, "SpriteAtlas.png")
 OUT_LUAU = os.path.join(os.path.dirname(ROOT), "src", "shared", "Sprites", "SpriteConfig.luau")
-ASSET_ID = "rbxassetid://113551605765056"
+ASSET_ID = "rbxassetid://140500397630079"
 
 CELL = 32
 # Transparent gutter around every sprite so rotated or scaled sampling can't bleed into neighbors

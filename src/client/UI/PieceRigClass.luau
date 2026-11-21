@@ -149,7 +149,7 @@ function PieceRigClass.new(board, pieceType, team)
         aura.Image.Size = UDim2.fromScale(aura.Width, aura.Height)
         aura.Image.ZIndex = 2
         -- See-through so the knight himself still reads in front of it
-        aura.Image.ImageTransparency = 0.35
+        aura.Image.ImageTransparency = 0.65
         aura.BasePosition = UDim2.fromScale(0.5, BODY_BOTTOM - aura.Height / 2)
 
         self.AuraEffect = aura

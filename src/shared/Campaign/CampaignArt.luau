@@ -20,15 +20,19 @@ local CampaignArt = {
     -- Rest Site campfire, built by art/tools/build_rest_camp.py and build_rest_art.py
     -- The fire sheet plays over the background; each version (party, or the Fallen Knight) has its own rows
     REST_BACKGROUND = "rbxassetid://133730252181741",
-    REST_FIRE = "rbxassetid://118720635859055",
-    REST_FIRE_FRAME = Vector2.new(195, 75),
+    REST_FIRE = "rbxassetid://71280917750326",
+    REST_FIRE_FRAME = Vector2.new(195, 100),
     REST_FIRE_FRAMES = 8,
     REST_FIRE_COLUMNS = 4,
     REST_FIRE_TIME = 0.12,
     RestFireRow = {Party = 0, Knight = 2},
     -- Where the fire sheet sits on the background, as fractions of it: x, y, width, height
-    REST_FIRE_RECT = {480 / 1672, 350 / 941, 780 / 1672, 300 / 941},
+    REST_FIRE_RECT = {480 / 1672, 250 / 941, 780 / 1672, 400 / 941},
     REST_ASPECT = 1672 / 941,
+    -- The three choice cards on the Rest Site screen, built by art/tools/build_rest_cards.py, left to right
+    REST_CARDS = "rbxassetid://135905483379568",
+    REST_CARD_SIZE = Vector2.new(96, 72),
+    RestCardOrder = {Rest = 0, Train = 1, Maintenance = 2},
 }
 
 return CampaignArt

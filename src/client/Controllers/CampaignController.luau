@@ -217,11 +217,11 @@ end
 
 local function FormatReward(regionId, nodeId)
     local node = CampaignConfig.Regions[regionId].Nodes[nodeId]
-    if node.Type == "Treasure" then return "Up to " .. CampaignConfig.Treasure.Rewards[1] .. " Gold" end
-    if node.Type == "Rest" then return "Checkpoint" end
-    if node.Type == "Mystery" then return "Something waits down this road..." end
-
     local gold, exp = CampaignRules.GetReward(regionId, nodeId)
+
+    if node.Type == "Treasure" then return string.format("Up to %d Gold   %d XP to pouch", CampaignConfig.Treasure.Rewards[1], exp) end
+    if node.Type == "Rest" then return string.format("Checkpoint   %d XP to pouch", exp) end
+    if node.Type == "Mystery" then return string.format("Something waits down this road...   %d XP to pouch", exp) end
 
     return string.format("%d Gold   %d XP to pouch", gold, exp)
 end
@@ -639,6 +639,7 @@ local function ShowRestPanel()
     local row = CampaignArt.RestFireRow[run and run.Companion and "Knight" or "Party"]
     local frameSize = CampaignArt.REST_FIRE_FRAME
 
+    restPanel.Health.Text = run and string.format("Health %d/%d", run.Health, run.MaxHealth) or ""
     restPanel.Visible = true
     playButton.Visible = false
 
@@ -950,13 +951,14 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
     pouch = areaView:WaitForChild("Pouch")
     ArmoryArt.SetIcon(pouch:WaitForChild("Icon"), "Pouch")
 
-    restPanel = areaView:WaitForChild("RestPanel")
+    restPanel = playerGui:WaitForChild("RestScreen"):WaitForChild("Root")
 
-    -- The camp fills the panel's width and keeps its shape, cropping off the sky and the foreground
+    -- The camp covers the whole screen and keeps its shape, cropping whichever edges overflow
     local restScene = restPanel:WaitForChild("Scene")
 
     local function FitRestScene()
-        local width = restPanel.AbsoluteSize.X
+        local size = restPanel.AbsoluteSize
+        local width = math.max(size.X, size.Y * CampaignArt.REST_ASPECT)
         restScene.Size = UDim2.fromOffset(width, width / CampaignArt.REST_ASPECT)
     end
 
@@ -987,8 +989,24 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
     treasureGrid = treasurePanel:WaitForChild("Grid")
     tileTemplate = treasurePanel:WaitForChild("TileTemplate")
 
+    local restChoices = restPanel:WaitForChild("Choices")
+
     for choice in pairs(REST_RESULTS) do
-        restPanel:WaitForChild(choice).Activated:Connect(function()
+        local card = restChoices:WaitForChild(choice)
+        card.Image = CampaignArt.REST_CARDS
+        card.ImageRectSize = CampaignArt.REST_CARD_SIZE
+        card.ImageRectOffset = Vector2.new(CampaignArt.RestCardOrder[choice] * CampaignArt.REST_CARD_SIZE.X, 0)
+
+        local cardScale = card:WaitForChild("UIScale")
+        card.MouseEnter:Connect(function()
+            TweenService:Create(cardScale, TweenInfo.new(0.12), {Scale = 1.06}):Play()
+        end)
+        card.MouseLeave:Connect(function()
+            TweenService:Create(cardScale, TweenInfo.new(0.12), {Scale = 1}):Play()
+        end)
+
+        card.Activated:Connect(function()
+            cardScale.Scale = 1
             ChooseRest(choice)
         end)
     end

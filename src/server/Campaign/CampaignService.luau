@@ -172,7 +172,8 @@ local function CompleteMysteryFight(player, regionId, nodeId, run)
         local health = PieceConfig.Health.FallenKnight
         run.Companion = {Health = health, MaxHealth = health}
 
-        local summary = CampaignService.CompleteNode(player, regionId, nodeId, 0, 0)
+        local _, exp = CampaignRules.GetReward(regionId, nodeId)
+        local summary = CampaignService.CompleteNode(player, regionId, nodeId, 0, exp)
         summary.Companion = true
 
         return summary
@@ -341,7 +342,8 @@ local function Dig(player, regionId, nodeId, column, row)
     CampaignRemote:FireClient(player, "Dig", result)
 
     local gold = CampaignRules.GetTreasureGold(isFound and #treasure.Digs or nil)
-    local summary = CampaignService.CompleteNode(player, regionId, nodeId, gold, 0)
+    local _, exp = CampaignRules.GetReward(regionId, nodeId)
+    local summary = CampaignService.CompleteNode(player, regionId, nodeId, gold, exp)
     summary.Found = isFound
 
     CampaignRemote:FireClient(player, "Result", summary)
@@ -411,7 +413,8 @@ local function ChooseMystery(player, regionId, nodeId, choice)
         end
     end
 
-    local summary = CampaignService.CompleteNode(player, regionId, nodeId, 0, 0)
+    local _, exp = CampaignRules.GetReward(regionId, nodeId)
+    local summary = CampaignService.CompleteNode(player, regionId, nodeId, 0, exp)
     summary.Encounter = encounter
     summary.Choice = choice
     summary.Outcome = outcome

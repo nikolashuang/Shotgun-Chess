@@ -15,7 +15,7 @@ FRAMES = 8
 
 # The render covers this part of the 1672x941 background, in background pixels: left, top, right, bottom
 # One world unit is 100 background pixels; the render is a quarter of the background's resolution
-REGION = (480, 350, 1260, 650)
+REGION = (480, 250, 1260, 650)
 PIXELS_PER_UNIT = 100
 RENDER_SCALE = 4
 
@@ -173,8 +173,15 @@ TONGUES = [
     (0.0, -0.2, 0.12, 0.5, 3, 0.2),
 ]
 EMBERS = 5
-# Flame tongues hugging the Fallen Knight
-AURA_TONGUES = 15
+# The Fallen Knight's flame, matching build_effects.py's board aura: (x, z of the base, height, colour index)
+# in unscaled piece units; the right half is listed and mirrored, plus one peak over his head
+AURA_RIGHT = [(0.82, 0.1, 0.65, 2), (0.86, 0.5, 0.7, 0), (0.82, 0.9, 0.75, 1), (0.7, 1.3, 0.8, 0), (0.5, 1.7, 0.85, 1), (0.24, 2.0, 0.95, 0)]
+# Dark tongues between each pair fill the gaps so the flame reads as one unbroken wall
+AURA_FILL = [((a[0] + b[0]) / 2 - 0.05, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2 + 0.1, 0) for a, b in zip(AURA_RIGHT, AURA_RIGHT[1:])]
+# Solid flame behind his whole body so the aura is one filled shape: (z of the base, height, radius, colour index)
+# Brighter than his board aura so his dark body still stands out against it at the fire
+AURA_BODY = [(0.0, 1.9, 1.0, 1), (0.7, 1.9, 0.85, 1), (1.4, 1.4, 0.65, 2)]
+AURA_FLAMES = [(x * side, z, h, c) for x, z, h, c in AURA_FILL + AURA_RIGHT for side in (-1, 1)] + [(0.0, 2.15, 1.1, 1)]
 
 
 class Camp:
@@ -207,7 +214,8 @@ class Camp:
             # Facing the fire, so the left-log knight is mirrored
             self.knight = piece(col, "FallenKnight", "Knight", [fallen, eye], flip=True)
             auras = [glow(f"Aura{i}", c) for i, c in enumerate(AURA)]
-            self.aura = [(cone(col, "Aura", auras[i % 3], 0.13, 1.0), i) for i in range(AURA_TONGUES)]
+            self.aura = [(cone(col, "Aura", auras[c], 0.32 * PIECE_SCALE, 1.0), x, z, h, i) for i, (x, z, h, c) in enumerate(AURA_FLAMES)]
+            self.aura_body = [(cone(col, "AuraBody", auras[c], r * PIECE_SCALE, 1.0, 8), z, h, i) for i, (z, h, r, c) in enumerate(AURA_BODY)]
         else:
             self.pawns = [piece(col, f"Pawn{i}", "Pawn", [piece_mat]) for i in range(2)]
             self.knight = piece(col, "Knight", "Knight", [piece_mat, bpy.data.materials["Gunmetal"]], flip=True)
@@ -219,13 +227,17 @@ class Camp:
 
         if self.version == "Knight":
             pose_piece(self.knight, 690, 500, t, 0.35, yaw=math.radians(20))
-            center = at(690, 500) + Vector((0, 0.3, 0.5))
-            for obj, i in self.aura:
-                phase = math.sin((t + i * 0.29) * 2 * math.pi)
-                a = math.radians(-160 + i * 320 / (AURA_TONGUES - 1))
-                offset = Vector((0.36 * math.sin(a), 0, 0.5 * math.cos(a)))
-                height = 0.34 * (0.8 + 0.3 * phase)
-                obj.matrix_world = Matrix.Translation(center + offset) @ Euler((0, math.radians(math.degrees(a) * 0.5 + 8 * phase), 0)).to_matrix().to_4x4() @ Matrix.Diagonal((1, 1, height, 1))
+            # The same close-wrapped flame as his board aura, burning up from his outline behind him
+            base = at(690, 500) + Vector((0, 0.3, 0))
+            for obj, x, z, h, i in self.aura:
+                phase = math.sin((t + i * 0.37) * 2 * math.pi)
+                height = h * PIECE_SCALE * (0.78 + 0.25 * phase)
+                lean = (8 if x > 0 else -8 if x < 0 else 0) + 7 * phase
+                offset = Vector((x * PIECE_SCALE, 0, z * PIECE_SCALE))
+                obj.matrix_world = Matrix.Translation(base + offset) @ Euler((0, math.radians(lean), 0)).to_matrix().to_4x4() @ Matrix.Diagonal((1, 1, height, 1))
+            for obj, z, h, i in self.aura_body:
+                height = h * PIECE_SCALE * (0.92 + 0.08 * math.sin((t + i * 0.3) * 2 * math.pi))
+                obj.matrix_world = Matrix.Translation(base + Vector((0, 0.2, z * PIECE_SCALE))) @ Matrix.Diagonal((1, 1, height, 1))
         else:
             pose_piece(self.pawns[0], 625, 500, t, 0.25)
             pose_piece(self.pawns[1], 735, 500, t, 0.6)
@@ -320,9 +332,17 @@ try:
         for other in camps:
             other.collection.hide_render = other is not camp
 
-        for i in range(FRAMES):
-            camp.pose(i / FRAMES)
-            scene.render.filepath = os.path.join(OUT, f"{camp.version}_{i}.png")
-            bpy.ops.render.render(write_still=True, scene=scene.name)
+        # The Fallen Knight's aura renders on its own so packing can lay it behind him see-through
+        aura = {obj for obj, *_ in getattr(camp, "aura", []) + getattr(camp, "aura_body", [])}
+        passes = [("", lambda obj: obj not in aura)] + ([("Aura", lambda obj: obj in aura)] if aura else [])
+
+        for suffix, shown in passes:
+            for obj in camp.collection.all_objects:
+                obj.hide_render = not shown(obj)
+
+            for i in range(FRAMES):
+                camp.pose(i / FRAMES)
+                scene.render.filepath = os.path.join(OUT, f"{camp.version}{suffix}_{i}.png")
+                bpy.ops.render.render(write_still=True, scene=scene.name)
 finally:
     remove_scene(scene)
