@@ -37,6 +37,14 @@ function PieceRules.GetMoves(pieceType, team, column, row, isBlocked)
         for _, offset in pairs(KNIGHT) do
             TryAdd(column + offset[1], row + offset[2])
         end
+    elseif pieceType == "FallenKnight" then
+        for _, offset in pairs(KNIGHT) do
+            TryAdd(column + offset[1], row + offset[2])
+        end
+
+        for _, offset in pairs(KING) do
+            TryAdd(column + offset[1], row + offset[2])
+        end
     elseif pieceType == "King" then
         for _, offset in pairs(KING) do
             TryAdd(column + offset[1], row + offset[2])
@@ -74,6 +82,14 @@ function PieceRules.GetAttacks(pieceType, team, column, row, isBlocked, isEnemy)
         TryAttack(column + 1, row + forward)
     elseif pieceType == "Knight" then
         for _, offset in pairs(KNIGHT) do
+            TryAttack(column + offset[1], row + offset[2])
+        end
+    elseif pieceType == "FallenKnight" then
+        for _, offset in pairs(KNIGHT) do
+            TryAttack(column + offset[1], row + offset[2])
+        end
+
+        for _, offset in pairs(KING) do
             TryAttack(column + offset[1], row + offset[2])
         end
     elseif SLIDES[pieceType] then

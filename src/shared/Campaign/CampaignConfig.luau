@@ -13,6 +13,7 @@ local CampaignConfig = {
         Combat = {Gold = 100, Exp = 50},
         Treasure = {Gold = 0, Exp = 0},
         Rest = {Gold = 0, Exp = 0},
+        Mystery = {Gold = 0, Exp = 0},
         Queen = {Gold = 400, Exp = 200},
         King = {Gold = 750, Exp = 350},
     },
@@ -21,6 +22,7 @@ local CampaignConfig = {
         Combat = "Battle",
         Treasure = "Treasure Hunt",
         Rest = "Rest Site",
+        Mystery = "Mystery",
         Queen = "Queen Fight",
         King = "Boss Fight",
     },
@@ -63,6 +65,29 @@ local CampaignConfig = {
         Rewards = {200, 175, 150, 125, 100},
         CONSOLATION = 25,
     },
+
+    -- Mystery nodes roll one of these on arrival (never the same one twice in a row)
+    Mystery = {
+        ENCOUNTERS = {"Gunsmith", "FallenKnight", "Ambush", "Altar"},
+
+        -- Costs come out of the run's pouch; damage goes on every shotgun hit, fall-off included
+        Gunsmith = {UPGRADE_COST = 50, UPGRADE_DAMAGE = 1, GAMBLE_COST = 25, GAMBLE_DAMAGE = 1},
+
+        -- Taking the hit is locked at DAMAGE health or less; fighting rolls an army from the region's points
+        Ambush = {
+            DAMAGE = 3,
+            Points = {Training = 6, Forest = 7, Cliffside = 8, Outskirts = 8, Gravehollow = 9},
+        },
+
+        -- Each offering needs more health than it costs
+        Altar = {BLOOD_COST = 4, BLOOD_HEALTH = 2, ROYAL_COST = 6, ROYAL_DAMAGE = 2},
+
+        -- The Knight waits alone on his throne tile; beat him and he joins the run
+        FallenKnight = {TILE = {6, 12}},
+    },
+
+    -- The Fallen Knight companion starts each battle this many columns right of the King
+    COMPANION_OFFSET = 1,
 
     -- Requires lists regions that must be completed first; completing a region means beating its King
     -- Nodes are built from Map by CampaignMap: Lanes across, Seed picks the layout (changing it reshuffles the map)

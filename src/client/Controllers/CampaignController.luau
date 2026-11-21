@@ -37,7 +37,48 @@ local REST_RESULTS = {
     Maintenance = "You clean your shotgun. +1 damage.",
 }
 
-local LEGEND_ORDER = {"Combat", "Rest", "Treasure", "Queen", "King"}
+-- Mystery encounters: what the panel says and the choices it offers, left to right
+local MysteryConfig = CampaignConfig.Mystery
+local MYSTERY_TEXT = {
+    Gunsmith = {
+        Title = "Wandering Gunsmith",
+        Body = "A mysterious gunsmith offers to work on your shotgun.",
+        Choices = {
+            {"Upgrade", string.format("Upgrade (%d Gold)", MysteryConfig.Gunsmith.UPGRADE_COST), "+1 shotgun damage"},
+            {"Gamble", string.format("Gamble (%d Gold)", MysteryConfig.Gunsmith.GAMBLE_COST), "+1 or -1 shotgun damage"},
+            {"Leave", "Leave", ""},
+        },
+    },
+    FallenKnight = {
+        Title = "Fallen Knight",
+        Body = "Loyalty doesn't allow him to leave his dead King's throne, but that could change...",
+        Choices = {
+            {"Challenge", "Challenge the Knight", "Win and he joins your run"},
+            {"Leave", "Continue walking", ""},
+        },
+    },
+    Ambush = {
+        Title = "Ambush!",
+        Body = "Enemy pieces burst out of hiding.",
+        Choices = {
+            {"TakeHit", "Take the hit", string.format("Lose %d health", MysteryConfig.Ambush.DAMAGE)},
+            {"Fight", "Fight the pieces", "Battle for the usual reward"},
+        },
+    },
+    Altar = {
+        Title = "Queen's Altar",
+        Body = "An altar to a fallen Queen asks for an offering.",
+        Choices = {
+            {"Blood", "Blood Offering", string.format("-%d health, +%d max health", MysteryConfig.Altar.BLOOD_COST, MysteryConfig.Altar.BLOOD_HEALTH)},
+            {"Royal", "Royal Sacrifice", string.format("-%d health, +%d shotgun damage", MysteryConfig.Altar.ROYAL_COST, MysteryConfig.Altar.ROYAL_DAMAGE)},
+            {"Leave", "Walk away", ""},
+        },
+    },
+}
+
+local LOCKED_TEXT_COLOR = Color3.fromHex("7A6E73")
+
+local LEGEND_ORDER = {"Combat", "Rest", "Treasure", "Mystery", "Queen", "King"}
 
 -- Scale of the world canvas compared to the visible window, and how wide each island is
 local WORLD_CANVAS_HEIGHT = 2.8
@@ -82,6 +123,10 @@ local runInfo = nil
 local pouch = nil
 
 local restPanel = nil
+local restFire = nil
+local mysteryPanel = nil
+-- The encounter shown in the mystery panel
+local mysteryEncounter = nil
 local treasurePanel = nil
 local treasureGrid = nil
 local tileTemplate = nil
@@ -174,6 +219,7 @@ local function FormatReward(regionId, nodeId)
     local node = CampaignConfig.Regions[regionId].Nodes[nodeId]
     if node.Type == "Treasure" then return "Up to " .. CampaignConfig.Treasure.Rewards[1] .. " Gold" end
     if node.Type == "Rest" then return "Checkpoint" end
+    if node.Type == "Mystery" then return "Something waits down this road..." end
 
     local gold, exp = CampaignRules.GetReward(regionId, nodeId)
 
@@ -196,8 +242,12 @@ local function UpdateRunInfo(regionId)
 
     local parts = {string.format("Health %d/%d", run.Health, run.MaxHealth)}
 
-    if run.DamageBonus > 0 then
-        table.insert(parts, string.format("+%d Damage", run.DamageBonus))
+    if run.DamageBonus ~= 0 then
+        table.insert(parts, string.format("%+d Damage", run.DamageBonus))
+    end
+
+    if run.Companion then
+        table.insert(parts, string.format("Fallen Knight %d/%d", run.Companion.Health, run.Companion.MaxHealth))
     end
 
     if run.HasCheckpoint then
@@ -215,6 +265,7 @@ local function ShowView(isWorld)
     if isWorld then
         restPanel.Visible = false
         treasurePanel.Visible = false
+        mysteryPanel.Visible = false
     end
 end
 
@@ -456,12 +507,14 @@ local function SelectNode(nodeId)
     end
 
     info.Text = text
-    playButton.Visible = state == "Available" and not restPanel.Visible and not treasurePanel.Visible
+    playButton.Visible = state == "Available" and not restPanel.Visible and not treasurePanel.Visible and not mysteryPanel.Visible
 
     if node.Type == "Rest" then
         playButton.Label.Text = "Rest"
     elseif node.Type == "Treasure" then
         playButton.Label.Text = "Dig"
+    elseif node.Type == "Mystery" then
+        playButton.Label.Text = "Explore"
     else
         playButton.Label.Text = "Fight"
     end
@@ -571,11 +624,36 @@ local function Redraw()
     end
 end
 
+-- Closing a panel brings the selected node's info and button back
+local function RefreshSelection()
+    if currentRegion and selectedNode and nodeButtons[selectedNode] then
+        SelectNode(selectedNode)
+    end
+end
+
 --REST AND TREASURE--
 
+-- The campfire plays its frames while the Rest Site is open; the Fallen Knight sits by the fire once he has joined
 local function ShowRestPanel()
+    local run = GetRun(currentRegion)
+    local row = CampaignArt.RestFireRow[run and run.Companion and "Knight" or "Party"]
+    local frameSize = CampaignArt.REST_FIRE_FRAME
+
     restPanel.Visible = true
     playButton.Visible = false
+
+    task.spawn(function()
+        local frame = 0
+
+        while restPanel.Visible do
+            local column = frame % CampaignArt.REST_FIRE_COLUMNS
+            local line = row + frame // CampaignArt.REST_FIRE_COLUMNS
+            restFire.ImageRectOffset = Vector2.new(column * frameSize.X, line * frameSize.Y)
+
+            frame = (frame + 1) % CampaignArt.REST_FIRE_FRAMES
+            task.wait(CampaignArt.REST_FIRE_TIME)
+        end
+    end)
 end
 
 local function ChooseRest(choice)
@@ -664,6 +742,76 @@ local function ShowDig(result)
     treasurePanel.CloseButton.Visible = true
 end
 
+--MYSTERY--
+
+local function StartBattle()
+    lastMatchRegion = currentRegion
+    screen.Enabled = false
+    hud.Enabled = true
+    startMatch("Campaign", currentRegion, selectedNode)
+end
+
+local function ShowMystery(encounter)
+    local text = MYSTERY_TEXT[encounter]
+    local run = GetRun(currentRegion)
+
+    mysteryEncounter = encounter
+    mysteryPanel.Title.Text = text.Title
+    mysteryPanel.Body.Text = text.Body
+    mysteryPanel.CloseButton.Visible = false
+
+    for i = 1, 3 do
+        local button = mysteryPanel["Choice" .. i]
+        local note = mysteryPanel["Note" .. i]
+        local choice = text.Choices[i]
+
+        button.Visible = choice ~= nil
+        note.Visible = choice ~= nil
+
+        if choice then
+            local canChoose, reason = CampaignRules.CanChooseMystery(run, encounter, choice[1])
+            button.Label.Text = choice[2]
+            button.Label.TextColor3 = canChoose and HIGHLIGHT_COLOR or LOCKED_TEXT_COLOR
+            button:SetAttribute("Choice", choice[1])
+            button:SetAttribute("Enabled", canChoose)
+            note.Text = canChoose and choice[3] or reason
+        end
+    end
+
+    mysteryPanel.Visible = true
+    playButton.Visible = false
+end
+
+local function ChooseMystery(index)
+    local button = mysteryPanel["Choice" .. index]
+    if not button:GetAttribute("Enabled") or mysteryPanel.CloseButton.Visible then return end
+
+    CampaignRemote:FireServer("Mystery", currentRegion, selectedNode, button:GetAttribute("Choice"))
+end
+
+-- What a mystery choice did, shown in the panel before it closes
+local function DescribeMystery(summary)
+    local choice = summary.Choice
+
+    if summary.Encounter == "Gunsmith" then
+        if choice == "Upgrade" then return "Your shotgun hits harder. +1 damage." end
+        if choice == "Gamble" then
+            return summary.Outcome > 0 and "The gamble pays off. +1 damage." or "The gamble backfires. -1 damage."
+        end
+        return "You leave the gunsmith behind."
+    elseif summary.Encounter == "FallenKnight" then
+        return "You walk on, leaving the Knight to his throne."
+    elseif summary.Encounter == "Ambush" then
+        return string.format("You push through the ambush and lose %d health.", MysteryConfig.Ambush.DAMAGE)
+    elseif summary.Encounter == "Altar" then
+        if choice == "Blood" then return "The altar drinks your blood. +2 max health." end
+        if choice == "Royal" then return "The altar accepts your sacrifice. +2 shotgun damage." end
+        return "You walk away from the altar."
+    end
+
+    return ""
+end
+
 local function Play()
     if not currentRegion or not selectedNode then return end
 
@@ -675,12 +823,12 @@ local function Play()
     elseif node.Type == "Treasure" then
         CampaignRemote:FireServer("StartTreasure", currentRegion, selectedNode)
         return
+    elseif node.Type == "Mystery" then
+        CampaignRemote:FireServer("StartMystery", currentRegion, selectedNode)
+        return
     end
 
-    lastMatchRegion = currentRegion
-    screen.Enabled = false
-    hud.Enabled = true
-    startMatch("Campaign", currentRegion, selectedNode)
+    StartBattle()
 end
 
 --RESULTS--
@@ -707,6 +855,10 @@ local function ShowResult(summary)
         if summary.Class then
             table.insert(lines, ClassConfig.Classes[summary.Class].DisplayName .. " class unlocked")
         end
+
+        if summary.Companion then
+            table.insert(lines, "The Fallen Knight joins your run")
+        end
     elseif summary.Checkpoint then
         table.insert(lines, "Back to your last Rest Site")
     else
@@ -717,6 +869,17 @@ local function ShowResult(summary)
     if not hud.Enabled then
         if summary.Type == "Rest" then
             info.Text = (REST_RESULTS[summary.Choice] or "") .. "\nCheckpoint saved"
+        elseif summary.Type == "Mystery" then
+            local result = DescribeMystery(summary)
+            mysteryPanel.Body.Text = result
+
+            for i = 1, 3 do
+                mysteryPanel["Choice" .. i].Visible = false
+                mysteryPanel["Note" .. i].Visible = false
+            end
+
+            mysteryPanel.CloseButton.Visible = true
+            info.Text = result
         else
             local title = summary.Found and "Treasure found!" or "No luck. A few coins for your trouble."
             treasurePanel.Message.Text = title .. "\n" .. table.concat(lines, "\n")
@@ -788,6 +951,38 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
     ArmoryArt.SetIcon(pouch:WaitForChild("Icon"), "Pouch")
 
     restPanel = areaView:WaitForChild("RestPanel")
+
+    -- The camp fills the panel's width and keeps its shape, cropping off the sky and the foreground
+    local restScene = restPanel:WaitForChild("Scene")
+
+    local function FitRestScene()
+        local width = restPanel.AbsoluteSize.X
+        restScene.Size = UDim2.fromOffset(width, width / CampaignArt.REST_ASPECT)
+    end
+
+    restPanel:GetPropertyChangedSignal("AbsoluteSize"):Connect(FitRestScene)
+    FitRestScene()
+
+    restScene:WaitForChild("Background").Image = CampaignArt.REST_BACKGROUND
+    restFire = restScene:WaitForChild("Fire")
+    restFire.Image = CampaignArt.REST_FIRE
+    restFire.ImageRectSize = CampaignArt.REST_FIRE_FRAME
+    local fireRect = CampaignArt.REST_FIRE_RECT
+    restFire.Position = UDim2.fromScale(fireRect[1], fireRect[2])
+    restFire.Size = UDim2.fromScale(fireRect[3], fireRect[4])
+
+    mysteryPanel = areaView:WaitForChild("MysteryPanel")
+
+    for i = 1, 3 do
+        mysteryPanel:WaitForChild("Choice" .. i).Activated:Connect(function()
+            ChooseMystery(i)
+        end)
+    end
+
+    mysteryPanel:WaitForChild("CloseButton").Activated:Connect(function()
+        mysteryPanel.Visible = false
+        RefreshSelection()
+    end)
     treasurePanel = areaView:WaitForChild("TreasurePanel")
     treasureGrid = treasurePanel:WaitForChild("Grid")
     tileTemplate = treasurePanel:WaitForChild("TileTemplate")
@@ -805,6 +1000,7 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
 
     treasurePanel:WaitForChild("CloseButton").Activated:Connect(function()
         treasurePanel.Visible = false
+        RefreshSelection()
     end)
 
     local infoBar = areaView:WaitForChild("InfoBar")
@@ -833,6 +1029,18 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
             end
         elseif action == "Dig" then
             ShowDig(data)
+        elseif action == "Mystery" then
+            if data.Region ~= currentRegion or data.Node ~= selectedNode then return end
+
+            -- Coming back to a fight already picked goes straight into it
+            if data.Fight then
+                StartBattle()
+            else
+                ShowMystery(data.Encounter)
+            end
+        elseif action == "MysteryFight" then
+            mysteryPanel.Visible = false
+            StartBattle()
         elseif action == "Result" then
             returnToWorld = data.RegionComplete == true
             ShowResult(data)

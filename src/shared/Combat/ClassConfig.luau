@@ -48,13 +48,13 @@ local ClassConfig = {
 
         Gunslinger = {
             DisplayName = "Gunslinger",
-            Passive = "Deadly Rounds: Shotgun blasts pass through everything. -0.5 damage for every enemy passed through.",
+            Passive = "Deadly Rounds: Shotgun blasts pass through everything. -2 damage for every enemy passed through.",
             Special = "Fan the Hammer: Fire 6 revolver shots down a 3 tile line. 60% to hit, 1.5 damage each.",
             Ultimate = "High Noon's Bounty: Mark 2 enemies. Gain 2 energy when each one dies.",
 
             -- Blasts aren't stopped by anything; each enemy passed on the way to a target costs this much damage
             DeadlyRounds = {
-                DamageLossPerEnemy = 0.5,
+                DamageLossPerEnemy = 2,
             },
 
             FanTheHammer = {

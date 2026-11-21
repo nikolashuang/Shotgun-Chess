@@ -65,7 +65,70 @@ def build_nodes(ref):
         atlas.paste(tile, (i * TILE, 0))
         print(name, "x", i * TILE)
 
+    atlas = add_mystery(atlas)
     atlas.save(os.path.join(OUT, "NodeIcons.png"))
+
+
+# "?" drawn in pixels, scaled up 5x; g is the gold fill, h its highlight
+QUESTION = [
+    ".gggg.",
+    "gh..gg",
+    "....gg",
+    "...gg.",
+    "..gg..",
+    "..gg..",
+    "......",
+    "..gg..",
+]
+QUESTION_SCALE = 5
+
+
+# The Mystery badge: the Treasure badge's gold octagon, emptied and stamped with a big gold question mark
+def add_mystery(atlas):
+    treasure = atlas.crop((2 * TILE, 0, 3 * TILE, TILE))
+    tile = treasure.copy()
+    px = tile.load()
+
+    # Paint over the chest with the badge's dark fill, sampled just inside the rim
+    fill = px[29, TILE // 2]
+    inner = Image.new("L", (TILE, TILE), 0)
+    corner = 25 / math.cos(math.radians(22.5))
+    points = [(TILE / 2 + corner * math.cos(math.radians(22.5 + 45 * i)), TILE / 2 + corner * math.sin(math.radians(22.5 + 45 * i))) for i in range(8)]
+    ImageDraw.Draw(inner).polygon(points, fill=255)
+    tile.paste(Image.new("RGBA", (TILE, TILE), fill), (0, 0), inner)
+
+    gold, light, ink = (0xE6, 0xB0, 0x48, 255), (0xFF, 0xE2, 0x8A, 255), (0x2A, 0x1C, 0x14, 255)
+    width, height = len(QUESTION[0]) * QUESTION_SCALE, len(QUESTION) * QUESTION_SCALE
+    left, top = (TILE - width) // 2, (TILE - height) // 2
+    glyph = Image.new("RGBA", (width + 2, height + 2), (0, 0, 0, 0))
+    gp = glyph.load()
+
+    for y, line in enumerate(QUESTION):
+        for x, ch in enumerate(line):
+            if ch == ".": continue
+            for dy in range(QUESTION_SCALE):
+                for dx in range(QUESTION_SCALE):
+                    gp[1 + x * QUESTION_SCALE + dx, 1 + y * QUESTION_SCALE + dy] = light if ch == "h" or dy == 0 else gold
+
+    # One pixel dark outline so the mark reads on the badge
+    outlined = glyph.copy()
+    op = outlined.load()
+    for y in range(glyph.height):
+        for x in range(glyph.width):
+            if gp[x, y][3]: continue
+            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if 0 <= nx < glyph.width and 0 <= ny < glyph.height and gp[nx, ny][3]:
+                    op[x, y] = ink
+                    break
+
+    tile.alpha_composite(outlined, (left - 1, top - 1))
+
+    grown = Image.new("RGBA", (atlas.width + TILE, TILE), (0, 0, 0, 0))
+    grown.paste(atlas, (0, 0))
+    grown.paste(tile, (atlas.width, 0))
+    print("Mystery", "x", atlas.width)
+
+    return grown
 
 
 # Sources with transparency keep it, snapped to fully on or off so pixel edges stay hard.

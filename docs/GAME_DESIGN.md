@@ -130,7 +130,7 @@ Chosen in the Armory alongside the shotgun. All numbers live in `ClassConfig`; e
 - **Ultimate [Hunting Strike]:** aimed and thrown exactly like a Pump shot (Nov 2026: was Double Barrel): same 3-tile cone, range, line of sight and point blank (`HuntingStrike.Weapon`), previewed with the same arc. Every non-King enemy in the hit tiles is stunned for 3 turns and deals no damage; a bolas flies to each one and stays wrapped around it while it's stunned. Kings are immune. Only throws if it would catch at least one non-King enemy, so the charge isn't wasted. (Replaced the old 5-tile radius in Nov 2026.)
 
 ### Gunslinger
-- **Passive [Deadly Rounds]** (Nov 2026, replaced Deadeye): no body blocking for any shotgun; blasts pass through every piece. Each target takes -0.5 damage for every enemy the blast passed through on the way to it. Point blank shots go through the adjacent enemy and on in a straight line to max range. Applied to the weapon itself (`ShotgunRules.GetWeapon(name, "Gunslinger")` sets `Pierces`), so the aim preview matches.
+- **Passive [Deadly Rounds]** (Nov 2026, replaced Deadeye): no body blocking for any shotgun; blasts pass through every piece. Each target takes -2 damage for every enemy the blast passed through on the way to it (nerfed from -0.5, Nov 2026). Point blank shots go through the adjacent enemy and on in a straight line to max range. Applied to the weapon itself (`ShotgunRules.GetWeapon(name, "Gunslinger")` sets `Pierces`), so the aim preview matches.
 - **Special [Fan the Hammer]:** the king pulls out a revolver (shown while aiming and firing) and fires 6 shots down a 3-tile straight line (snapped to the 8 chess directions). Each shot has a 60% chance to hit and deals 1.5 damage. Shots don't pierce: each hits the first living enemy in the line, so once that enemy dies the remaining shots go to the next one.
 - **Ultimate [High Noon's Bounty]:** click 2 enemies (Kings allowed; 1 if only one is left) to mark them with a red X. Each marked enemy pays 2 energy when it dies, however it dies. Marks last until the enemy dies.
 
@@ -164,7 +164,7 @@ World map, bottom to top: **King's Training** (tutorial) → **Hunter Forest** (
 - **Health carries over** between battles. The King starts each run at 15/15.
 - **Rest Sites are checkpoints** with three choices: **Rest** (heal to full), **Train** (+2 max and current health), **Gun Maintenance** (+1 to every shotgun hit, fall-off included; a Double Barrel's two blasts get +1 each). Upgrades last for the region only.
 - **Dying** sends the run back to its last Rest Site, where the choice can be made again. Everything after it is lost. With no Rest Site reached yet, the run ends and the region starts over.
-- **Leaving mid-region** works the same way: on rejoin the run picks up from its last Rest Site, or from the start.
+- **Leaving mid-region** keeps the run exactly as it was: every finished node is saved to the DataStore a few seconds later, and again when the player leaves. A battle left unfinished just has to be fought again; a rolled Treasure Hunt or mystery encounter stays the same.
 - **The pouch:** Gold and XP from nodes collect in the run's pouch and are only paid when the region's King falls. Defeating a King completes the region and permanently unlocks its class (King's Training unlocks no class).
 - Completed regions can be replayed as a fresh run; the pouch then pays `REPLAY_REWARD_SCALE` (20%).
 
@@ -183,6 +183,27 @@ Enemy armies are rolled fresh every battle from a point budget (`CampaignConfig.
 - 2 points are reserved for Pawns; Rooks, Knights and Bishops are picked at random to spend the rest, then Pawns fill what's left (max 12). Exactly 12 Pawns form a wall across row 9.
 - Everything is placed randomly on rows 9–12. In boss battles the Queen starts on column 6 and the King on column 7 of row 12.
 - Bishops alternate square colors, so neither color is safe.
+
+### Mystery Encounters
+
+Some fight columns hold **Mystery** nodes instead of battles (`CampaignMap.MYSTERY_PLANS`). Each region deals the lane plans in its own order: one lane gets four mysteries (two early, two late), one lane is straight battles, and the others get one early and one late, so routes feel different and players branch out.
+
+Arriving rolls one of four encounters on the server (never the same one twice in a row, and no Fallen Knight once he has joined); it's kept in the run, so leaving can't reroll it. Numbers live in `CampaignConfig.Mystery`.
+
+- **Wandering Gunsmith:** pay 50 Gold from the pouch for +1 shotgun damage (fall-off included), pay 25 to gamble (+1 or -1), or leave. Locked when the pouch can't cover it.
+- **Fallen Knight:** challenge him (a battle against him alone) or keep walking. Beating him makes him a companion for the rest of the run.
+- **Ambush:** take 3 damage (locked at 3 health or less) or fight an army rolled from the region's points (Training 6, Forest 7, Cliffside 8, Outskirts 8, Gravehollow 9) for a normal battle's reward.
+- **Queen's Altar:** Blood Offering (-4 health, +2 max health), Royal Sacrifice (-6 health, +2 shotgun damage), or walk away. Each needs more health than it costs.
+
+### Fallen Knight
+
+- 7 health, deals 2, moves and attacks like a King and a Knight combined (`PieceRules`). Dark teal armour, glowing blue eyes and a flickering blue-green aura (`Aura` effect behind his sprite).
+- As a companion he starts every battle one tile right of the King, acts on his own at the end of the player's turn (`CompanionAIService`: attack first, finishing pieces and the enemy King; otherwise close in while avoiding tiles enemies can hit) and can't be commanded.
+- His health carries between battles like the King's; Rest heals him too. If he dies he's gone for the run.
+
+### Rest Site Scene
+
+The Rest Site panel shows `art/campaign/RestCamp.png` with an animated campfire layer on top: the King on the right log and either his party (two pawns, a knight and a bishop) or the Fallen Knight on the left log. Rendered in Blender by `art/tools/build_rest_camp.py`, packed by `build_rest_art.py`.
 
 ### Treasure Hunt
 

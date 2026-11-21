@@ -15,7 +15,8 @@ function AnimatedSpriteClass.new(pieceName, parent, team)
 
     self.PieceName = pieceName
     self.Rows = SpriteConfig.Pieces[pieceName]
-    self.TeamOffset = SpriteConfig.Teams[team or "White"]
+    -- Special pieces (the Fallen Knight) have their own column and look the same on both teams
+    self.TeamOffset = SpriteConfig.Columns[pieceName] or SpriteConfig.Teams[team or "White"]
 
     self.Image = Instance.new("ImageLabel")
     self.Image.Name = pieceName .. "Sprite"

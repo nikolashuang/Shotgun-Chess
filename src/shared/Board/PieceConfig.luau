@@ -6,6 +6,8 @@ local PieceConfig = {
         Bishop = 5,
         Rook = 7,
         Queen = 9,
+        -- Campaign mystery encounter: fought once, then fights beside the King for the rest of the run
+        FallenKnight = 7,
     },
 
     -- Damage a summoned piece deals when commanded onto an enemy
@@ -15,6 +17,7 @@ local PieceConfig = {
         Bishop = 2,
         Rook = 2,
         Queen = 4,
+        FallenKnight = 2,
     },
 
     -- Energy cost to summon

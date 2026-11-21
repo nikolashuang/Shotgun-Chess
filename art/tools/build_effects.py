@@ -70,7 +70,14 @@ def star_points():
     return points
 
 
+# Set ONLY = ["Aura"] before running to render just those effects
+ONLY = globals().get("ONLY")
+
+
 def render_frames(objects, size, view, prefix, count, pose):
+    if ONLY and prefix not in ONLY:
+        return
+
     scene = bpy.context.scene
     cam = bpy.data.objects["SpriteCam"]
 
@@ -458,6 +465,40 @@ def pose_smoke(t):
     smoke_obj.hide_render = False
 
 
+# Fallen Knight aura: blue-green flame tongues licking up around the piece, drawn behind its sprite
+AURA_FRAMES = 6
+aura_mats = [flat("AuraFlame", "2E9C8E"), flat("AuraLight", "7FE3C8"), flat("AuraDeep", "1F6F72")]
+# (angle around the piece in degrees, 0 is straight up; flame length; colour index)
+AURA_TONGUES = [(-165, 0.4, 2), (-140, 0.5, 0), (-115, 0.6, 1), (-90, 0.65, 0), (-65, 0.7, 1), (-40, 0.75, 0), (-18, 0.85, 1), (0, 0.9, 0),
+                (18, 0.85, 1), (40, 0.75, 0), (65, 0.7, 1), (90, 0.65, 0), (115, 0.6, 1), (140, 0.5, 0), (165, 0.4, 2)]
+
+
+def build_aura(t):
+    def build(bm):
+        for i, (angle, length, index) in enumerate(AURA_TONGUES):
+            phase = math.sin((t + i * 0.37) * 2 * math.pi)
+            a = math.radians(angle)
+            # Tongues sit on an oval hugging the knight (about 1.5 wide and 2.4 tall) and point outward, curling up
+            x, z = 0.98 * math.sin(a), 1.05 + 1.25 * math.cos(a)
+            h = length * 1.25 * (0.8 + 0.25 * phase)
+            lean = angle * 0.55 + 10 * phase
+            cone(bm, (x, 0.4, z), h, 0.2, index, 5, rot("Y", lean))
+        # Sparks drifting up beside the knight
+        for i in range(3):
+            y = (t + i / 3) % 1
+            ball(bm, (-0.7 + i * 0.7, 0.3, 0.4 + y * 2.2), 0.06, 1, 1)
+    return build
+
+
+aura_obj = located(mesh_object("FxAura", build_aura(0), aura_mats))
+
+
+def pose_aura(t):
+    global aura_obj
+    aura_obj = located(mesh_object("FxAura", build_aura(t), aura_mats))
+    aura_obj.hide_render = False
+
+
 def still(_):
     pass
 
@@ -474,5 +515,7 @@ render_frames([bound_obj], (14, 10), BOARD_VIEW, "BolasBound", 1, still)
 render_frames([revolver_obj], (18, 12), FRONT_VIEW, "Revolver", 1, still)
 render_frames([mark_obj], (12, 12), FRONT_VIEW, "Mark", 1, still)
 render_frames([smoke_obj], (70, 70), (0, 0, 20), "Smoke", SMOKE_FRAMES, pose_smoke)
+# Same camera and size as the piece sprites, so the aura lines up with the knight cell
+render_frames([aura_obj], (32, 32), (72, 19.02, 7.4), "Aura", AURA_FRAMES, pose_aura)
 
 print("Built board effect frames")

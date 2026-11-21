@@ -99,16 +99,8 @@ local function LoadData(player)
             return store:GetAsync(tostring(player.UserId))
         end)
 
-        if ok then
-            local data = Reconcile(result or NewData())
-
-            -- A run left mid-region picks up again from its last Rest Site
-            for regionId, run in pairs(data.Runs) do
-                data.Runs[regionId] = CampaignRules.Rewind(run)
-            end
-
-            return data
-        end
+        -- Runs are saved as they stand, so leaving mid-region picks up exactly where the player left
+        if ok then return Reconcile(result or NewData()) end
 
         warn("[ProfileService] Load failed for " .. player.Name .. ": " .. tostring(result))
         task.wait(1)

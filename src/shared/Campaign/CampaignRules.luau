@@ -7,6 +7,7 @@ local CampaignMap = require(script.Parent.CampaignMap)
 
 local EncounterConfig = CampaignConfig.Encounter
 local TreasureConfig = CampaignConfig.Treasure
+local MysteryConfig = CampaignConfig.Mystery
 
 -- Cleared is the profile's set of cleared node keys ("Region.Node"); a region is complete once its King key is set
 -- A run is one attempt at a region: the route walked so far (Path), the King's health and upgrades, and the pouch
@@ -61,10 +62,16 @@ function CampaignRules.NewRun()
         Checkpoint = nil,
         -- The Treasure Hunt being dug: {Node, Column, Row, Digs = {{Column, Row}}}
         Treasure = nil,
+        -- The mystery encounter rolled on the current Mystery node: {Node, Encounter, Fight}
+        Mystery = nil,
+        -- Last encounter rolled, so the next Mystery node rolls a different one
+        LastMystery = nil,
+        -- The Fallen Knight once he joins: {Health, MaxHealth}; gone for the run if he dies
+        Companion = nil,
     }
 end
 
--- The run without its checkpoint or treasure dig
+-- The run without its checkpoint, treasure dig or mystery in progress
 function CampaignRules.CopyRun(run)
     return {
         Path = table.clone(run.Path),
@@ -73,6 +80,8 @@ function CampaignRules.CopyRun(run)
         DamageBonus = run.DamageBonus,
         Gold = run.Gold,
         Exp = run.Exp,
+        LastMystery = run.LastMystery,
+        Companion = run.Companion and table.clone(run.Companion),
     }
 end
 
@@ -97,6 +106,8 @@ function CampaignRules.GetClientRuns(runs)
         if run.Treasure then
             copy.Treasure = {Node = run.Treasure.Node, Digs = run.Treasure.Digs}
         end
+
+        copy.Mystery = run.Mystery
 
         shown[regionId] = copy
     end
@@ -152,10 +163,51 @@ function CampaignRules.GetPoints(regionId, nodeId)
     local node = region.Nodes[nodeId]
     local lastFight = region.StartPoints + (CampaignMap.FIGHTS - 1) * EncounterConfig.POINTS_PER_FIGHT
 
+    if node.Type == "Mystery" then return MysteryConfig.Ambush.Points[regionId] end
     if node.Type == "Queen" then return lastFight + EncounterConfig.QUEEN_BONUS end
     if node.Type == "King" then return lastFight + EncounterConfig.QUEEN_BONUS + EncounterConfig.KING_BONUS end
 
     return region.StartPoints + (node.Fight - 1) * EncounterConfig.POINTS_PER_FIGHT
+end
+
+--MYSTERY--
+
+-- Never the same encounter twice in a row
+function CampaignRules.RollMystery(run, random)
+    local options = {}
+
+    for _, encounter in ipairs(MysteryConfig.ENCOUNTERS) do
+        -- Only one Fallen Knight can follow the King
+        local isTaken = encounter == "FallenKnight" and run.Companion ~= nil
+
+        if encounter ~= run.LastMystery and not isTaken then
+            table.insert(options, encounter)
+        end
+    end
+
+    return options[random:NextInteger(1, #options)]
+end
+
+-- Whether the run can take this choice; the second value says why not, for the button
+function CampaignRules.CanChooseMystery(run, encounter, choice)
+    if encounter == "Gunsmith" then
+        local gunsmith = MysteryConfig.Gunsmith
+        if choice == "Upgrade" then return run.Gold >= gunsmith.UPGRADE_COST, "Not enough gold" end
+        if choice == "Gamble" then return run.Gold >= gunsmith.GAMBLE_COST, "Not enough gold" end
+        return choice == "Leave"
+    elseif encounter == "FallenKnight" then
+        return choice == "Challenge" or choice == "Leave"
+    elseif encounter == "Ambush" then
+        if choice == "TakeHit" then return run.Health > MysteryConfig.Ambush.DAMAGE, "Too hurt" end
+        return choice == "Fight"
+    elseif encounter == "Altar" then
+        local altar = MysteryConfig.Altar
+        if choice == "Blood" then return run.Health > altar.BLOOD_COST, "Too hurt" end
+        if choice == "Royal" then return run.Health > altar.ROYAL_COST, "Too hurt" end
+        return choice == "Leave"
+    end
+
+    return false
 end
 
 --TREASURE--

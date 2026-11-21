@@ -16,6 +16,7 @@ local PieceClass = require(script.Parent.PieceClass)
 local SideClass = require(script.Parent.SideClass)
 local EnemyAIService = require(ServerScriptService.AI.EnemyAIService)
 local PracticeAIService = require(ServerScriptService.AI.PracticeAIService)
+local CompanionAIService = require(ServerScriptService.AI.CompanionAIService)
 
 -- Each class's passive, special and ultimate live in its own component
 local ClassComponents = {
@@ -45,6 +46,10 @@ function MatchClass.new(player, shotgunName, className, enemies, aiRating)
     -- Set by whoever owns the match to be told the result; campaign matches without it never end
     self.OnEnd = nil
     self.HasEnemyKing = false
+
+    -- Campaign Fallen Knight: {Type, Column, Row, Health} set before Start; Companion is the piece once placed
+    self.CompanionStart = nil
+    self.Companion = nil
 
     self.Pieces = {}
     self.NextPieceId = 1
@@ -265,6 +270,12 @@ function MatchClass:Start()
 
     self.HasEnemyKing = self:CountPieces("King", "Black") > 0
 
+    local ally = self.CompanionStart
+    if ally and not self:IsOccupied(ally.Column, ally.Row) then
+        self.Companion = self:AddPiece(ally.Type, "White", ally.Column, ally.Row, ally.Health)
+        self.Companion.isCompanion = true
+    end
+
     local white = self.Sides.White
     white:GainEnergy()
 
@@ -312,8 +323,10 @@ function MatchClass:IsSideTurn(side)
     return self.Phase == "PlayerTurn" and self.ActiveTeam == side.Team
 end
 
-function MatchClass:AddPiece(pieceType, team, column, row)
+-- health starts the piece hurt (a companion carrying its health between battles)
+function MatchClass:AddPiece(pieceType, team, column, row, health)
     local piece = PieceClass.new(self.NextPieceId, pieceType, team, column, row)
+    piece.Health = health or piece.Health
     self.NextPieceId += 1
     self.Pieces[piece.Id] = piece
 
@@ -767,6 +780,8 @@ function MatchClass:Command(side, pieceId, column, row)
     if not piece then return end
     if piece.Team ~= side.Team then return end
     if piece.Type == "King" then return end
+    -- The Fallen Knight acts on his own
+    if piece.isCompanion then return end
     if piece:IsStunned() then return end
 
     local function IsBlocked(blockColumn, blockRow)
@@ -907,6 +922,10 @@ function MatchClass:StartEnemyTurn()
     self:TickBleed("Black")
     if self:CheckVictory() then return end
 
+    -- The Fallen Knight moves at the end of the player's turn, before the enemies plan
+    self:RunCompanion()
+    if self:CheckVictory() then return end
+
     self:SendTurnState()
 
     local turn = self.Turn
@@ -945,6 +964,40 @@ function MatchClass:StartEnemyTurn()
             self:StartPlayerTurn()
         end)
     end)
+end
+
+--COMPANION--
+
+function MatchClass:RunCompanion()
+    local piece = self.Companion
+    if not piece or not self.Pieces[piece.Id] then return end
+    if piece:IsStunned() then return end
+
+    local plan = CompanionAIService.Plan(self, piece)
+    if not plan then return end
+
+    if plan.Type == "Attack" then
+        local target = self:GetPieceAt(plan.Column, plan.Row)
+        if not target or target.Team == piece.Team then return end
+
+        local isCapture = self:DamagePiece(target, PieceConfig.Damage[piece.Type], self.Sides.White)
+
+        if isCapture then
+            piece.Column = plan.Column
+            piece.Row = plan.Row
+        end
+
+        self:SendAttack(piece, target, isCapture)
+        return
+    end
+
+    if self:IsOccupied(plan.Column, plan.Row) then return end
+
+    piece.Column = plan.Column
+    piece.Row = plan.Row
+
+    self:SendAll("PieceMoved", piece.Id, plan.Column, plan.Row)
+    self:OnUnitMoved(piece)
 end
 
 --ENEMY ACTIONS--

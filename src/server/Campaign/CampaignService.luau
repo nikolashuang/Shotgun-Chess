@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
+local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local CampaignConfig = require(ReplicatedStorage.Shared.Campaign.CampaignConfig)
 local CampaignRules = require(ReplicatedStorage.Shared.Campaign.CampaignRules)
 local EncounterRules = require(script.Parent.EncounterRules)
@@ -13,6 +14,7 @@ local CampaignRemote = ReplicatedStorage.Remotes.CampaignRemote
 
 local RestConfig = CampaignConfig.Rest
 local TreasureConfig = CampaignConfig.Treasure
+local MysteryConfig = CampaignConfig.Mystery
 
 local REST_CHOICES = {"Rest", "Train", "Maintenance"}
 
@@ -46,6 +48,24 @@ local function GetPlayableRun(player, regionId, nodeId)
     end
 
     return run
+end
+
+-- Every step of a run is written to the DataStore right away, so leaving (or a crash) never loses it
+-- Saves wait SAVE_DELAY so a burst of steps becomes one write
+local SAVE_DELAY = 3
+local pendingSaves = {}
+
+local function SaveSoon(player)
+    if pendingSaves[player] then return end
+    pendingSaves[player] = true
+
+    task.delay(SAVE_DELAY, function()
+        pendingSaves[player] = nil
+
+        if player.Parent then
+            ProfileService.Save(player)
+        end
+    end)
 end
 
 -- Pays the pouch out, unlocks the class and ends the run
@@ -86,6 +106,7 @@ function CampaignService.CompleteNode(player, regionId, nodeId, gold, exp)
     end
 
     table.insert(run.Path, nodeId)
+    run.Mystery = nil
     run.Gold += gold
     run.Exp += exp
 
@@ -105,6 +126,7 @@ function CampaignService.CompleteNode(player, regionId, nodeId, gold, exp)
     end
 
     ProfileService.Sync(player)
+    SaveSoon(player)
 
     return summary
 end
@@ -116,18 +138,60 @@ local function FailRun(player, regionId, nodeId)
     data.Runs[regionId] = rewound
 
     ProfileService.Sync(player)
+    SaveSoon(player)
 
     return {Victory = false, Region = regionId, Node = nodeId, Checkpoint = rewound ~= nil}
+end
+
+-- The army for a battle node, or for a fight a mystery encounter started on this node
+local function GetEnemies(run, regionId, nodeId)
+    local node = CampaignRules.GetNode(regionId, nodeId)
+
+    if CampaignRules.IsBattle(node) then
+        return EncounterRules.Generate(CampaignRules.GetPoints(regionId, nodeId), node.Type)
+    end
+
+    local mystery = run.Mystery
+    if node.Type ~= "Mystery" or not mystery or mystery.Node ~= nodeId then return nil end
+
+    if mystery.Fight == "FallenKnight" then
+        local tile = MysteryConfig.FallenKnight.TILE
+        return {{Type = "FallenKnight", Column = tile[1], Row = tile[2]}}
+    elseif mystery.Fight == "Ambush" then
+        return EncounterRules.Generate(CampaignRules.GetPoints(regionId, nodeId), "Combat")
+    end
+
+    return nil
+end
+
+-- What winning a mystery fight gives: the Knight joins, an ambush pays like a battle
+local function CompleteMysteryFight(player, regionId, nodeId, run)
+    local fight = run.Mystery.Fight
+
+    if fight == "FallenKnight" then
+        local health = PieceConfig.Health.FallenKnight
+        run.Companion = {Health = health, MaxHealth = health}
+
+        local summary = CampaignService.CompleteNode(player, regionId, nodeId, 0, 0)
+        summary.Companion = true
+
+        return summary
+    end
+
+    local region = CampaignConfig.Regions[regionId]
+    local reward = CampaignConfig.Rewards.Combat
+
+    return CampaignService.CompleteNode(player, regionId, nodeId, math.floor(reward.Gold * region.RewardScale), math.floor(reward.Exp * region.RewardScale))
 end
 
 function CampaignService.CreateMatch(player, regionId, nodeId)
     local run = GetPlayableRun(player, regionId, nodeId)
     if not run then return nil end
 
-    local node = CampaignRules.GetNode(regionId, nodeId)
-    if not CampaignRules.IsBattle(node) then return nil end
+    local enemies = GetEnemies(run, regionId, nodeId)
+    if not enemies then return nil end
 
-    local enemies = EncounterRules.Generate(CampaignRules.GetPoints(regionId, nodeId), node.Type)
+    local node = CampaignRules.GetNode(regionId, nodeId)
     local shotgun, class = LoadoutService.GetLoadout(player)
     local match = MatchClass.new(player, shotgun, class, enemies, CampaignConfig.AI_RATING)
 
@@ -137,12 +201,36 @@ function CampaignService.CreateMatch(player, regionId, nodeId)
     king.Health = run.Health
     king.DamageBonus = run.DamageBonus
 
+    -- So does the Fallen Knight, who starts beside the King
+    if run.Companion then
+        match.CompanionStart = {
+            Type = "FallenKnight",
+            Column = king.Column + CampaignConfig.COMPANION_OFFSET,
+            Row = king.Row,
+            Health = run.Companion.Health,
+        }
+    end
+
     match.OnEnd = function(result)
         local summary = nil
 
         if result == "Victory" then
             run.Health = king.Health
-            summary = CampaignService.CompleteNode(player, regionId, nodeId)
+
+            if run.Companion then
+                local companion = match.Companion
+                run.Companion.Health = companion and companion:IsAlive() and companion.Health or 0
+
+                if run.Companion.Health <= 0 then
+                    run.Companion = nil
+                end
+            end
+
+            if CampaignRules.IsBattle(node) then
+                summary = CampaignService.CompleteNode(player, regionId, nodeId)
+            else
+                summary = CompleteMysteryFight(player, regionId, nodeId, run)
+            end
         else
             summary = FailRun(player, regionId, nodeId)
         end
@@ -167,6 +255,10 @@ local function Rest(player, regionId, nodeId, choice)
 
     if choice == "Rest" then
         run.Health = run.MaxHealth
+
+        if run.Companion then
+            run.Companion.Health = run.Companion.MaxHealth
+        end
     elseif choice == "Train" then
         run.MaxHealth += RestConfig.TRAIN_HEALTH
         run.Health += RestConfig.TRAIN_HEALTH
@@ -255,6 +347,78 @@ local function Dig(player, regionId, nodeId, column, row)
     CampaignRemote:FireClient(player, "Result", summary)
 end
 
+-- The encounter is rolled once per visit and kept in the run, so leaving and coming back can't reroll it
+local function StartMystery(player, regionId, nodeId)
+    local node = CampaignRules.GetNode(regionId, nodeId)
+    if not node or node.Type ~= "Mystery" then return end
+
+    local run = GetPlayableRun(player, regionId, nodeId)
+    if not run then return end
+
+    if not run.Mystery or run.Mystery.Node ~= nodeId then
+        local encounter = CampaignRules.RollMystery(run, Random.new())
+        run.Mystery = {Node = nodeId, Encounter = encounter}
+        run.LastMystery = encounter
+    end
+
+    ProfileService.Sync(player)
+    CampaignRemote:FireClient(player, "Mystery", {Region = regionId, Node = nodeId, Encounter = run.Mystery.Encounter, Fight = run.Mystery.Fight})
+end
+
+local function ChooseMystery(player, regionId, nodeId, choice)
+    if typeof(choice) ~= "string" then return end
+
+    local run = GetPlayableRun(player, regionId, nodeId)
+    if not run then return end
+
+    local mystery = run.Mystery
+    if not mystery or mystery.Node ~= nodeId or mystery.Fight then return end
+    if not CampaignRules.CanChooseMystery(run, mystery.Encounter, choice) then return end
+
+    local encounter = mystery.Encounter
+    local outcome = nil
+
+    -- Fights start a match on this node; the result arrives when it ends
+    if choice == "Challenge" or choice == "Fight" then
+        mystery.Fight = encounter
+        ProfileService.Sync(player)
+        CampaignRemote:FireClient(player, "MysteryFight", {Region = regionId, Node = nodeId})
+        return
+    end
+
+    if encounter == "Gunsmith" then
+        local gunsmith = MysteryConfig.Gunsmith
+
+        if choice == "Upgrade" then
+            run.Gold -= gunsmith.UPGRADE_COST
+            run.DamageBonus += gunsmith.UPGRADE_DAMAGE
+        elseif choice == "Gamble" then
+            run.Gold -= gunsmith.GAMBLE_COST
+            outcome = Random.new():NextInteger(0, 1) == 1 and gunsmith.GAMBLE_DAMAGE or -gunsmith.GAMBLE_DAMAGE
+            run.DamageBonus += outcome
+        end
+    elseif encounter == "Ambush" and choice == "TakeHit" then
+        run.Health -= MysteryConfig.Ambush.DAMAGE
+    elseif encounter == "Altar" then
+        local altar = MysteryConfig.Altar
+
+        if choice == "Blood" then
+            run.Health -= altar.BLOOD_COST
+            run.MaxHealth += altar.BLOOD_HEALTH
+        elseif choice == "Royal" then
+            run.Health -= altar.ROYAL_COST
+            run.DamageBonus += altar.ROYAL_DAMAGE
+        end
+    end
+
+    local summary = CampaignService.CompleteNode(player, regionId, nodeId, 0, 0)
+    summary.Encounter = encounter
+    summary.Choice = choice
+    summary.Outcome = outcome
+
+    CampaignRemote:FireClient(player, "Result", summary)
+end
+
 local init = false
 function CampaignService.Init()
     if init then return end
@@ -269,6 +433,10 @@ function CampaignService.Init()
             StartTreasure(player, regionId, nodeId)
         elseif action == "Dig" then
             Dig(player, regionId, nodeId, first, second)
+        elseif action == "StartMystery" then
+            StartMystery(player, regionId, nodeId)
+        elseif action == "Mystery" then
+            ChooseMystery(player, regionId, nodeId, first)
         end
     end)
 end

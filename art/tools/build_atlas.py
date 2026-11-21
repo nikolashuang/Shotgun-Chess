@@ -6,7 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRAMES = os.path.join(ROOT, "frames")
 OUT_PNG = os.path.join(ROOT, "SpriteAtlas.png")
 OUT_LUAU = os.path.join(os.path.dirname(ROOT), "src", "shared", "Sprites", "SpriteConfig.luau")
-ASSET_ID = "rbxassetid://125291758302096"
+ASSET_ID = "rbxassetid://113551605765056"
 
 CELL = 32
 # Transparent gutter around every sprite so rotated or scaled sampling can't bleed into neighbors
@@ -30,6 +30,17 @@ BLACK_RECOLOR = {
 }
 
 PIECES = ["Pawn", "Knight", "Bishop", "Rook", "Queen", "King"]
+
+# Special pieces reuse another piece's frames, recolored, and get their own column (same sprites for both teams)
+# The Fallen Knight: dark teal armour, glowing blue eyes and a teal outline that blends into his aura
+FALLEN_RECOLOR = {
+    (0xF0, 0xE9, 0xD8, 255): (0x4F, 0x6E, 0x78, 255),
+    (0xB3, 0xA8, 0x8F, 255): (0x32, 0x48, 0x52, 255),
+    (0x8A, 0x93, 0xA6, 255): (0x3E, 0x5A, 0x63, 255),
+    (0x4E, 0x56, 0x6B, 255): (0x6C, 0xC4, 0xFF, 255),
+    OUTLINE: (0x7F, 0xE3, 0xC8, 255),
+}
+SPECIAL = {"FallenKnight": ("Knight", FALLEN_RECOLOR)}
 # name: (frames, seconds per frame, looped, flash frames)
 ANIMS = {
     "Idle":   (4, 0.22, True, []),
@@ -52,6 +63,7 @@ EFFECTS = {
     "BolasBound": (1, 0.1, False),
     "Mark": (1, 0.1, False),
     "Smoke": (3, 0.3, False),
+    "Aura": (6, 0.1, False),
 }
 
 def nearest(c):
@@ -120,6 +132,13 @@ for piece in PIECES:
         black = [f if i in flashes else recolor(f, BLACK_RECOLOR) for i, f in enumerate(frames)]
         rows.append((piece, anim, frames, black))
 
+special_rows = []
+for name, (source, mapping) in SPECIAL.items():
+    for anim, (count, _, _, flashes) in ANIMS.items():
+        if anim == "Recoil": continue
+        frames = [clean(Image.open(os.path.join(FRAMES, f"{source}_{anim}_{i}.png")), i in flashes) for i in range(count)]
+        special_rows.append((name, anim, [f if i in flashes else recolor(f, mapping) for i, f in enumerate(frames)]))
+
 # Gun sprites and grips come from art/tools/build_guns.py
 GUNS = json.load(open(os.path.join(FRAMES, "guns.json")))
 # Gunslinger's Fan the Hammer revolver (build_effects.py) is held like a gun
@@ -164,7 +183,9 @@ TEAM_WIDTH = STRIDE * 6
 MAX_SIZE = 1024
 UI_COLUMN_WIDTH = 220
 ui_x = TEAM_WIDTH * 2 + PAD
-width = ui_x + UI_COLUMN_WIDTH
+# Special pieces get a column right of the UI sprites
+special_x = ui_x + UI_COLUMN_WIDTH + PAD
+width = special_x + TEAM_WIDTH
 
 ui_images = [("TileMark", mark), ("ArcDot", arc_dot), ("ArcEdge", arc_edge), ("Pellet", pellet), ("ShellFull", shell_full), ("ShellEmpty", shell_empty)]
 for name, img in gun_images.items():
@@ -179,13 +200,13 @@ ui = {}
 x, y, row_height = ui_x, PAD, 0
 for name, img in ui_images:
     w, h = img.size
-    if x + w + PAD > width:
+    if x + w + PAD > ui_x + UI_COLUMN_WIDTH:
         x, y, row_height = ui_x, y + row_height + PAD * 2, 0
     ui[name] = (x, y, w, h)
     x += w + PAD * 2
     row_height = max(row_height, h)
 
-height = max(y + row_height + PAD, len(rows) * STRIDE + PAD)
+height = max(y + row_height + PAD, len(rows) * STRIDE + PAD, len(special_rows) * STRIDE + PAD)
 assert width <= MAX_SIZE and height <= MAX_SIZE, f"atlas is {width}x{height}, over Roblox's {MAX_SIZE} px limit"
 atlas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
 
@@ -198,6 +219,11 @@ for r, (piece, anim, frames, black) in enumerate(rows):
 
 for name, img in ui_images:
     atlas.alpha_composite(img, ui[name][:2])
+
+for r, (piece, anim, frames) in enumerate(special_rows):
+    for i, f in enumerate(frames):
+        atlas.alpha_composite(f, (special_x + i * STRIDE, PAD + r * STRIDE))
+    anim_entries.setdefault(piece, {})[anim] = PAD + r * STRIDE
 
 atlas.save(OUT_PNG)
 
@@ -219,17 +245,22 @@ lines.append("")
 lines.append("    -- X offset of each team's sprites in the atlas")
 lines.append(f"    Teams = {{White = {PAD}, Black = {TEAM_WIDTH + PAD}}},")
 lines.append("")
+lines.append("    -- X offset of special pieces, which look the same on both teams")
+lines.append("    Columns = {" + ", ".join(f"{name} = {special_x}" for name in SPECIAL) + "},")
+lines.append("")
 lines.append("    -- Y offset of each animation row in the atlas")
 lines.append("    Pieces = {")
-for piece in PIECES:
+for piece in PIECES + list(SPECIAL):
     entries = ", ".join(f"{a} = {y}" for a, y in anim_entries[piece].items())
     lines.append(f"        {piece} = {{{entries}}},")
 lines.append("    },")
 lines.append("")
 lines.append("    -- Topmost opaque pixel row of each piece's idle sprite")
 lines.append("    HeadRows = {")
-for piece in PIECES:
-    idle = next(frames for p, a, frames, _ in rows if p == piece and a == "Idle")[0]
+idles = {p: frames[0] for p, a, frames, _ in rows if a == "Idle"}
+idles.update({p: frames[0] for p, a, frames in special_rows if a == "Idle"})
+for piece in PIECES + list(SPECIAL):
+    idle = idles[piece]
     top = next(y for y in range(CELL) if any(idle.getpixel((x, y))[3] > 0 for x in range(CELL)))
     lines.append(f"        {piece} = {top},")
 lines.append("    },")

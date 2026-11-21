@@ -141,6 +141,19 @@ function PieceRigClass.new(board, pieceType, team)
     self.StunEffect = nil
     self.ArrowEffect = nil
     self.MarkEffect = nil
+    self.AuraEffect = nil
+
+    -- The Fallen Knight burns with a blue-green aura drawn behind his sprite
+    if pieceType == "FallenKnight" then
+        local aura = EffectSpriteClass.new("Aura", self.Rig)
+        aura.Image.Size = UDim2.fromScale(aura.Width, aura.Height)
+        aura.Image.ZIndex = 2
+        -- See-through so the knight himself still reads in front of it
+        aura.Image.ImageTransparency = 0.35
+        aura.BasePosition = UDim2.fromScale(0.5, BODY_BOTTOM - aura.Height / 2)
+
+        self.AuraEffect = aura
+    end
 
     self:CreateHealthBar(board, pieceType, team)
     self:CreateArrow()
@@ -467,6 +480,7 @@ function PieceRigClass:Die()
     self:SetStunned(false)
     self:SetArrow(false)
     self:SetMarked(false)
+    self:RemoveAura()
 
     self.HideToken += 1
     TweenService:Create(self.HealthBar, TweenInfo.new(BAR_HIDE_TIME), {GroupTransparency = 1}):Play()
@@ -476,9 +490,17 @@ function PieceRigClass:Die()
     end)
 end
 
+function PieceRigClass:RemoveAura()
+    if self.AuraEffect then
+        self.AuraEffect:Destroy()
+        self.AuraEffect = nil
+    end
+end
+
 function PieceRigClass:Destroy()
     self:SetStunned(false)
     self:SetMarked(false)
+    self:RemoveAura()
 
     if self.ArrowEffect then
         self.ArrowEffect:Destroy()

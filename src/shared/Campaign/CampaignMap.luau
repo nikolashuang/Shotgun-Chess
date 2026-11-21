@@ -2,10 +2,11 @@
 -- Uses a seeded Random so the server and every client build the same map
 local CampaignMap = {}
 
--- Column 1 is the single start node. Every route fights 3 times, then hits one Rest and one Treasure
+-- Column 1 is the single start node. Every route crosses 3 fight columns, then hits one Rest and one Treasure
+-- Some fight columns hold Mystery nodes instead of battles (see MYSTERY_PLANS)
 local PATTERN = {"Fight", "Fight", "Fight", "Break", "Break", "Fight", "Fight", "Fight", "Break", "Break"}
 
--- Normal battles on every route, numbered 1 to FIGHTS in each Combat node's Fight
+-- Fight columns on every route, numbered 1 to FIGHTS in each Combat node's Fight (it sets the battle's budget)
 CampaignMap.FIGHTS = 0
 
 for _, kind in ipairs(PATTERN) do
@@ -23,6 +24,16 @@ local LANE_BOTTOM = 0.87
 
 local JITTER_X = 0.012
 local JITTER_Y = 0.045
+
+-- Fight columns each lane turns into Mystery nodes, so routes feel different and players branch out:
+-- one lane is all mysteries (two early, two late), one is straight battles, the rest get one of each
+-- Plans are dealt to lanes in a seeded order, so every region puts them on different lanes
+local MYSTERY_PLANS = {
+    {2, 3, 6, 8},
+    {},
+    {3, 7},
+    {2, 6},
+}
 
 -- Chance a node also links to a neighbouring lane, and that a branch replaces its straight link
 local BRANCH_CHANCE = 0.4
@@ -93,6 +104,19 @@ function CampaignMap.Build(map)
         table.insert(nodes.Start.Links, GetNodeId(2, lane))
         parentCounts[GetNodeId(2, lane)] += 1
         table.insert(nodes[GetNodeId(#PATTERN, lane)].Links, "Queen")
+    end
+
+    -- A separate random so dealing the plans never changes the routes above
+    local planRandom = Random.new(map.Seed + 1)
+    local plans = table.move(MYSTERY_PLANS, 1, lanes, 1, {})
+    planRandom:Shuffle(plans)
+
+    for lane, plan in ipairs(plans) do
+        for _, column in ipairs(plan) do
+            local node = nodes[GetNodeId(column, lane)]
+            node.Type = "Mystery"
+            node.Fight = nil
+        end
     end
 
     for column = 2, #PATTERN - 1 do

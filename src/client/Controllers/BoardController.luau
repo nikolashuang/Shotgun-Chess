@@ -222,6 +222,11 @@ local function GetCommandMoves(piece)
     return PieceRules.GetMoves(piece.Type, piece.Team, piece.Rig.Column, piece.Rig.Row, IsOccupied)
 end
 
+-- The campaign's Fallen Knight fights on his own, so only summoned pieces take commands
+local function IsCommandable(piece)
+    return piece.Team == "White" and piece.Type ~= "FallenKnight"
+end
+
 -- Moves and attacks share the Command action; attacks target enemy tiles
 local function GetCommandTargets(piece)
     local targets = GetCommandMoves(piece)
@@ -249,7 +254,7 @@ local function UpdateArrows()
     local hoveredPiece = hoveredTile and PieceController.GetAt(hoveredTile:GetAttribute("Column"), hoveredTile:GetAttribute("Row"))
 
     if hoveredPiece then
-        if hoveredPiece.Team == "White" and selectedAction == "Command" and CanAct(ActionCost.Command, "Command") then
+        if IsCommandable(hoveredPiece) and selectedAction == "Command" and CanAct(ActionCost.Command, "Command") then
             arrows[hoveredPiece.Id] = ALLY_ARROW_COLOR
         elseif hoveredPiece.Team == "Black" and AbilityController.TargetsEnemies(selectedAction) then
             arrows[hoveredPiece.Id] = ENEMY_ARROW_COLOR
@@ -332,7 +337,9 @@ local function DrawPreview()
 
         if not selectedPiece then
             for _, piece in pairs(PieceController.GetTeamPieces("White")) do
-                HighlightTile(piece.Rig.Column, piece.Rig.Row, SELECT_COLOR, 0.65, true)
+                if IsCommandable(piece) then
+                    HighlightTile(piece.Rig.Column, piece.Rig.Row, SELECT_COLOR, 0.65, true)
+                end
             end
             return
         end
@@ -412,7 +419,7 @@ local function OnTileClicked(column, row)
 
         local clickedPiece = PieceController.GetAt(column, row)
 
-        if clickedPiece and clickedPiece.Team == "White" then
+        if clickedPiece and IsCommandable(clickedPiece) then
             commandPieceId = clickedPiece.Id
             BoardController.RefreshPreview()
             return

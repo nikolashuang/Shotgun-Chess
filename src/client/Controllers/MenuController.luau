@@ -133,8 +133,7 @@ local function BindHover(button)
         label.TextColor3 = restColor
     end)
 
-    -- MouseLeave never fires when the menu hides under the cursor, so this snaps the button back
-    table.insert(hoverResets, function()
+    local function Reset()
         if tween then
             tween:Cancel()
         end
@@ -146,7 +145,13 @@ local function BindHover(button)
         button.Position = restPosition
         label.TextColor3 = restColor
         reveal.Value = 0
-    end)
+    end
+
+    -- Clicking closes the ribbon and slides the label back, even while the cursor is still on it
+    button.Activated:Connect(Reset)
+
+    -- MouseLeave never fires when the menu hides under the cursor, so this snaps the button back
+    table.insert(hoverResets, Reset)
 end
 
 local function CloseAllPanels(root)

@@ -3,7 +3,7 @@
 # renders each one to art/armory/icons/<Name>.png, writes the scene to art/ArmoryIcons.blend
 # and removes it again so the sprite file is left as it was. build_armory_art.py outlines and packs the renders.
 import bpy, bmesh, math, os
-from mathutils import Vector, Euler
+from mathutils import Vector, Euler, Matrix
 
 ROOT = os.path.dirname(os.path.dirname(bpy.data.filepath))
 OUT = os.path.join(ROOT, "art", "armory", "icons")
@@ -16,7 +16,7 @@ ORTHO_SCALE = 2.9
 # Most icons are drawn flat-on like the gun sprites; these keep the angled 3D camera
 CAMERA_PITCH_2D = 90
 CAMERA_PITCH_3D = 72
-THREE_D = {"Siege", "GunslingerSpecial"}
+THREE_D = {"Siege"}
 
 
 def linear(hex_color):
@@ -266,63 +266,94 @@ def hunting_strike(icon):
     icon.ball(rope, center, 0.1)
 
 
-def deadeye(icon):
-    red = glow("Target", TARGET)
-    icon.torus(red, (0, 0, 0), 0.75, 0.07, rotation=(FACE, 0, 0), segments=28)
-    icon.torus(red, (0, 0, 0), 0.35, 0.05, rotation=(FACE, 0, 0), segments=20)
-    for angle in (0, 90, 180, 270):
-        a = math.radians(angle)
-        x, up = math.cos(a) * 0.95, math.sin(a) * 0.95
-        icon.cube(red, (x, -up * math.cos(math.radians(FACE)), up * math.sin(math.radians(FACE))), (0.1 if angle % 180 else 0.4, 0.1, 0.4 if angle % 180 else 0.1))
-    icon.ball(glow("TargetCore", "F1D4AC"), (0, 0, 0), 0.1)
+# Two bullets flying out of the card toward the viewer, angled off to the right, with speed streaks behind them
+def deadly_rounds(icon):
+    brass = toon("Casing", "6A4A1E", "B8893F", "D9A84F")
+    copper = toon("BulletTip", "5A2E1C", "9C5434", "C8784A")
+    streak = glow("Streak", "F1D4AC")
+    direction = Vector((0.42, -0.88, 0.22)).normalized()
+    rotation = direction.to_track_quat("Z", "Y").to_euler()
+
+    def bullet(base, scale):
+        base = Vector(base)
+        casing = icon.cylinder(brass, base + direction * 0.26 * scale, 0.17 * scale, 0.52 * scale, 16)
+        casing.rotation_euler = rotation
+        rim = icon.cylinder(brass, base, 0.19 * scale, 0.06 * scale, 16)
+        rim.rotation_euler = rotation
+        tip = icon.cylinder(copper, base + direction * 0.68 * scale, 0.17 * scale, 0.32 * scale, 16, top=0.05 * scale)
+        tip.rotation_euler = rotation
+        icon.ball(copper, base + direction * 0.84 * scale, 0.055 * scale)
+
+        # Streaks trail back from the casing
+        for offset, length in ((Vector((0, 0, 0.1)), 0.9), (Vector((0, 0, -0.1)), 0.65), (Vector((0.08, 0, 0)), 0.5)):
+            start = base + offset * scale
+            icon.rod(streak, start, start - direction * length * scale, 0.018, vertices=4)
+
+    bullet((-0.33, 0.3, 0.34), 1.35)
+    bullet((0.42, 0.1, -0.46), 1.1)
 
 
-# Side-on service revolver modelled on the reference photo, barrel to the right
+# Side-on long-barrel revolver modelled on the reference photo, barrel to the right
+# Frame, grip and hammer are each one extruded outline so the gun reads as one solid piece
 def fan_the_hammer(icon):
-    steel = toon("Blued", "2A2830", "4E4A56", "8A8694")
-    drum = toon("Drum", "3A3640", "5E5A66", "9A96A4")
+    steel = toon("DarkBlued", "16121A", "2E2A34", "4E4A56")
+    drum = toon("DarkDrum", "221E28", "3E3A46", "625E6C")
     flute = toon("Flute", "1E1820", "2A2830", "3A3640")
     wood = toon("Grip", "3A2018", "6A3A24", "94573A")
-    dx = -0.24
+    dx = -0.22
 
     def at(x, z, y=0):
         return (x + dx, y, z)
 
-    # Barrel with a rounded muzzle, top rib and a half-moon front sight
-    icon.rod(steel, at(0.2, 0.34), at(1.26, 0.34), 0.085, vertices=12)
-    icon.ball(steel, at(1.26, 0.34), 0.085, scale=(0.6, 1, 1))
-    icon.cube(steel, at(0.73, 0.42), (1.06, 0.05, 0.03))
-    icon.cylinder(steel, at(1.16, 0.44), 0.06, 0.04, 10, rotation=(90, 0, 0))
+    # Extrudes a side outline (x, z points, counterclockwise) through the gun's thickness
+    def outline(mat, points, depth, y=0):
+        def build(bm):
+            front = [bm.verts.new((x + dx, y - depth / 2, z)) for x, z in points]
+            back = [bm.verts.new((x + dx, y + depth / 2, z)) for x, z in points]
+            bm.faces.new(list(reversed(front)))
+            bm.faces.new(back)
+            for i in range(len(points)):
+                n = (i + 1) % len(points)
+                bm.faces.new((front[i], front[n], back[n], back[i]))
 
-    # Ejector rod under the barrel, ending in a round knob
-    icon.rod(steel, at(0.22, 0.2), at(0.82, 0.2), 0.035, vertices=8)
-    icon.ball(steel, at(0.84, 0.2), 0.055)
+        return icon.add(build, mat, (0, 0, 0))
 
-    # Fluted cylinder with a bevelled front
-    icon.rod(drum, at(-0.18, 0.29), at(0.17, 0.29), 0.21, vertices=14)
-    icon.cylinder(drum, at(0.2, 0.29), 0.21, 0.06, 14, rotation=(0, 90, 0), top=0.16)
-    for z in (0.23, 0.35):
-        icon.cube(flute, at(0.0, z, -0.22), (0.26, 0.02, 0.03))
+    # Frame: top strap over the cylinder, recoil shield, and the backstrap running down into the grip
+    outline(steel, [
+        (0.22, 0.12), (0.22, 0.44), (-0.36, 0.44), (-0.48, 0.38), (-0.56, 0.22),
+        (-0.62, 0.02), (-0.52, -0.06), (-0.30, -0.02), (-0.02, -0.02), (0.08, 0.08),
+    ], 0.14)
 
-    # Frame: top strap, rounded recoil shield and backstrap, bottom strap
-    icon.cube(steel, at(0.0, 0.52), (0.5, 0.12, 0.07))
-    icon.cube(steel, at(-0.31, 0.3), (0.2, 0.14, 0.44))
-    icon.cylinder(steel, at(-0.34, 0.44), 0.14, 0.14, 14, rotation=(90, 0, 0))
-    icon.cube(steel, at(-0.12, 0.1), (0.5, 0.12, 0.08))
+    # Hammer spur curling back off the top of the frame
+    outline(steel, [(-0.34, 0.4), (-0.42, 0.52), (-0.52, 0.6), (-0.62, 0.62), (-0.64, 0.57), (-0.54, 0.52), (-0.48, 0.42), (-0.46, 0.36)], 0.08)
 
-    # Hammer spur curling back with a rounded tip
-    icon.cube(steel, at(-0.44, 0.6), (0.1, 0.09, 0.22), rotation=(0, -40, 0))
-    icon.ball(steel, at(-0.53, 0.69), 0.075)
+    # Wooden grip wrapping the backstrap: wider than the frame so it hugs it, angled down and back
+    outline(wood, [
+        (-0.3, 0.0), (-0.44, 0.18), (-0.56, 0.24), (-0.66, 0.18), (-0.72, 0.0), (-0.8, -0.32),
+        (-0.88, -0.6), (-0.84, -0.76), (-0.66, -0.82), (-0.54, -0.74), (-0.48, -0.5), (-0.4, -0.22),
+    ], 0.2)
+    icon.cylinder(toon("Medallion", *GOLD), at(-0.58, -0.14, -0.11), 0.045, 0.02, 10, rotation=(90, 0, 0))
 
-    # Round trigger guard and a curved trigger
-    icon.torus(steel, at(-0.12, -0.04), 0.14, 0.025, rotation=(90, 0, 0), segments=16)
-    icon.cube(steel, at(-0.1, -0.01), (0.04, 0.05, 0.16), rotation=(0, 15, 0))
+    # Long barrel with a top rib, a ramp front sight and the ejector shroud underneath
+    icon.rod(steel, at(0.2, 0.32), at(1.38, 0.32), 0.08, vertices=12)
+    icon.cube(steel, at(0.79, 0.41), (1.18, 0.05, 0.03))
+    outline(steel, [(1.24, 0.4), (1.36, 0.4), (1.36, 0.5), (1.32, 0.5)], 0.04)
+    icon.cube(steel, at(0.48, 0.2), (0.56, 0.1, 0.1))
+    icon.ball(steel, at(0.76, 0.2), 0.05, scale=(1, 1, 1))
 
-    # Wooden grip angled down and back, rounded at the butt, with a medallion
-    icon.cube(wood, at(-0.55, -0.27), (0.34, 0.16, 0.74), rotation=(0, 20, 0))
-    icon.cylinder(wood, at(-0.68, -0.62), 0.17, 0.16, 14, rotation=(90, 0, 0))
-    icon.ball(wood, at(-0.36, -0.05), 0.1, scale=(1, 0.8, 1))
-    icon.cylinder(toon("Medallion", *GOLD), at(-0.5, -0.12, -0.1), 0.05, 0.03, 8, rotation=(90, 0, 0))
+    # Fluted cylinder in front of the frame
+    icon.rod(drum, at(-0.2, 0.24), at(0.18, 0.24), 0.2, vertices=14)
+    for z in (0.17, 0.31):
+        icon.cube(flute, at(-0.01, z, -0.21), (0.3, 0.02, 0.035))
+
+    # Round trigger guard under the frame and a curved trigger
+    icon.torus(steel, at(-0.18, -0.12), 0.13, 0.024, rotation=(90, 0, 0), segments=16)
+    icon.cube(steel, at(-0.17, -0.08), (0.04, 0.05, 0.16), rotation=(0, 15, 0))
+
+    # A little larger so the long barrel fills the card
+    grow = Matrix.Scale(1.12, 4)
+    for obj in icon.collection.objects:
+        obj.matrix_basis = grow @ obj.matrix_basis
 
 
 def bounty(icon):
@@ -542,7 +573,7 @@ def remove_scene(scene):
 BUILDERS = [
     ("ReaperSpecial", assimilate), ("ReaperUltimate", reapers_high),
     ("HunterPassive", collector), ("HunterSpecial", trap_layout), ("HunterUltimate", hunting_strike),
-    ("GunslingerPassive", deadeye), ("GunslingerSpecial", fan_the_hammer), ("GunslingerUltimate", bounty),
+    ("GunslingerPassive", deadly_rounds), ("GunslingerSpecial", fan_the_hammer), ("GunslingerUltimate", bounty),
     ("OutlawPassive", opportunist), ("OutlawSpecial", conceal), ("OutlawUltimate", ambush),
     ("Siege", siege),
     ("Duels", duels), ("Practice", practice), ("Queue", queue), ("Challenge", challenge),

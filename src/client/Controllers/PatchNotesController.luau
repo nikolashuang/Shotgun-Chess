@@ -13,7 +13,13 @@ local overlay = nil
 local PatchNotesController = {}
 
 local function FormatRelease(release)
-    local lines = {string.format("<b>v%s - %s</b>", release.Version, release.Title)}
+    local header = string.format("<b>v%s - %s</b>", release.Version, release.Title)
+
+    if release.Date then
+        header ..= string.format("  <font transparency=\"0.4\">%s</font>", release.Date)
+    end
+
+    local lines = {header}
 
     for _, note in ipairs(release.Notes) do
         table.insert(lines, "• " .. note)
