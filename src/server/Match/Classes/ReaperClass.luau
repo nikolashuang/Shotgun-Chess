@@ -45,12 +45,12 @@ function ReaperClass:OnPieceKilled(piece)
     self.Souls[soul.Id] = soul
 
     self.Side:Send("SoulAdded", soul.Id, soul.Type, soul.Column, soul.Row)
-    match:SendTo(match:GetOpponent(self.Side), "SoulAdded", soul.Id, soul.Type, soul.Column, soul.Row, true)
+    match:SendOthers(self.Side, "SoulAdded", soul.Id, soul.Type, soul.Column, soul.Row, true)
 end
 
 function ReaperClass:RemoveSouls(ids, isAbsorbed)
     self.Side:Send("SoulsRemoved", ids, isAbsorbed)
-    self.Match:SendTo(self.Match:GetOpponent(self.Side), "SoulsRemoved", ids)
+    self.Match:SendOthers(self.Side, "SoulsRemoved", ids)
 end
 
 -- payload.SoulId; the bonus move doesn't use up the king's own move, so it works before or after it

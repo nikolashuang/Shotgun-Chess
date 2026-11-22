@@ -4,6 +4,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local CampaignConfig = require(ReplicatedStorage.Shared.Campaign.CampaignConfig)
+local DevConfig = require(ReplicatedStorage.Shared.Player.DevConfig)
 local CampaignRules = require(ReplicatedStorage.Shared.Campaign.CampaignRules)
 local EncounterRules = require(script.Parent.EncounterRules)
 local MatchClass = require(ServerScriptService.Match.MatchClass)
@@ -34,6 +35,7 @@ local function GetPlayableRun(player, regionId, nodeId)
 
     local region = CampaignConfig.Regions[regionId]
     if not region or not region.Nodes[nodeId] then return nil end
+    if region.DevOnly and not DevConfig.IsDev(player) then return nil end
 
     local data = GetData(player)
     if not data then return nil end
@@ -77,10 +79,17 @@ local function FinishRegion(player, regionId, summary)
     local isReplay = CampaignRules.IsRegionComplete(data.Nodes, regionId)
     local gold, exp = CampaignRules.GetPayout(run, isReplay)
 
+    -- Testing in the dev region never touches the profile's gold or exp
+    if region.DevOnly then
+        gold, exp = 0, 0
+    end
+
     ProfileService.AddGold(player, gold)
     ProfileService.AddExp(player, exp)
 
-    data.Nodes[CampaignRules.GetNodeKey(regionId, region.Final)] = true
+    if not region.DevOnly then
+        data.Nodes[CampaignRules.GetNodeKey(regionId, region.Final)] = true
+    end
     data.Runs[regionId] = nil
 
     if region.Class and not data.Classes[region.Class] then
@@ -156,7 +165,13 @@ local function GetEnemies(run, regionId, nodeId)
 
     if mystery.Fight == "FallenKnight" then
         local tile = MysteryConfig.FallenKnight.TILE
-        return {{Type = "FallenKnight", Column = tile[1], Row = tile[2]}}
+        local enemies = {{Type = "FallenKnight", Column = tile[1], Row = tile[2]}}
+
+        for _, pawnTile in ipairs(MysteryConfig.FallenKnight.PAWN_TILES) do
+            table.insert(enemies, {Type = "FallenPawn", Column = pawnTile[1], Row = pawnTile[2]})
+        end
+
+        return enemies
     elseif mystery.Fight == "Ambush" then
         return EncounterRules.Generate(CampaignRules.GetPoints(regionId, nodeId), "Combat")
     end
@@ -358,7 +373,8 @@ local function StartMystery(player, regionId, nodeId)
     if not run then return end
 
     if not run.Mystery or run.Mystery.Node ~= nodeId then
-        local encounter = CampaignRules.RollMystery(run, Random.new())
+        -- Dev nodes are pinned to one encounter so each can be tested on demand
+        local encounter = node.Encounter or CampaignRules.RollMystery(run, Random.new())
         run.Mystery = {Node = nodeId, Encounter = encounter}
         run.LastMystery = encounter
     end
@@ -440,6 +456,11 @@ function CampaignService.Init()
             StartMystery(player, regionId, nodeId)
         elseif action == "Mystery" then
             ChooseMystery(player, regionId, nodeId, first)
+        elseif action == "ResetDev" and DevConfig.IsDev(player) then
+            -- Every visit to the dev region starts from a fresh run so every screen and fight can be seen again
+            ProfileService.ResetDevRegions(player)
+            ProfileService.Sync(player)
+            CampaignRemote:FireClient(player, "DevReset")
         end
     end)
 end

@@ -7,7 +7,9 @@ local PieceConfig = {
         Rook = 7,
         Queen = 9,
         -- Campaign mystery encounter: fought once, then fights beside the King for the rest of the run
-        FallenKnight = 7,
+        FallenKnight = 10,
+        -- Guard the Fallen Knight's throne; fight like normal pawns
+        FallenPawn = 4,
     },
 
     -- Damage a summoned piece deals when commanded onto an enemy
@@ -15,9 +17,10 @@ local PieceConfig = {
         Pawn = 1,
         Knight = 2,
         Bishop = 2,
-        Rook = 2,
+        Rook = 3,
         Queen = 4,
-        FallenKnight = 2,
+        FallenKnight = 4,
+        FallenPawn = 1,
     },
 
     -- Energy cost to summon

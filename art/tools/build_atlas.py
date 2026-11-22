@@ -6,7 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRAMES = os.path.join(ROOT, "frames")
 OUT_PNG = os.path.join(ROOT, "SpriteAtlas.png")
 OUT_LUAU = os.path.join(os.path.dirname(ROOT), "src", "shared", "Sprites", "SpriteConfig.luau")
-ASSET_ID = "rbxassetid://140500397630079"
+ASSET_ID = "rbxassetid://89880060139916"
 
 CELL = 32
 # Transparent gutter around every sprite so rotated or scaled sampling can't bleed into neighbors
@@ -40,7 +40,26 @@ FALLEN_RECOLOR = {
     (0x4E, 0x56, 0x6B, 255): (0x6C, 0xC4, 0xFF, 255),
     OUTLINE: (0x7F, 0xE3, 0xC8, 255),
 }
-SPECIAL = {"FallenKnight": ("Knight", FALLEN_RECOLOR)}
+FALLEN_EYE = (0x6C, 0xC4, 0xFF, 255)
+
+
+# Pawns have no face, so the Fallen Pawns get two glowing eyes on the head, following it as it bobs
+def add_pawn_eyes(frame):
+    frame = frame.copy()
+    alpha = frame.getchannel("A")
+    top = next((y for y in range(frame.height) if any(alpha.getpixel((x, y)) for x in range(frame.width))), None)
+    if top is None: return frame
+    row = top + 3
+    xs = [x for x in range(frame.width) if alpha.getpixel((x, row))]
+    if len(xs) < 6: return frame
+    center = (xs[0] + xs[-1]) // 2
+    for x in (center - 2, center + 1):
+        frame.putpixel((x, row), FALLEN_EYE)
+    return frame
+
+
+# name: (source piece, recolor, extra touch-up per frame or None)
+SPECIAL = {"FallenKnight": ("Knight", FALLEN_RECOLOR, None), "FallenPawn": ("Pawn", FALLEN_RECOLOR, add_pawn_eyes)}
 # name: (frames, seconds per frame, looped, flash frames)
 ANIMS = {
     "Idle":   (4, 0.22, True, []),
@@ -133,11 +152,14 @@ for piece in PIECES:
         rows.append((piece, anim, frames, black))
 
 special_rows = []
-for name, (source, mapping) in SPECIAL.items():
+for name, (source, mapping, touch_up) in SPECIAL.items():
     for anim, (count, _, _, flashes) in ANIMS.items():
         if anim == "Recoil": continue
         frames = [clean(Image.open(os.path.join(FRAMES, f"{source}_{anim}_{i}.png")), i in flashes) for i in range(count)]
-        special_rows.append((name, anim, [f if i in flashes else recolor(f, mapping) for i, f in enumerate(frames)]))
+        frames = [f if i in flashes else recolor(f, mapping) for i, f in enumerate(frames)]
+        if touch_up:
+            frames = [f if i in flashes or anim == "Death" else touch_up(f) for i, f in enumerate(frames)]
+        special_rows.append((name, anim, frames))
 
 # Gun sprites and grips come from art/tools/build_guns.py
 GUNS = json.load(open(os.path.join(FRAMES, "guns.json")))

@@ -259,13 +259,14 @@ end
 
 function PracticeAIService.TakeTurn(match, side)
     local turn = match.Turn
-    local speed = match:GetOpponent(side).Player:GetAttribute("GameSpeed") or 1
+    local rival = match:GetOpponent(side).Player
+    local speed = rival and rival:GetAttribute("GameSpeed") or 1
 
     -- False once the match ended or the turn moved on, which stops the AI
     local function Pause(seconds)
         task.wait(seconds)
 
-        return match.isActive and match.Turn == turn and not match.isSkipping
+        return match.isActive and match.Turn == turn and not side.isSkipping
     end
 
     task.spawn(function()

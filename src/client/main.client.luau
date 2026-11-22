@@ -1,3 +1,6 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local DuelConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Duel"):WaitForChild("DuelConfig"))
 local ActionPanelController = require(script.Parent.Controllers.ActionPanelController)
 local ArmoryController = require(script.Parent.Controllers.ArmoryController)
 local BoardController = require(script.Parent.Controllers.BoardController)
@@ -6,6 +9,7 @@ local PatchNotesController = require(script.Parent.Controllers.PatchNotesControl
 local CombatHudController = require(script.Parent.Controllers.CombatHudController)
 local CrtController = require(script.Parent.Controllers.CrtController)
 local DevPanelController = require(script.Parent.Controllers.DevPanelController)
+local DuelPlaceController = require(script.Parent.Controllers.DuelPlaceController)
 local GameMenuController = require(script.Parent.Controllers.GameMenuController)
 local InputController = require(script.Parent.Controllers.InputController)
 local MenuController = require(script.Parent.Controllers.MenuController)
@@ -16,6 +20,22 @@ local SingleplayerController = require(script.Parent.Controllers.SingleplayerCon
 local ShopController = require(script.Parent.Controllers.ShopController)
 local SummonPanelController = require(script.Parent.Controllers.SummonPanelController)
 local TurnController = require(script.Parent.Controllers.TurnController)
+
+-- The duel place has only the game board: no menus, campaign or shop
+if game.PlaceId == DuelConfig.DUEL_PLACE_ID then
+    ActionPanelController.Init()
+    BoardController.Init(ActionPanelController)
+    SummonPanelController.Init()
+    TurnController.Init()
+    InputController.Init(ActionPanelController, TurnController)
+    CombatHudController.Init()
+    CrtController.Init()
+    SettingsController.Init(InputController)
+    GameMenuController.Init(BoardController.LeaveMatch, nil, SettingsController.Open, SettingsController.Close, DuelPlaceController.Surrender)
+    ProfileController.Init()
+    DuelPlaceController.Init()
+    return
+end
 
 ActionPanelController.Init()
 BoardController.Init(ActionPanelController)

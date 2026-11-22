@@ -226,15 +226,15 @@ function MenuController.Init(openSettings, openPatchNotes)
         -- Screens with their own sub-views (Multiplayer) step back through them themselves
         if screen:GetAttribute("HandlesBack") then continue end
 
-        screen:WaitForChild("Root"):WaitForChild("BackButton").Activated:Connect(function()
+        screen:WaitForChild("BackButton").Activated:Connect(function()
             screen.Enabled = false
             menu.Enabled = true
         end)
     end
 
-    -- Every screen keeps Settings beside its Menu button at the bottom right; Singleplayer wires its own
+    -- Every screen keeps Settings beside its Menu button at the bottom right screen edge; Singleplayer wires its own
     for _, name in ipairs({"MultiplayerScreen", "ArmoryScreen", "ShopScreen", "CampaignScreen"}) do
-        playerGui:WaitForChild(name):WaitForChild("Root"):WaitForChild("SettingsButton").Activated:Connect(openSettings)
+        playerGui:WaitForChild(name):WaitForChild("SettingsButton").Activated:Connect(openSettings)
     end
 
     for _, button in pairs(root:GetChildren()) do

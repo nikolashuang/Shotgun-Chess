@@ -143,14 +143,16 @@ function PieceRigClass.new(board, pieceType, team)
     self.MarkEffect = nil
     self.AuraEffect = nil
 
-    -- The Fallen Knight burns with a blue-green aura drawn behind his sprite
-    if pieceType == "FallenKnight" then
+    -- The Fallen Knight and his pawns burn with a blue-green aura drawn behind their sprites
+    if pieceType == "FallenKnight" or pieceType == "FallenPawn" then
         local aura = EffectSpriteClass.new("Aura", self.Rig)
-        aura.Image.Size = UDim2.fromScale(aura.Width, aura.Height)
+        -- Pawns are shorter, so theirs is smaller
+        local scale = pieceType == "FallenPawn" and 0.75 or 1
+        aura.Image.Size = UDim2.fromScale(aura.Width * scale, aura.Height * scale)
         aura.Image.ZIndex = 2
         -- See-through so the knight himself still reads in front of it
         aura.Image.ImageTransparency = 0.65
-        aura.BasePosition = UDim2.fromScale(0.5, BODY_BOTTOM - aura.Height / 2)
+        aura.BasePosition = UDim2.fromScale(0.5, BODY_BOTTOM - aura.Height * scale / 2)
 
         self.AuraEffect = aura
     end

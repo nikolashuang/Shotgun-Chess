@@ -1,9 +1,9 @@
 # Run inside Blender (Text Editor > Run Script) with art/ShotgunChessSprites.blend open.
-# Builds one small drawing per class ability (plus the Siege, Duels, Practice, Queue and Challenge cards) in a temporary scene,
+# Builds one small drawing per class ability (plus the Siege, Duels, Practice, Queue, Challenge and Global Queue cards) in a temporary scene,
 # renders each one to art/armory/icons/<Name>.png, writes the scene to art/ArmoryIcons.blend
 # and removes it again so the sprite file is left as it was. build_armory_art.py outlines and packs the renders.
 import bpy, bmesh, math, os
-from mathutils import Vector, Euler, Matrix
+from mathutils import Vector, Euler, Matrix, noise
 
 ROOT = os.path.dirname(os.path.dirname(bpy.data.filepath))
 OUT = os.path.join(ROOT, "art", "armory", "icons")
@@ -97,6 +97,8 @@ SOUL_CORE = "E8FFF8"
 ENERGY = "F6D36A"
 TARGET = "C8644F"
 SPARK = "FFD27A"
+OCEAN = ("2E4452", "4F7482", "8FB0AA")
+LAND = ("3E5230", "5F7E42", "8AA860")
 
 
 def build_torus(bm, major, minor, major_segments, minor_segments, arc=2 * math.pi):
@@ -174,6 +176,18 @@ class Icon:
                 bm.faces.new((front[i], back[i], back[n], front[n]))
 
         return self.add(build, mat, location, rotation)
+
+    # A copy of a model already in the sprite file, sharing its mesh and materials
+    def copy(self, name, location, rotation=(0, 0, 0), scale=(1, 1, 1)):
+        obj = bpy.data.objects[name].copy()
+        # The sprite file keeps its source models hidden from renders
+        obj.hide_render = False
+        obj.location = location
+        obj.rotation_euler = Euler([math.radians(r) for r in rotation])
+        obj.scale = scale
+        self.collection.objects.link(obj)
+
+        return obj
 
     # A rod between two points
     def rod(self, mat, start, end, radius, vertices=6):
@@ -433,9 +447,11 @@ def shotgun(icon, angle, double=False):
     icon.rod(wood, d * 0.2 - n * 0.13, d * 0.5 - n * 0.13, 0.09, vertices=8)
 
 
+# Two Pumps crossed with their barrels up, copied from the hand-made "Shotgun" model the Pump sprite is rendered from
+# The second is mirrored so it points left, and sits in front
 def duels(icon):
-    shotgun(icon, 45, double=True)
-    shotgun(icon, 135, double=True)
+    icon.copy("Shotgun", (0, 0, 0.05), rotation=(0, -45, 0), scale=(0.85, 0.85, 0.85))
+    icon.copy("Shotgun", (0, -0.3, 0.05), rotation=(0, 45, 0), scale=(-0.85, 0.85, 0.85))
 
 
 def practice(icon):
@@ -474,6 +490,25 @@ def challenge(icon):
     icon.rod(ink, (0.82, -0.05, 0.48), (0, -0.05, -0.12), 0.025)
     icon.cylinder(toon("Wax", *RUST), (0, -0.1, -0.12), 0.3, 0.08, 14, rotation=(90, 0, 0))
     icon.star(glow("Spark", SPARK), (0, -0.16, -0.12), 0.16, 0.07, 0.04, rotation=(FACE, 0, 0))
+
+
+# The Earth for the Global Queue: continents scattered by noise over an ocean sphere
+def globe(icon):
+    ocean = toon("Ocean", *OCEAN)
+    land = toon("Land", *LAND)
+
+    obj = icon.add(lambda bm: bmesh.ops.create_uvsphere(bm, u_segments=40, v_segments=20, radius=0.95), ocean, (0, 0, 0))
+    obj.data.materials.append(land)
+
+    # Fixed offset so every build lands the continents in the same place
+    offset = Vector((3.1, 7.4, 1.9))
+    for poly in obj.data.polygons:
+        center = Vector(poly.center)
+        if noise.noise(center * 1.7 + offset) + 0.4 * noise.noise(center * 4 + offset) > 0.08:
+            poly.material_index = 1
+
+    obj.rotation_euler = Euler((0, math.radians(-20), 0))
+    obj.scale = (1.15, 1.15, 1.15)
 
 
 # Leather coin pouch tied with a gold cord, a coin leaning on the front
@@ -645,7 +680,7 @@ BUILDERS = [
     ("OutlawPassive", opportunist), ("OutlawSpecial", conceal), ("OutlawUltimate", ambush),
     ("Siege", siege),
     ("Duels", duels), ("Practice", practice), ("Queue", queue), ("Challenge", challenge),
-    ("Pouch", pouch),
+    ("Pouch", pouch), ("GlobalQueue", globe),
     ("RestBandage", rest_bandage), ("RestTrain", rest_train), ("RestUpgrade", rest_upgrade),
 ]
 

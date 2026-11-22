@@ -31,7 +31,7 @@ function PieceRules.GetMoves(pieceType, team, column, row, isBlocked)
         return true
     end
 
-    if pieceType == "Pawn" then
+    if pieceType == "Pawn" or pieceType == "FallenPawn" then
         TryAdd(column, row + PieceRules.GetForward(team))
     elseif pieceType == "Knight" then
         for _, offset in pairs(KNIGHT) do
@@ -76,7 +76,7 @@ function PieceRules.GetAttacks(pieceType, team, column, row, isBlocked, isEnemy)
         table.insert(attacks, {Column = toColumn, Row = toRow})
     end
 
-    if pieceType == "Pawn" then
+    if pieceType == "Pawn" or pieceType == "FallenPawn" then
         local forward = PieceRules.GetForward(team)
         TryAttack(column - 1, row + forward)
         TryAttack(column + 1, row + forward)

@@ -5,7 +5,7 @@ local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
 local EnergyConfig = CombatConfig.Energy
 
 -- One player's half of a match: their king, energy, ultimate, class and turn usage
--- Campaign matches have a single White side; duels have a White and a Black side
+-- Campaign matches have a single White side; duels have a White and a Black side, 2v2 two of each
 local SideClass = {}
 
 SideClass.__index = SideClass
@@ -15,6 +15,8 @@ function SideClass.new(match, player, team, king, className)
 
     self.Match = match
     self.Player = player
+    -- Key in match.Sides: the team, or "White2"/"Black2" for the second 2v2 player
+    self.Key = team
 
     self.Team = team
     self.EnemyTeam = team == "White" and "Black" or "White"
@@ -35,6 +37,15 @@ function SideClass.new(match, player, team, king, className)
 
     -- Seconds left on the duel chess clock; nil outside duels
     self.Clock = nil
+    -- A stunned duel King's turn is being skipped
+    self.isSkipping = false
+
+    -- 2v2: the player ended their part of the team's turn, is out (king dead, clock out or left), left the match,
+    -- or voted to surrender
+    self.hasEndedTurn = false
+    self.isOut = false
+    self.isDisconnected = false
+    self.wantsSurrender = false
 
     -- Practice AI sides only: AIConfig rating key and the piece it is saving energy for
     self.AIRating = nil

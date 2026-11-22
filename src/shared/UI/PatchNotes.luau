@@ -1,10 +1,30 @@
 -- Game version shown in the corner of every screen, and the patch notes on the main menu
 -- One release per day: bump the last number each day, and the middle one (resetting the last) only for a huge update
 local PatchNotes = {
-    VERSION = "0.4.1",
+    VERSION = "0.5.0",
 
     -- Newest first
     Releases = {
+        {
+            Version = "0.5.0",
+            Date = "Nov 22",
+            Title = "Multiplayer Revamp",
+            Notes = {
+                "Duels now start by picking 1v1 or 2v2, then Global Queue or Challenge.",
+                "Global Queue (1v1): get matched with players from every server, not just yours. Matches play on their own duel server and send you back to the lobby with your rewards when they end.",
+                "Duel servers load you straight onto the board, wait for both players, then count down from 3 before the clocks start.",
+                "In a global duel, Menu has Resume, Settings and Surrender, and a Surrender button sits below the energy bar. Surrendering pays nothing, same as leaving.",
+                "If your rival never shows up, you're sent back and put straight into the queue again.",
+                "2v2 Challenge: open a lobby and invite a teammate and two rivals. Both teammates act together on their team's turn, each with their own King, energy and 5-minute clock.",
+                "In 2v2 a team loses once both of its Kings fall, and shots and commands never hit your teammate.",
+                "If your teammate disconnects, fight on 1v2 for double rewards or surrender. Both teammates can also vote to surrender together.",
+                "2v2 Global Queue is coming soon.",
+                "New card art: an Earth for Global Queue, and two crossed Pump shotguns for Duels.",
+                "Settings and Menu buttons now sit at the very bottom right of every screen, clear of the panels and the version number.",
+                "Every action now shows its energy cost, and a Move indicator beside Actions pulses while your King can still move this turn.",
+                "Your King's card is now labelled King's Health, and the Fallen Knight gets his own health card at the top right while he fights beside you.",
+            },
+        },
         {
             Version = "0.4.1",
             Date = "Nov 21",
@@ -18,6 +38,7 @@ local PatchNotes = {
                 "Rest Sites now have their own screen: your King rests by a campfire with his party, or with the Fallen Knight once he joins, and you pick Rest, Train or Upgrade Shotgun from illustrated cards.",
                 "Leaving in the middle of a region now saves your run exactly where you were.",
                 "Rest Sites, Treasure Hunts and Mystery encounters now give XP too.",
+                "Every Mystery encounter now has its own illustrated screen, and the Fallen Knight's eye lights up before you face him.",
             },
         },
         {

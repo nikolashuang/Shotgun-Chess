@@ -1,4 +1,5 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
@@ -6,6 +7,7 @@ local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 local AtlasImage = require(script.Parent.Parent.UI.AtlasImage)
 local ShotgunController = require(script.Parent.ShotgunController)
 local SummonPanelController = require(script.Parent.SummonPanelController)
+local PieceController = require(script.Parent.PieceController)
 
 local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BoardRemote")
 
@@ -18,6 +20,14 @@ local DIVIDER_COLOR = Color3.fromHex("271F29")
 local DIVIDER_WIDTH = 2
 local HEALTH_DIVIDER_WIDTH = 1
 
+-- Pieces that join the player's side and get their own health card, by the name shown beside it
+local COMPANION_NAMES = {
+    FallenKnight = "Fallen Knight",
+}
+-- Pixels of the companion's idle sprite cropped for its portrait, like the King's head on his card
+local PORTRAIT_SIZE = 12
+local PORTRAIT_INSET = 10
+
 local fireLabel = nil
 local gunIcon = nil
 local slugFrame = nil
@@ -29,11 +39,13 @@ local energyBar = nil
 local energyCount = nil
 local dividerCount = 0
 local shotgunName = nil
-local kingHealthText = nil
-local kingHealthBar = nil
-local kingHealthFill = nil
+local kingCard = nil
 local kingMaxHealth = 1
-local kingDividerCount = 0
+local companionCard = nil
+local companionLabel = nil
+-- The companion piece on the board and the health its card last showed
+local companionId = nil
+local companionShown = nil
 
 local CombatHudController = {}
 
@@ -44,7 +56,7 @@ local function UpdateFireLabel(mode)
     if mode == "Alt" and weapon.AltMode then
         fireLabel.Text = ALT_MODE_NAMES[weapon.AltMode]
     else
-        fireLabel.Text = weapon.DisplayName
+        fireLabel.Text = "Shoot"
     end
 end
 
@@ -115,22 +127,81 @@ local function Update(state)
     CombatHudController.SetKingHealth(state.KingHealth, state.KingMaxHealth)
 end
 
--- The king portrait's health beside the turn bar; maxHealth can be left out after the first call
-function CombatHudController.SetKingHealth(health, maxHealth)
-    if not kingHealthFill then return end
+-- A portrait card's health text and bar, with one tick per point of max health
+local function NewHealthCard(frame)
+    local bar = frame:WaitForChild("HealthBar")
 
-    kingMaxHealth = maxHealth or kingMaxHealth
+    return {
+        Frame = frame,
+        Text = frame:WaitForChild("HealthText"),
+        Bar = bar,
+        Fill = bar:WaitForChild("Fill"),
+        DividerCount = 0,
+    }
+end
 
-    if kingDividerCount ~= kingMaxHealth then
-        DrawDividers(kingHealthBar, kingHealthFill, kingMaxHealth, HEALTH_DIVIDER_WIDTH)
-        kingDividerCount = kingMaxHealth
+local function DrawHealthCard(card, health, maxHealth)
+    if card.DividerCount ~= maxHealth then
+        DrawDividers(card.Bar, card.Fill, maxHealth, HEALTH_DIVIDER_WIDTH)
+        card.DividerCount = maxHealth
     end
 
     -- Revolver hits deal half points
     local shown = health % 1 == 0 and string.format("%d", health) or string.format("%.1f", health)
 
-    kingHealthFill.Size = UDim2.fromScale(math.clamp(health / kingMaxHealth, 0, 1), 1)
-    kingHealthText.Text = string.format("%s/%d", shown, kingMaxHealth)
+    card.Fill.Size = UDim2.fromScale(math.clamp(health / maxHealth, 0, 1), 1)
+    card.Text.Text = string.format("%s/%d", shown, maxHealth)
+end
+
+-- The king portrait's health beside the turn bar; maxHealth can be left out after the first call
+function CombatHudController.SetKingHealth(health, maxHealth)
+    if not kingCard then return end
+
+    kingMaxHealth = maxHealth or kingMaxHealth
+    DrawHealthCard(kingCard, health, kingMaxHealth)
+end
+
+--COMPANIONS--
+
+local function ShowCompanion(id, pieceType)
+    companionId = id
+    companionShown = nil
+    companionLabel.Text = COMPANION_NAMES[pieceType]
+
+    local portrait = companionCard.Frame.PortraitFrame.Portrait
+    portrait.Image = SpriteConfig.ASSET_ID
+    portrait.ImageRectOffset = Vector2.new(
+        SpriteConfig.Columns[pieceType] + PORTRAIT_INSET,
+        SpriteConfig.Pieces[pieceType].Idle + SpriteConfig.HeadRows[pieceType]
+    )
+    portrait.ImageRectSize = Vector2.new(PORTRAIT_SIZE, PORTRAIT_SIZE)
+
+    companionCard.Frame.Visible = true
+    companionLabel.Visible = true
+end
+
+local function HideCompanion()
+    companionId = nil
+    companionCard.Frame.Visible = false
+    companionLabel.Visible = false
+end
+
+-- Follows the companion's board health, so every way it can be hurt or healed shows up; gone once it dies
+local function UpdateCompanion()
+    if not companionId then return end
+
+    local piece = PieceController.Get(companionId)
+    if not piece then
+        HideCompanion()
+        return
+    end
+
+    local health, maxHealth = piece.Rig.Health, piece.Rig.MaxHealth
+    if not health or not maxHealth then return end
+    if companionShown == health then return end
+
+    companionShown = health
+    DrawHealthCard(companionCard, health, maxHealth)
 end
 
 local init = false
@@ -154,18 +225,27 @@ function CombatHudController.Init()
     energyFill = energyBar:WaitForChild("Fill")
     energyCount = energyPanel:WaitForChild("EnergyCount")
 
-    local kingHealth = root:WaitForChild("TurnBar"):WaitForChild("KingHealth")
-    kingHealthText = kingHealth:WaitForChild("HealthText")
-    kingHealthBar = kingHealth:WaitForChild("HealthBar")
-    kingHealthFill = kingHealthBar:WaitForChild("Fill")
+    kingCard = NewHealthCard(root:WaitForChild("TurnBar"):WaitForChild("KingHealth"))
+    companionCard = NewHealthCard(root:WaitForChild("CompanionHealth"))
+    companionLabel = root:WaitForChild("CompanionLabel")
+    HideCompanion()
 
     ShotgunController.OnModeChanged = UpdateFireLabel
 
-    BoardRemote.OnClientEvent:Connect(function(action, state)
-        if action ~= "TurnState" then return end
-
-        Update(state)
+    BoardRemote.OnClientEvent:Connect(function(action, ...)
+        if action == "TurnState" then
+            Update(...)
+        elseif action == "MatchStarted" then
+            HideCompanion()
+        elseif action == "PieceAdded" then
+            local id, pieceType, team = ...
+            if team == "White" and COMPANION_NAMES[pieceType] then
+                ShowCompanion(id, pieceType)
+            end
+        end
     end)
+
+    RunService.Heartbeat:Connect(UpdateCompanion)
 end
 
 return CombatHudController

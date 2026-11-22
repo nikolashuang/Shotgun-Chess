@@ -25,7 +25,7 @@ end
 local function GetControlledTiles(context, pieceType, team, column, row, ignoreKey)
     local tiles = {}
 
-    if pieceType == "Pawn" then
+    if pieceType == "Pawn" or pieceType == "FallenPawn" then
         local forward = PieceRules.GetForward(team)
         tiles[GetKey(column - 1, row + forward)] = true
         tiles[GetKey(column + 1, row + forward)] = true

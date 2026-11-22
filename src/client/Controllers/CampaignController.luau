@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
 local CampaignConfig = require(ReplicatedStorage.Shared.Campaign.CampaignConfig)
+local DevConfig = require(ReplicatedStorage.Shared.Player.DevConfig)
 local CampaignRules = require(ReplicatedStorage.Shared.Campaign.CampaignRules)
 local CampaignArt = require(ReplicatedStorage.Shared.Campaign.CampaignArt)
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
@@ -53,7 +54,7 @@ local MYSTERY_TEXT = {
         Title = "Fallen Knight",
         Body = "Loyalty doesn't allow him to leave his dead King's throne, but that could change...",
         Choices = {
-            {"Challenge", "Challenge the Knight", "Win and he joins your run"},
+            {"Challenge", "Challenge the Knight", ""},
             {"Leave", "Continue walking", ""},
         },
     },
@@ -125,8 +126,15 @@ local pouch = nil
 local restPanel = nil
 local restFire = nil
 local mysteryPanel = nil
+local devButton = nil
 -- The encounter shown in the mystery panel
 local mysteryEncounter = nil
+local mysteryBackground = nil
+local gunsmith = nil
+local eyeGlow = nil
+local mysteryFade = nil
+-- The Fallen Knight's eyes are lighting up before his fight
+local isMysteryBusy = false
 local treasurePanel = nil
 local treasureGrid = nil
 local tileTemplate = nil
@@ -221,6 +229,8 @@ local function FormatReward(regionId, nodeId)
 
     if node.Type == "Treasure" then return string.format("Up to %d Gold   %d XP to pouch", CampaignConfig.Treasure.Rewards[1], exp) end
     if node.Type == "Rest" then return string.format("Checkpoint   %d XP to pouch", exp) end
+    -- Dev nodes say which encounter they're pinned to
+    if node.Encounter then return string.format("%s   %d XP to pouch", MYSTERY_TEXT[node.Encounter].Title, exp) end
     if node.Type == "Mystery" then return string.format("Something waits down this road...   %d XP to pouch", exp) end
 
     return string.format("%d Gold   %d XP to pouch", gold, exp)
@@ -260,6 +270,7 @@ end
 local function ShowView(isWorld)
     worldView.Visible = isWorld
     areaView.Visible = not isWorld
+    devButton.Visible = isWorld and DevConfig.IsDev(Players.LocalPlayer)
     backButton.Label.Text = isWorld and "Back" or "World Map"
 
     if isWorld then
@@ -757,17 +768,23 @@ local function ShowMystery(encounter)
     local run = GetRun(currentRegion)
 
     mysteryEncounter = encounter
+    isMysteryBusy = false
+    mysteryBackground.Image = CampaignArt.MysteryBackgrounds[encounter]
     mysteryPanel.Title.Text = text.Title
     mysteryPanel.Body.Text = text.Body
+    mysteryPanel.Health.Text = run and string.format("Health %d/%d", run.Health, run.MaxHealth) or ""
     mysteryPanel.CloseButton.Visible = false
+    mysteryPanel.Choices.Visible = true
+    mysteryFade.BackgroundTransparency = 1
+    eyeGlow.ImageTransparency = 1
+    gunsmith.Visible = encounter == "Gunsmith"
 
     for i = 1, 3 do
-        local button = mysteryPanel["Choice" .. i]
-        local note = mysteryPanel["Note" .. i]
+        local button = mysteryPanel.Choices["Choice" .. i]
+        local note = button.Note
         local choice = text.Choices[i]
 
         button.Visible = choice ~= nil
-        note.Visible = choice ~= nil
 
         if choice then
             local canChoose, reason = CampaignRules.CanChooseMystery(run, encounter, choice[1])
@@ -781,13 +798,55 @@ local function ShowMystery(encounter)
 
     mysteryPanel.Visible = true
     playButton.Visible = false
+
+    if encounter == "Gunsmith" then
+        task.spawn(function()
+            local frame = 0
+            local size = CampaignArt.GUNSMITH_FRAME
+
+            while mysteryPanel.Visible and mysteryEncounter == "Gunsmith" do
+                gunsmith.ImageRectOffset = Vector2.new(frame % CampaignArt.GUNSMITH_COLUMNS * size.X, frame // CampaignArt.GUNSMITH_COLUMNS * size.Y)
+                frame = (frame + 1) % CampaignArt.GUNSMITH_FRAMES
+                task.wait(CampaignArt.GUNSMITH_TIME)
+            end
+        end)
+    end
+end
+
+-- Transparency, then how long it holds, as the Fallen Knight's eye flickers on like he's waking up
+local EYE_FLICKER = {{0.4, 0.06}, {1, 0.14}, {0.6, 0.06}, {1, 0.3}}
+local EYE_WAKE_HOLD = 1.4
+
+-- The outline of the Fallen Knight's eye flickers on and stays lit, then the screen fades out before his board
+local function PlayEyeGlow()
+    eyeGlow.ImageTransparency = 1
+    task.wait(0.4)
+
+    for _, step in ipairs(EYE_FLICKER) do
+        eyeGlow.ImageTransparency = step[1]
+        task.wait(step[2])
+    end
+
+    Tween(eyeGlow, 0.35, {ImageTransparency = 0})
+    task.wait(0.35 + EYE_WAKE_HOLD)
+
+    Tween(mysteryFade, 0.5, {BackgroundTransparency = 0})
+    task.wait(0.5)
 end
 
 local function ChooseMystery(index)
-    local button = mysteryPanel["Choice" .. index]
-    if not button:GetAttribute("Enabled") or mysteryPanel.CloseButton.Visible then return end
+    local button = mysteryPanel.Choices["Choice" .. index]
+    if not button:GetAttribute("Enabled") or mysteryPanel.CloseButton.Visible or isMysteryBusy then return end
 
-    CampaignRemote:FireServer("Mystery", currentRegion, selectedNode, button:GetAttribute("Choice"))
+    local choice = button:GetAttribute("Choice")
+
+    if choice == "Challenge" then
+        isMysteryBusy = true
+        mysteryPanel.Choices.Visible = false
+        PlayEyeGlow()
+    end
+
+    CampaignRemote:FireServer("Mystery", currentRegion, selectedNode, choice)
 end
 
 -- What a mystery choice did, shown in the panel before it closes
@@ -874,10 +933,7 @@ local function ShowResult(summary)
             local result = DescribeMystery(summary)
             mysteryPanel.Body.Text = result
 
-            for i = 1, 3 do
-                mysteryPanel["Choice" .. i].Visible = false
-                mysteryPanel["Note" .. i].Visible = false
-            end
+            mysteryPanel.Choices.Visible = false
 
             mysteryPanel.CloseButton.Visible = true
             info.Text = result
@@ -936,7 +992,7 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
 
     local root = screen:WaitForChild("Root")
     header = root:WaitForChild("Header")
-    backButton = root:WaitForChild("BackButton")
+    backButton = screen:WaitForChild("BackButton")
 
     worldView = root:WaitForChild("WorldView")
     worldCanvas = worldView:WaitForChild("Canvas")
@@ -973,10 +1029,44 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
     restFire.Position = UDim2.fromScale(fireRect[1], fireRect[2])
     restFire.Size = UDim2.fromScale(fireRect[3], fireRect[4])
 
-    mysteryPanel = areaView:WaitForChild("MysteryPanel")
+    devButton = root:WaitForChild("DevButton")
+    -- The server wipes the dev run first, then says when to open it
+    devButton.Activated:Connect(function()
+        if isAnimating then return end
+        CampaignRemote:FireServer("ResetDev")
+    end)
+
+    mysteryPanel = playerGui:WaitForChild("MysteryScreen"):WaitForChild("Root")
+
+    -- Like the camp, each encounter's art covers the whole screen and keeps its shape
+    local mysteryScene = mysteryPanel:WaitForChild("Scene")
+
+    local function FitMysteryScene()
+        local size = mysteryPanel.AbsoluteSize
+        local width = math.max(size.X, size.Y * CampaignArt.MYSTERY_ASPECT)
+        mysteryScene.Size = UDim2.fromOffset(width, width / CampaignArt.MYSTERY_ASPECT)
+    end
+
+    mysteryPanel:GetPropertyChangedSignal("AbsoluteSize"):Connect(FitMysteryScene)
+    FitMysteryScene()
+
+    mysteryBackground = mysteryScene:WaitForChild("Background")
+    gunsmith = mysteryScene:WaitForChild("Gunsmith")
+    gunsmith.Image = CampaignArt.GUNSMITH_SHEET
+    gunsmith.ImageRectSize = CampaignArt.GUNSMITH_FRAME
+    local smithRect = CampaignArt.GUNSMITH_RECT
+    gunsmith.Position = UDim2.fromScale(smithRect[1], smithRect[2])
+    gunsmith.Size = UDim2.fromScale(smithRect[3], smithRect[4])
+
+    eyeGlow = mysteryScene:WaitForChild("EyeGlow")
+    eyeGlow.Image = CampaignArt.EYE_WAKE
+    local eyeRect = CampaignArt.EYE_RECT
+    eyeGlow.Position = UDim2.fromScale(eyeRect[1], eyeRect[2])
+    eyeGlow.Size = UDim2.fromScale(eyeRect[3], eyeRect[4])
+    mysteryFade = mysteryPanel:WaitForChild("Fade")
 
     for i = 1, 3 do
-        mysteryPanel:WaitForChild("Choice" .. i).Activated:Connect(function()
+        mysteryPanel:WaitForChild("Choices"):WaitForChild("Choice" .. i).Activated:Connect(function()
             ChooseMystery(i)
         end)
     end
@@ -1056,6 +1146,8 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
             else
                 ShowMystery(data.Encounter)
             end
+        elseif action == "DevReset" then
+            CampaignController.ShowRegion("Dev")
         elseif action == "MysteryFight" then
             mysteryPanel.Visible = false
             StartBattle()

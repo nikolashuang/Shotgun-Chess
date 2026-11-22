@@ -58,11 +58,14 @@ function MatchClass.new(player, shotgunName, className, enemies, aiRating)
 
     self.Sides = {}
 
-    -- Phase is "PlayerTurn" while ActiveTeam's player acts, "EnemyTurn" while the AI acts, or "Over"
+    -- Phase is "PlayerTurn" while ActiveTeam's player acts, "EnemyTurn" while the AI acts, "Countdown" before a
+    -- duel place match begins, or "Over"
     self.Phase = "PlayerTurn"
     self.ActiveTeam = "White"
     self.Turn = 1
     self.TurnStartedAt = 0
+    -- Seconds left before the clocks start, during the "Countdown" phase
+    self.CountdownLeft = nil
 
     self.Random = Random.new()
 
@@ -70,9 +73,8 @@ function MatchClass.new(player, shotgunName, className, enemies, aiRating)
     self.AIMistakes = 0
 
     self.isDuel = false
+    self.isTeamDuel = false
     self.isActive = true
-    -- A stunned duel King's turn is being skipped
-    self.isSkipping = false
 
     local side = self:AddSide(player, "White", BoardConfig.KING_START_COLUMN, BoardConfig.KING_START_ROW, shotgunName, className)
 
@@ -95,25 +97,50 @@ function MatchClass.newDuel(whitePlayer, whiteShotgun, whiteClass, blackPlayer, 
     self:AddSide(blackPlayer, "Black", column, row, blackShotgun, blackClass)
 
     for _, side in pairs(self.Sides) do
-        side.Clock = DuelConfig.CLOCK
-
-        -- Duel kings are board pieces too, so shots, commands and traps can reach them
-        side.King.Id = self.NextPieceId
-        self.NextPieceId += 1
-        self.Pieces[side.King.Id] = side.King
+        self:AddDuelKing(side)
     end
 
     return self
 end
 
-function MatchClass:AddSide(player, team, column, row, shotgunName, className)
+-- 2v2: whites and blacks are each two {Player, Shotgun, Class}; teammates start side by side on their back row
+-- Both players on a team act during the team's turn, each with their own king, energy and clock
+function MatchClass.newTeamDuel(whites, blacks)
+    local white, black = whites[1], blacks[1]
+    local self = MatchClass.newDuel(white.Player, white.Shotgun, white.Class, black.Player, black.Shotgun, black.Class)
+
+    self.isTeamDuel = true
+
+    local column = BoardConfig.KING_START_COLUMN + 1
+    local row = BoardConfig.KING_START_ROW
+    local secondWhite = self:AddSide(whites[2].Player, "White", column, row, whites[2].Shotgun, whites[2].Class, "White2")
+    local secondBlack = self:AddSide(blacks[2].Player, "Black", MirrorRules.Tile(column), MirrorRules.Tile(row), blacks[2].Shotgun, blacks[2].Class, "Black2")
+
+    self:AddDuelKing(secondWhite)
+    self:AddDuelKing(secondBlack)
+
+    return self
+end
+
+-- Duel kings are board pieces too, so shots, commands and traps can reach them
+function MatchClass:AddDuelKing(side)
+    side.Clock = DuelConfig.CLOCK
+
+    side.King.Id = self.NextPieceId
+    self.NextPieceId += 1
+    self.Pieces[side.King.Id] = side.King
+end
+
+-- key defaults to the team; the second player on a 2v2 team gets its own key
+function MatchClass:AddSide(player, team, column, row, shotgunName, className, key)
     local king = KingClass.new(player, column, row, shotgunName, className, team)
     local side = SideClass.new(self, player, team, king, className)
 
     local component = ClassComponents[className]
     side.Ability = component and component.new(side)
 
-    self.Sides[team] = side
+    side.Key = key or team
+    self.Sides[side.Key] = side
 
     return side
 end
@@ -129,6 +156,32 @@ end
 -- nil in campaign matches, where the other team is the AI
 function MatchClass:GetOpponent(side)
     return self.Sides[side.EnemyTeam]
+end
+
+-- Every side on the team, still playing or not
+function MatchClass:GetTeamSides(team)
+    local sides = {}
+
+    for _, side in pairs(self.Sides) do
+        if side.Team == team then
+            table.insert(sides, side)
+        end
+    end
+
+    return sides
+end
+
+function MatchClass:GetOpponents(side)
+    return self:GetTeamSides(side.EnemyTeam)
+end
+
+-- nil outside 2v2
+function MatchClass:GetTeammate(side)
+    for _, other in pairs(self.Sides) do
+        if other ~= side and other.Team == side.Team then return other end
+    end
+
+    return nil
 end
 
 -- The side whose class reacts to things happening to this team (its traps, its bleeds)
@@ -149,6 +202,7 @@ end
 -- The Black player gets every event turned around so their own king is at the bottom as White
 function MatchClass:SendTo(side, action, ...)
     if not side or not side.Player then return end
+    if side.isDisconnected or not side.Player.Parent then return end
 
     if side.Team == "Black" then
         BoardRemote:FireClient(side.Player, action, MirrorRules.Event(action, table.pack(...)))
@@ -163,16 +217,20 @@ function MatchClass:SendAll(action, ...)
     end
 end
 
+function MatchClass:SendOthers(exceptSide, action, ...)
+    for _, side in pairs(self.Sides) do
+        if side ~= exceptSide then
+            self:SendTo(side, action, ...)
+        end
+    end
+end
+
 -- Each player sees their own king through King events and the other king as a piece
 function MatchClass:SendKingMoved(side, ownAction)
     local king = side.King
 
     side:Send(ownAction, king.Column, king.Row)
-
-    local opponent = self:GetOpponent(side)
-    if opponent then
-        self:SendTo(opponent, "PieceMoved", king.Id, king.Column, king.Row)
-    end
+    self:SendOthers(side, "PieceMoved", king.Id, king.Column, king.Row)
 end
 
 -- Health updates for everyone except exceptSide, who already saw the hit through their own event
@@ -202,7 +260,7 @@ end
 function MatchClass:GetClock(side)
     if not side or not side.Clock then return nil end
     if not self:IsSideTurn(side) then return side.Clock end
-    if self.isSkipping then return side.Clock end
+    if side.isSkipping then return side.Clock end
 
     return math.max(side.Clock - (time() - self.TurnStartedAt), 0)
 end
@@ -210,9 +268,9 @@ end
 function MatchClass:GetTurnState(side)
     local phase = "EnemyTurn"
 
-    if self.Phase == "Over" then
-        phase = "Over"
-    elseif self:IsSideTurn(side) and self.isSkipping then
+    if self.Phase == "Over" or self.Phase == "Countdown" then
+        phase = self.Phase
+    elseif self:IsSideTurn(side) and side.isSkipping then
         phase = "Stunned"
     elseif self:IsSideTurn(side) then
         phase = "PlayerTurn"
@@ -238,8 +296,28 @@ function MatchClass:GetTurnState(side)
         NextShotBonus = side.NextShotBonus,
         Ability = self:CallAbility(side, "GetState"),
         Clock = self:GetClock(side),
-        EnemyClock = self:GetClock(self:GetOpponent(side)),
+        EnemyClock = self:GetRivalClock(side),
+        TeamDuel = self.isTeamDuel,
+        IsOut = side.isOut,
+        Countdown = self.CountdownLeft,
     }
+end
+
+-- 2v2 shows the lowest clock still running on the other team; once they're all out, the last one's clock
+function MatchClass:GetRivalClock(side)
+    local lowest = nil
+    local last = nil
+
+    for _, opponent in ipairs(self:GetOpponents(side)) do
+        local clock = self:GetClock(opponent)
+        last = clock or last
+
+        if clock and not opponent.isOut and (not lowest or clock < lowest) then
+            lowest = clock
+        end
+    end
+
+    return lowest or last
 end
 
 function MatchClass:SendTurnState()
@@ -250,18 +328,43 @@ end
 
 --SETUP--
 
-function MatchClass:Start()
+-- countdown (seconds) shows the board first and only starts the turns and clocks once it runs out
+function MatchClass:Start(countdown)
+    self:Setup()
+
+    if not countdown then
+        self:Begin()
+        return
+    end
+
+    self.Phase = "Countdown"
+
+    task.spawn(function()
+        for left = countdown, 1, -1 do
+            if not self.isActive then return end
+
+            self.CountdownLeft = left
+            self:SendTurnState()
+            task.wait(1)
+        end
+
+        if not self.isActive then return end
+
+        self.CountdownLeft = nil
+        self.Phase = "PlayerTurn"
+        self:Begin()
+    end)
+end
+
+function MatchClass:Setup()
     self:SendAll("MatchStarted")
 
     for _, side in pairs(self.Sides) do
         local king = side.King
         side:Send("KingMoved", king.Column, king.Row)
 
-        -- The rival King comes with its shotgun so the other player can see what it is running
-        local opponent = self:GetOpponent(side)
-        if opponent then
-            self:SendTo(opponent, "PieceAdded", king.Id, king.Type, king.Team, king.Column, king.Row, king.Health, king.MaxHealth, king.ShotgunName)
-        end
+        -- Other Kings come with their shotgun so everyone can see what they are running
+        self:SendOthers(side, "PieceAdded", king.Id, king.Type, king.Team, king.Column, king.Row, king.Health, king.MaxHealth, king.ShotgunName)
     end
 
     for _, enemy in ipairs(self.Enemies) do
@@ -275,16 +378,23 @@ function MatchClass:Start()
         self.Companion = self:AddPiece(ally.Type, "White", ally.Column, ally.Row, ally.Health)
         self.Companion.isCompanion = true
     end
+end
 
-    local white = self.Sides.White
-    white:GainEnergy()
+function MatchClass:Begin()
+    local whites = self:GetTeamSides("White")
+
+    for _, side in ipairs(whites) do
+        side:GainEnergy()
+    end
 
     self.TurnStartedAt = time()
     self:SendTurnState()
 
-    if self.isDuel then
-        self:StartClock(white)
-        self:StartAITurn(white)
+    if not self.isDuel then return end
+
+    for _, side in ipairs(whites) do
+        self:StartClock(side)
+        self:StartAITurn(side)
     end
 end
 
@@ -292,15 +402,82 @@ function MatchClass:Destroy()
     self.isActive = false
 end
 
--- Leaving a duel early forfeits it
+-- Leaving a duel early forfeits it; in 2v2 the teammate fights on alone or surrenders
 function MatchClass:Leave(player)
     local side = self:GetSide(player)
+
+    if self.isTeamDuel and self.isActive and side then
+        self:Disconnect(side)
+        return
+    end
 
     if self.isDuel and self.isActive and side then
         self:EndDuel(self:GetOpponent(side), "Forfeit")
     end
 
     self:Destroy()
+end
+
+-- A 2v2 player who leaves is out for good; a team that loses both players forfeits
+function MatchClass:Disconnect(side)
+    if side.isDisconnected then return end
+
+    side.isDisconnected = true
+    self:KnockOut(side)
+
+    if self:CheckDuelOver("Forfeit") then return end
+
+    local teammate = self:GetTeammate(side)
+    if teammate and not teammate.isOut then
+        teammate:Send("TeammateLeft")
+    end
+
+    self:CheckTeamTurnDone()
+end
+
+-- A 2v2 player is out once their king dies, their clock runs out or they leave; a king still standing is taken off
+-- The out player's summons go to their teammate
+function MatchClass:KnockOut(side)
+    if side.isOut then return end
+
+    side.isOut = true
+
+    local king = side.King
+    if self.Pieces[king.Id] then
+        self.Pieces[king.Id] = nil
+        king.Health = 0
+        self:SendOthers(side, "PieceDamaged", king.Id, 0)
+    end
+
+    local teammate = self:GetTeammate(side)
+    if teammate then
+        teammate:Send("TeammatePiecesFreed")
+    end
+end
+
+-- A 1v1 surrender ends the duel at once; a 2v2 team surrenders once every player still in agrees
+-- A player left alone by a disconnect surrenders on their own, for a smaller reward to the winners
+function MatchClass:Surrender(side)
+    if not self.isDuel or not self.isActive then return end
+    if side.isOut then return end
+
+    if not self.isTeamDuel then
+        self:EndDuel(self:GetOpponent(side), "Surrender")
+        return
+    end
+
+    side.wantsSurrender = true
+
+    local teammate = self:GetTeammate(side)
+    local winner = self:GetOpponents(side)[1]
+
+    if teammate.isDisconnected then
+        self:EndDuel(winner, "DisconnectSurrender")
+    elseif teammate.isOut or teammate.wantsSurrender then
+        self:EndDuel(winner, "Surrender")
+    else
+        teammate:Send("SurrenderVote")
+    end
 end
 
 --BOARD--
@@ -319,18 +496,26 @@ function MatchClass:IsOccupied(column, row)
     return self:GetPieceAt(column, row) ~= nil
 end
 
+-- In 2v2 both teammates act during their team's turn until each ends theirs
 function MatchClass:IsSideTurn(side)
+    if side.isOut or side.hasEndedTurn then return false end
+
     return self.Phase == "PlayerTurn" and self.ActiveTeam == side.Team
 end
 
 -- health starts the piece hurt (a companion carrying its health between battles)
-function MatchClass:AddPiece(pieceType, team, column, row, health)
+-- owner is the side that summoned it; a 2v2 teammate is told the piece isn't theirs to command
+function MatchClass:AddPiece(pieceType, team, column, row, health, owner)
     local piece = PieceClass.new(self.NextPieceId, pieceType, team, column, row)
     piece.Health = health or piece.Health
+    piece.Owner = owner
     self.NextPieceId += 1
     self.Pieces[piece.Id] = piece
 
-    self:SendAll("PieceAdded", piece.Id, piece.Type, piece.Team, piece.Column, piece.Row, piece.Health, piece.MaxHealth)
+    for _, side in pairs(self.Sides) do
+        local isTeammates = owner ~= nil and owner ~= side and owner.Team == side.Team
+        self:SendTo(side, "PieceAdded", piece.Id, piece.Type, piece.Team, piece.Column, piece.Row, piece.Health, piece.MaxHealth, nil, isTeammates)
+    end
 
     return piece
 end
@@ -374,7 +559,7 @@ end
 
 function MatchClass:CanAct(side, cost, action)
     if not self:IsSideTurn(side) then return false end
-    if self.isSkipping then return false end
+    if side.isSkipping then return false end
     if side.UsedActions[action] then return false end
     if side.Energy < cost then return false end
 
@@ -388,21 +573,43 @@ end
 
 -- Smoke belongs to the side being attacked; AI attacks (no attacker) are against White
 function MatchClass:IsProtected(column, row, attacker)
-    local defender = attacker and self:GetOpponent(attacker) or self.Sides.White
+    local defenders = attacker and self:GetOpponents(attacker) or {self.Sides.White}
 
-    return self:CallAbility(defender, "IsProtected", column, row) == true
+    for _, defender in ipairs(defenders) do
+        if self:CallAbility(defender, "IsProtected", column, row) == true then return true end
+    end
+
+    return false
 end
 
 -- Chance a shotgun blast lands on the tile; lower inside the Outlaw's smoke
 function MatchClass:GetShotHitChance(column, row, attacker)
-    local defender = attacker and self:GetOpponent(attacker) or self.Sides.White
+    local defenders = attacker and self:GetOpponents(attacker) or {self.Sides.White}
+    local chance = 1
 
-    return self:CallAbility(defender, "GetShotHitChance", column, row) or 1
+    for _, defender in ipairs(defenders) do
+        chance = math.min(chance, self:CallAbility(defender, "GetShotHitChance", column, row) or 1)
+    end
+
+    return chance
 end
 
 -- Called whenever a piece or king ends up on a new tile; the other team's traps can catch it
 function MatchClass:OnUnitMoved(piece)
-    self:CallAbility(self:GetDefender(piece.Team), "OnEnemyMoved", piece)
+    for _, side in pairs(self.Sides) do
+        if side.Team ~= piece.Team then
+            self:CallAbility(side, "OnEnemyMoved", piece)
+        end
+    end
+end
+
+-- The other team's traps on the way stop a commanded piece
+function MatchClass:InterceptPath(side, piece, column, row)
+    for _, opponent in ipairs(self:GetOpponents(side)) do
+        if self:CallAbility(opponent, "InterceptPath", piece, column, row) then return true end
+    end
+
+    return false
 end
 
 -- kind is the look of the stun ("Stars" or "Bolas"); bolas are only thrown on the attacker's screen
@@ -497,10 +704,26 @@ function MatchClass:CheckDefeat()
     return true
 end
 
-function MatchClass:CheckDuelOver()
+-- A dead king puts its player out; a team with every player out loses (in 1v1 that's its only king)
+function MatchClass:CheckDuelOver(reason)
     for _, side in pairs(self.Sides) do
         if not side.King:IsAlive() then
-            self:EndDuel(self:GetOpponent(side), "KingKilled")
+            self:KnockOut(side)
+        end
+    end
+
+    for _, team in ipairs({"White", "Black"}) do
+        local isBeaten = true
+
+        for _, side in ipairs(self:GetTeamSides(team)) do
+            if not side.isOut then
+                isBeaten = false
+            end
+        end
+
+        if isBeaten then
+            local winner = self:GetTeamSides(team == "White" and "Black" or "White")[1]
+            self:EndDuel(winner, reason or "KingKilled")
             return true
         end
     end
@@ -508,7 +731,8 @@ function MatchClass:CheckDuelOver()
     return false
 end
 
--- reason is "KingKilled", "Timeout" or "Forfeit"
+-- reason is "KingKilled", "Timeout", "Forfeit", or in 2v2 "Surrender" or "DisconnectSurrender"
+-- winner is any side on the winning team
 function MatchClass:EndDuel(winner, reason)
     if not self.isActive then return end
 
@@ -524,8 +748,12 @@ end
 -- Actions are limited by energy and once per turn each, so the turn ends through End Turn
 function MatchClass:FinishEvent()
     if self:CheckVictory() then return end
-    -- A King that walks into a trap loses the rest of this turn (and the next one, see EndDuelTurn)
-    if self:CheckStunSkip(self.Sides[self.ActiveTeam]) then return end
+    if self:CheckTeamTurnDone() then return end
+
+    -- A King that walks into a trap loses the rest of this turn (and the next one, see EndTeamTurn)
+    for _, side in ipairs(self:GetTeamSides(self.ActiveTeam)) do
+        self:CheckStunSkip(side)
+    end
 
     self:SendTurnState()
 end
@@ -534,11 +762,12 @@ end
 -- Its clock stops while the turn is skipped
 function MatchClass:CheckStunSkip(side)
     if not self.isDuel then return false end
-    if self.isSkipping then return true end
+    if side.isSkipping then return true end
+    if not self:IsSideTurn(side) then return false end
     if not side.King:IsStunned() then return false end
 
     side.Clock = self:GetClock(side)
-    self.isSkipping = true
+    side.isSkipping = true
     self:SendTurnState()
 
     local turn = self.Turn
@@ -624,8 +853,6 @@ function MatchClass:Fire(side, targetX, targetY, mode)
     local damaged = {}
     -- What the other player sees: hits keyed by the tile each target stood on
     local enemyDamaged = {}
-    local opponent = self:GetOpponent(side)
-
     -- Farthest first, so a knocked back enemy never blocks one behind it that is also being pushed
     table.sort(targets, function(a, b)
         return BoardRules.GetDistance(king.Column, king.Row, a.Column, a.Row) > BoardRules.GetDistance(king.Column, king.Row, b.Column, b.Row)
@@ -665,10 +892,7 @@ function MatchClass:Fire(side, targetX, targetY, mode)
         end
 
         table.insert(damaged, result)
-
-        -- The other player's own king is hit with no Id
-        local isOpponentKing = opponent ~= nil and piece == opponent.King
-        table.insert(enemyDamaged, {Id = not isOpponentKing and piece.Id or nil, Column = column, Row = row, Health = piece.Health})
+        table.insert(enemyDamaged, {Piece = piece, Column = column, Row = row, Health = piece.Health})
     end
 
     king:SpendAmmo(mode)
@@ -676,8 +900,17 @@ function MatchClass:Fire(side, targetX, targetY, mode)
 
     side:Send("ShotFired", pellets, hitTiles, damaged, shotType)
 
-    if opponent then
-        self:SendTo(opponent, "EnemyShotFired", king.Id, pellets, hitTiles, enemyDamaged)
+    -- Everyone else sees the shot; each player's own king is hit with no Id
+    for _, other in pairs(self.Sides) do
+        if other == side then continue end
+
+        local seen = {}
+
+        for _, hit in ipairs(enemyDamaged) do
+            table.insert(seen, {Id = hit.Piece ~= other.King and hit.Piece.Id or nil, Column = hit.Column, Row = hit.Row, Health = hit.Health})
+        end
+
+        self:SendTo(other, "EnemyShotFired", king.Id, pellets, hitTiles, seen)
     end
 
     -- Knocked back enemies can land in traps
@@ -685,10 +918,7 @@ function MatchClass:Fire(side, targetX, targetY, mode)
         local piece = self.Pieces[result.Id]
 
         if piece and result.KnockColumn then
-            if opponent then
-                self:SendTo(opponent, "PieceMoved", piece.Id, piece.Column, piece.Row)
-            end
-
+            self:SendOthers(side, "PieceMoved", piece.Id, piece.Column, piece.Row)
             self:OnUnitMoved(piece)
         end
     end
@@ -768,7 +998,7 @@ function MatchClass:Summon(side, pieceType, column, row)
     if maxActive and self:CountPieces(pieceType, side.Team) >= maxActive then return end
 
     self:SpendEnergy(side, cost, "Summon")
-    self:AddPiece(pieceType, side.Team, column, row)
+    self:AddPiece(pieceType, side.Team, column, row, nil, side)
 
     self:FinishEvent()
 end
@@ -780,6 +1010,8 @@ function MatchClass:Command(side, pieceId, column, row)
     if not piece then return end
     if piece.Team ~= side.Team then return end
     if piece.Type == "King" then return end
+    -- 2v2: each player commands their own summons, and their teammate's once that teammate is out
+    if piece.Owner and piece.Owner ~= side and not piece.Owner.isOut then return end
     -- The Fallen Knight acts on his own
     if piece.isCompanion then return end
     if piece:IsStunned() then return end
@@ -787,8 +1019,6 @@ function MatchClass:Command(side, pieceId, column, row)
     local function IsBlocked(blockColumn, blockRow)
         return self:IsOccupied(blockColumn, blockRow)
     end
-
-    local opponent = self:GetOpponent(side)
 
     -- Commanding onto an enemy attacks it; like a chess capture, a kill moves the attacker onto the enemy's square,
     -- otherwise it stays on its own
@@ -806,8 +1036,8 @@ function MatchClass:Command(side, pieceId, column, row)
 
         self:SpendEnergy(side, ActionCost.Command, "Command")
 
-        -- The other player's traps on the way stop the attack
-        if self:CallAbility(opponent, "InterceptPath", piece, column, row) then
+        -- The other team's traps on the way stop the attack
+        if self:InterceptPath(side, piece, column, row) then
             self:FinishEvent()
             return
         end
@@ -828,7 +1058,7 @@ function MatchClass:Command(side, pieceId, column, row)
 
     self:SpendEnergy(side, ActionCost.Command, "Command")
 
-    if self:CallAbility(opponent, "InterceptPath", piece, column, row) then
+    if self:InterceptPath(side, piece, column, row) then
         self:FinishEvent()
         return
     end
@@ -845,7 +1075,7 @@ end
 
 function MatchClass:EndTurn(side)
     if not self:IsSideTurn(side) then return end
-    if self.isSkipping then return end
+    if side.isSkipping then return end
 
     if self.isDuel then
         self:EndDuelTurn(side)
@@ -856,43 +1086,84 @@ end
 
 --DUEL TURNS--
 
--- Each player's clock only runs on their own turn
+-- Each player's clock only runs on their own turn; in 2v2 the team's turn ends once both players have ended theirs
 function MatchClass:EndDuelTurn(side)
     side.Clock = self:GetClock(side)
-    self.isSkipping = false
+    side.isSkipping = false
+    side.hasEndedTurn = true
+
+    if self:CheckTeamTurnDone() then return end
+
+    self:SendTurnState()
+end
+
+-- Ends the team's turn once nobody on it can still act; returns true if it did
+function MatchClass:CheckTeamTurnDone()
+    if not self.isDuel or not self.isActive or self.Phase ~= "PlayerTurn" then return false end
+
+    for _, side in ipairs(self:GetTeamSides(self.ActiveTeam)) do
+        if self:IsSideTurn(side) or side.isSkipping then return false end
+    end
+
+    self:EndTeamTurn()
+
+    return true
+end
+
+function MatchClass:EndTeamTurn()
+    local team = self.ActiveTeam
+    local enemyTeam = team == "White" and "Black" or "White"
 
     -- A stun lasts through its piece's own turns, not counting the turn it was stunned on
     for _, piece in pairs(self.Pieces) do
-        if piece.Team == side.Team and piece.StunnedOnTurn ~= self.Turn then
+        if piece.Team == team and piece.StunnedOnTurn ~= self.Turn then
             piece:TickStun()
         end
     end
 
     self:ClearEndedStuns()
 
-    local opponent = self:GetOpponent(side)
-    self:CallAbility(opponent, "OnEnemyTurnEnd")
-    self:StartDuelTurn(opponent)
+    for _, opponent in ipairs(self:GetTeamSides(enemyTeam)) do
+        self:CallAbility(opponent, "OnEnemyTurnEnd")
+    end
+
+    self:StartTeamTurn(enemyTeam)
 end
 
-function MatchClass:StartDuelTurn(side)
-    self.ActiveTeam = side.Team
+function MatchClass:StartTeamTurn(team)
+    self.ActiveTeam = team
     self.Turn += 1
-    side.HasMoved = false
-    side.UsedActions = {}
 
-    self:CallAbility(side, "OnPlayerTurnStart")
+    local sides = self:GetTeamSides(team)
 
-    side:GainEnergy()
-    self:TickBleed(side.Team)
+    for _, side in ipairs(sides) do
+        side.HasMoved = false
+        side.UsedActions = {}
+        side.hasEndedTurn = false
+
+        if not side.isOut then
+            self:CallAbility(side, "OnPlayerTurnStart")
+            side:GainEnergy()
+        end
+    end
+
+    self:TickBleed(team)
     if self:CheckDuelOver() then return end
 
     self.TurnStartedAt = time()
-    if self:CheckStunSkip(side) then return end
+
+    for _, side in ipairs(sides) do
+        self:CheckStunSkip(side)
+    end
 
     self:SendTurnState()
-    self:StartClock(side)
-    self:StartAITurn(side)
+
+    for _, side in ipairs(sides) do
+        if self:IsSideTurn(side) and not side.isSkipping then
+            self:StartClock(side)
+            self:StartAITurn(side)
+        end
+    end
 end
 
 function MatchClass:StartAITurn(side)
@@ -901,16 +1172,27 @@ function MatchClass:StartAITurn(side)
     PracticeAIService.TakeTurn(self, side)
 end
 
+-- Running out of time loses a 1v1; in 2v2 it only puts that player out
 function MatchClass:StartClock(side)
     local turn = self.Turn
 
     task.delay(side.Clock, function()
         if not self.isActive then return end
         if self.Turn ~= turn then return end
-        if self.isSkipping then return end
+        if side.isSkipping or side.hasEndedTurn then return end
 
         side.Clock = 0
-        self:EndDuel(self:GetOpponent(side), "Timeout")
+
+        if not self.isTeamDuel then
+            self:EndDuel(self:GetOpponent(side), "Timeout")
+            return
+        end
+
+        self:KnockOut(side)
+        if self:CheckDuelOver("Timeout") then return end
+        if self:CheckTeamTurnDone() then return end
+
+        self:SendTurnState()
     end)
 end
 

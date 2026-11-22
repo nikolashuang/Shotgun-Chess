@@ -76,14 +76,15 @@ local CampaignConfig = {
         -- Taking the hit is locked at DAMAGE health or less; fighting rolls an army from the region's points
         Ambush = {
             DAMAGE = 3,
-            Points = {Training = 6, Forest = 7, Cliffside = 8, Outskirts = 8, Gravehollow = 9},
+            Points = {Training = 6, Forest = 7, Cliffside = 8, Outskirts = 8, Gravehollow = 9, Dev = 6},
         },
 
         -- Each offering needs more health than it costs
         Altar = {BLOOD_COST = 4, BLOOD_HEALTH = 2, ROYAL_COST = 6, ROYAL_DAMAGE = 2},
 
         -- The Knight waits alone on his throne tile; beat him and he joins the run
-        FallenKnight = {TILE = {6, 12}},
+        -- Three Fallen Pawns guard the steps in front of his throne
+        FallenKnight = {TILE = {6, 12}, PAWN_TILES = {{5, 11}, {6, 11}, {7, 11}}},
     },
 
     -- The Fallen Knight companion starts each battle this many columns right of the King
@@ -151,11 +152,37 @@ local CampaignConfig = {
             Final = "King",
             Map = {Lanes = 4, Seed = 53},
         },
+
+        -- Developer testing ground, left out of ORDER so it never shows on the world map
+        -- Every node stays open, each Mystery node is pinned to one encounter, and finishing it pays nothing
+        Dev = {
+            DisplayName = "Dev Campaign",
+            Subtitle = "Developers only: every node stays open",
+            Requires = {},
+            DevOnly = true,
+            AllNodesOpen = true,
+            RewardScale = 1,
+            StartPoints = 6,
+            Start = "Start",
+            Final = "King",
+            Nodes = {
+                Start = {Type = "Combat", Fight = 1, Position = {0.06, 0.5}, Links = {"Battle", "Rest", "Treasure", "Gunsmith", "FallenKnight", "Ambush", "Altar"}},
+                Battle = {Type = "Combat", Fight = 6, Position = {0.24, 0.2}, Links = {"Queen"}},
+                Rest = {Type = "Rest", Position = {0.24, 0.5}, Links = {"Queen"}},
+                Treasure = {Type = "Treasure", Position = {0.24, 0.8}, Links = {"Queen"}},
+                Gunsmith = {Type = "Mystery", Encounter = "Gunsmith", Position = {0.48, 0.17}, Links = {"Queen"}},
+                FallenKnight = {Type = "Mystery", Encounter = "FallenKnight", Position = {0.48, 0.39}, Links = {"Queen"}},
+                Ambush = {Type = "Mystery", Encounter = "Ambush", Position = {0.48, 0.61}, Links = {"Queen"}},
+                Altar = {Type = "Mystery", Encounter = "Altar", Position = {0.48, 0.83}, Links = {"Queen"}},
+                Queen = {Type = "Queen", Position = {0.72, 0.5}, Links = {"King"}},
+                King = {Type = "King", Position = {0.9, 0.5}, Links = {}},
+            },
+        },
     },
 }
 
 for _, region in pairs(CampaignConfig.Regions) do
-    region.Nodes = CampaignMap.Build(region.Map)
+    region.Nodes = region.Nodes or CampaignMap.Build(region.Map)
 end
 
 return CampaignConfig

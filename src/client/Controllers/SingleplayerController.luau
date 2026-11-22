@@ -90,10 +90,10 @@ function SingleplayerController.Init(openSettings)
     siegeCard.Label.TextTransparency = 0.5
     AddLock(siegeCard.Art)
 
-    root:WaitForChild("SettingsButton").Activated:Connect(openSettings)
+    screen:WaitForChild("SettingsButton").Activated:Connect(openSettings)
 
     -- Back steps out of Practice first, then to the main menu
-    root:WaitForChild("BackButton").Activated:Connect(function()
+    screen:WaitForChild("BackButton").Activated:Connect(function()
         if practiceView.Visible then
             ShowPractice(false)
             return

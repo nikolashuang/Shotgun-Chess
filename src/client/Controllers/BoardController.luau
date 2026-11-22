@@ -222,9 +222,15 @@ local function GetCommandMoves(piece)
     return PieceRules.GetMoves(piece.Type, piece.Team, piece.Rig.Column, piece.Rig.Row, IsOccupied)
 end
 
+-- 2v2: ids of the teammate's summons, which only the teammate can command while they're still in
+local teammatePieces = {}
+
 -- The campaign's Fallen Knight fights on his own, so only summoned pieces take commands
 local function IsCommandable(piece)
-    return piece.Team == "White" and piece.Type ~= "FallenKnight"
+    if piece.Team ~= "White" then return false end
+    if piece.Type == "FallenKnight" or piece.Type == "King" then return false end
+
+    return not teammatePieces[piece.Id]
 end
 
 -- Moves and attacks share the Command action; attacks target enemy tiles
@@ -647,10 +653,15 @@ local function GetHoveredTile()
     return {Column = hoveredTile:GetAttribute("Column"), Row = hoveredTile:GetAttribute("Row")}
 end
 
--- Enemy Kings fight with a shotgun like the player's king, so they hold one
--- shotgunName is the rival's real shotgun in duels; campaign Kings leave it out
-local function OnPieceAdded(id, pieceType, team, column, row, _health, _maxHealth, shotgunName)
-    if pieceType ~= "King" or team ~= "Black" then return end
+-- Other Kings fight with a shotgun like the player's king, so they hold one
+-- shotgunName is the real shotgun in duels (rivals and the 2v2 teammate); campaign Kings leave it out
+local function OnPieceAdded(id, pieceType, team, column, row, _health, _maxHealth, shotgunName, isTeammates)
+    if isTeammates then
+        teammatePieces[id] = true
+    end
+
+    if pieceType ~= "King" then return end
+    if team ~= "Black" and not shotgunName then return end
 
     ShotgunController.AttachEnemyGun(PieceController.Get(id).Rig.Rig, column, row, shotgunName)
 end
@@ -746,6 +757,7 @@ function BoardController.Init(actionPanelController)
 
     BoardRemote.OnClientEvent:Connect(function(action, ...)
         if action == "MatchStarted" then
+            teammatePieces = {}
             PieceController.Clear()
             BoardEffectsController.Clear()
 
@@ -773,6 +785,8 @@ function BoardController.Init(actionPanelController)
             if kingRig then
                 kingRig:SetStunned(...)
             end
+        elseif action == "TeammatePiecesFreed" then
+            teammatePieces = {}
         elseif action == "PieceMarked" then
             PieceController.SetMarked(...)
         elseif action == "SoulAdded" then

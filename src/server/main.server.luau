@@ -6,6 +6,8 @@ local ProfileService = require(ServerScriptService.Player.ProfileService)
 local LoadoutService = require(ServerScriptService.Player.LoadoutService)
 local CampaignService = require(ServerScriptService.Campaign.CampaignService)
 local DuelService = require(ServerScriptService.Duel.DuelService)
+local DuelPlaceService = require(ServerScriptService.Duel.DuelPlaceService)
+local DuelConfig = require(ReplicatedStorage.Shared.Duel.DuelConfig)
 local DevService = require(ServerScriptService.Player.DevService)
 local MirrorRules = require(ServerScriptService.Match.MirrorRules)
 
@@ -30,11 +32,19 @@ local function StartMatch(player, match)
     player:SetAttribute("InMatch", true)
 end
 
+-- The duel place shares this code but only runs the global duel it was reserved for
+local isDuelPlace = game.PlaceId == DuelConfig.DUEL_PLACE_ID
+
 ProfileService.Init()
 LoadoutService.Init()
-CampaignService.Init()
-DuelService.Init(StartMatch)
-DevService.Init()
+
+if isDuelPlace then
+    DuelPlaceService.Init(StartMatch)
+else
+    CampaignService.Init()
+    DuelService.Init(StartMatch)
+    DevService.Init()
+end
 
 local function IsFiniteNumber(value)
     return typeof(value) == "number" and value == value and math.abs(value) < 1e6
@@ -49,7 +59,7 @@ end
 
 BoardRemote.OnServerEvent:Connect(function(player, action, first, second, third)
     if action == "StartMatch" then
-        if first ~= "Campaign" then return end
+        if isDuelPlace or first ~= "Campaign" then return end
 
         local match = CampaignService.CreateMatch(player, second, third)
         if not match then return end
@@ -118,6 +128,8 @@ BoardRemote.OnServerEvent:Connect(function(player, action, first, second, third)
         match:Command(side, first, second, third)
     elseif action == "EndTurn" then
         match:EndTurn(side)
+    elseif action == "Surrender" then
+        match:Surrender(side)
     end
 end)
 

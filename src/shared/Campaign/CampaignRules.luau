@@ -120,6 +120,7 @@ end
 function CampaignRules.GetNodeState(run, regionId, nodeId)
     local region = CampaignConfig.Regions[regionId]
     if not region or not region.Nodes[nodeId] then return "Locked" end
+    if region.AllNodesOpen then return "Available" end
 
     if not run or #run.Path == 0 then
         return nodeId == region.Start and "Available" or "Locked"

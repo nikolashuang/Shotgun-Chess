@@ -7,6 +7,7 @@ local ProgressionRules = require(ReplicatedStorage.Shared.Player.ProgressionRule
 local SettingsConfig = require(ReplicatedStorage.Shared.Player.SettingsConfig)
 local KeybindConfig = require(ReplicatedStorage.Shared.Player.KeybindConfig)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
+local CampaignConfig = require(ReplicatedStorage.Shared.Campaign.CampaignConfig)
 local CampaignRules = require(ReplicatedStorage.Shared.Campaign.CampaignRules)
 
 local ProfileRemote = ReplicatedStorage.Remotes.ProfileRemote
@@ -91,6 +92,28 @@ local function ValidateKeybinds(keybinds)
     return saved
 end
 
+-- Dev regions are for testing only: their runs and cleared nodes are never written to the DataStore
+local function StripDevRegions(data)
+    local stripped = table.clone(data)
+    stripped.Runs = table.clone(data.Runs)
+    stripped.Nodes = table.clone(data.Nodes)
+
+    for regionId, region in pairs(CampaignConfig.Regions) do
+        if not region.DevOnly then continue end
+
+        stripped.Runs[regionId] = nil
+        local prefix = regionId .. "."
+
+        for key in pairs(data.Nodes) do
+            if string.sub(key, 1, #prefix) == prefix then
+                stripped.Nodes[key] = nil
+            end
+        end
+    end
+
+    return stripped
+end
+
 local function LoadData(player)
     if not store then return nil end
 
@@ -100,7 +123,7 @@ local function LoadData(player)
         end)
 
         -- Runs are saved as they stand, so leaving mid-region picks up exactly where the player left
-        if ok then return Reconcile(result or NewData()) end
+        if ok then return StripDevRegions(Reconcile(result or NewData())) end
 
         warn("[ProfileService] Load failed for " .. player.Name .. ": " .. tostring(result))
         task.wait(1)
@@ -170,21 +193,49 @@ function ProfileService.Reset(player)
     profile.Data = NewData()
 end
 
+-- Throws away the player's dev region progress so the next visit starts fresh
+function ProfileService.ResetDevRegions(player)
+    local profile = Profiles[player]
+    if not profile then return end
+
+    profile.Data = StripDevRegions(profile.Data)
+end
+
 function ProfileService.Save(player)
     local profile = Profiles[player]
     if not profile then return end
 
     -- Profiles that failed to load are never saved so they can't overwrite real data
     if not profile.CanSave then return end
+    -- Already saved for a teleport; a later save could overwrite what the next place writes
+    if profile.isTeleporting then return end
 
     local ok, result = pcall(function()
         store:UpdateAsync(tostring(player.UserId), function()
-            return profile.Data
+            return StripDevRegions(profile.Data)
         end)
     end)
 
     if not ok then
         warn("[ProfileService] Save failed for " .. player.Name .. ": " .. tostring(result))
+    end
+end
+
+-- Saves now and stops this server saving the player again, so the place they teleport to loads their latest data
+function ProfileService.SaveForTeleport(player)
+    ProfileService.Save(player)
+
+    local profile = Profiles[player]
+    if profile then
+        profile.isTeleporting = true
+    end
+end
+
+-- The teleport failed and the player is staying, so this server saves them again
+function ProfileService.CancelTeleport(player)
+    local profile = Profiles[player]
+    if profile then
+        profile.isTeleporting = false
     end
 end
 

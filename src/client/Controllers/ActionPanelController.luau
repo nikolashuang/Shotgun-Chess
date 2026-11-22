@@ -1,4 +1,8 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+
+local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
+local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 
 local SELECTED_COLOR = Color3.fromHex("F1D4AC")
 local DEFAULT_COLOR = Color3.fromHex("9C574B")
@@ -17,6 +21,26 @@ local ActionPanelController = {}
 
 ActionPanelController.SelectedAction = nil
 ActionPanelController.OnSelectionChanged = nil
+
+-- Summon costs depend on the piece, so it shows the cheapest to the dearest
+local function GetCostText(action)
+    if action == "Summon" then
+        local lowest, highest = math.huge, 0
+
+        for _, pieceType in ipairs(PieceConfig.SUMMONABLE) do
+            lowest = math.min(lowest, PieceConfig.Cost[pieceType])
+            highest = math.max(highest, PieceConfig.Cost[pieceType])
+        end
+
+        return string.format("%d-%d Energy", lowest, highest)
+    end
+
+    local cost = CombatConfig.ActionCost[action]
+    if not cost then return "" end
+    if cost == 0 then return "Free" end
+
+    return cost .. " Energy"
+end
 
 local function SetHighlight(button, enabled)
     local stroke = button:FindFirstChildOfClass("UIStroke")
@@ -38,6 +62,11 @@ function ActionPanelController.Init()
             if not button:IsA("TextButton") then continue end
 
             buttonsByAction[button:GetAttribute("Action")] = button
+
+            local costLabel = button:FindFirstChild("CostLabel")
+            if costLabel then
+                costLabel.Text = GetCostText(button:GetAttribute("Action"))
+            end
 
             button.Activated:Connect(function()
                 ActionPanelController.Select(button)

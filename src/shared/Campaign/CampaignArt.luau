@@ -33,6 +33,26 @@ local CampaignArt = {
     REST_CARDS = "rbxassetid://135905483379568",
     REST_CARD_SIZE = Vector2.new(96, 72),
     RestCardOrder = {Rest = 0, Train = 1, Maintenance = 2},
+
+    -- Mystery encounter screens, built by art/tools/build_mystery_art.py; every background is 1672x941 like the camp
+    MysteryBackgrounds = {
+        Altar = "rbxassetid://113565901767238",
+        Ambush = "rbxassetid://91466943784949",
+        Gunsmith = "rbxassetid://132885799635283",
+        FallenKnight = "rbxassetid://122636487856177",
+    },
+    MYSTERY_ASPECT = 1672 / 941,
+    -- The bishop at the anvil, built by art/tools/build_gunsmith.py; plays over the Gunsmith background
+    GUNSMITH_SHEET = "rbxassetid://93677776912006",
+    GUNSMITH_FRAME = Vector2.new(100, 100),
+    GUNSMITH_FRAMES = 8,
+    GUNSMITH_COLUMNS = 4,
+    GUNSMITH_TIME = 0.11,
+    GUNSMITH_RECT = {520 / 1672, 220 / 941, 400 / 1672, 400 / 941},
+    -- The Fallen Knight's eye traced in teal, laid exactly over his eye on the background when he wakes
+    -- Rect is x, y, width, height as fractions of the background; matches EYE_BOX in build_mystery_art.py
+    EYE_WAKE = "rbxassetid://84506445068510",
+    EYE_RECT = {944 / 1672, 460 / 941, 48 / 1672, 40 / 941},
 }
 
 return CampaignArt
