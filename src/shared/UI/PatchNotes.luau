@@ -1,12 +1,12 @@
 -- Game version shown in the corner of every screen, and the patch notes on the main menu
 -- One release per day: bump the last number each day, and the middle one (resetting the last) only for a huge update
 local PatchNotes = {
-    VERSION = "0.5.1",
+    VERSION = "0.5.2",
 
     -- Newest first
     Releases = {
         {
-            Version = "0.5.1",
+            Version = "0.5.2",
             Date = "Nov 22",
             Title = "New Shop",
             Notes = {
@@ -14,6 +14,13 @@ local PatchNotes = {
                 "Buy Gold with Robux: 1,000, 10,000, 50,000 (best value) or 100,000.",
                 "New 2x Gold and 2x XP boosts: each lasts 1 hour of play time and doubles what you earn from the campaign and duels. Buying more adds time.",
                 "Shotguns now cost 5,000 more Gold each.",
+            },
+        },
+        {
+            Version = "0.5.1",
+            Date = "Nov 22",
+            Title = "Previews and Fixes",
+            Notes = {
                 "Aiming a shot or commanding a piece at an enemy now marks the damage it's about to take in white on its health bar.",
                 "Hovering a piece shows its name above its health bar.",
                 "Multiplayer now opens at level 5, right around finishing Hunter Forest. Duels inside it still unlock at level 10.",
