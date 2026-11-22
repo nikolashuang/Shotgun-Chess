@@ -20,6 +20,9 @@ local SingleplayerController = require(script.Parent.Controllers.SingleplayerCon
 local ShopController = require(script.Parent.Controllers.ShopController)
 local SummonPanelController = require(script.Parent.Controllers.SummonPanelController)
 local TurnController = require(script.Parent.Controllers.TurnController)
+local WorldLockController = require(script.Parent.Controllers.WorldLockController)
+
+WorldLockController.Init()
 
 -- The duel place has only the game board: no menus, campaign or shop
 if game.PlaceId == DuelConfig.DUEL_PLACE_ID then

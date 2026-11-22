@@ -1,10 +1,19 @@
 -- Game version shown in the corner of every screen, and the patch notes on the main menu
 -- One release per day: bump the last number each day, and the middle one (resetting the last) only for a huge update
 local PatchNotes = {
-    VERSION = "0.5.2",
+    VERSION = "0.5.3",
 
     -- Newest first
     Releases = {
+        {
+            Version = "0.5.3",
+            Date = "Nov 22",
+            Title = "Shotgun Balance",
+            Notes = {
+                "Double Barrel: each barrel now deals 3.5 up close down to 2.5 at max range (was 5 down to 3.5), so a full blast is 7 to 5.",
+                "Long Barrel: now deals 3 up close (was 5), still dropping to 1 at max range.",
+            },
+        },
         {
             Version = "0.5.2",
             Date = "Nov 22",

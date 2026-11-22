@@ -1,0 +1,1 @@
+-- Replaces Roblox's default character sounds script so the hidden 3D character never makes footstep or jump sounds
