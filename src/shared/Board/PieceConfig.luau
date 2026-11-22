@@ -38,6 +38,13 @@ local PieceConfig = {
     },
 
     SUMMONABLE = {"Pawn", "Knight", "Bishop", "Rook", "Queen"},
+
+    -- Singleplayer enemy pawns that reach the player's back row become one of these, by weight
+    PROMOTIONS = {
+        {Type = "Knight", Weight = 40},
+        {Type = "Bishop", Weight = 40},
+        {Type = "Rook", Weight = 20},
+    },
 }
 
 return PieceConfig

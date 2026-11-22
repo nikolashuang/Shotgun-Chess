@@ -80,11 +80,41 @@ function PieceController.Attack(attackerId, targetId, health, isCapture)
     end)
 end
 
+-- Swaps the piece's rig for its new type once it lands on the back row
+function PieceController.Promote(id, pieceType, health, maxHealth)
+    local piece = pieces[id]
+    if not piece then return end
+
+    piece.Type = pieceType
+    local oldRig = piece.Rig
+
+    oldRig:WhenSettled(function()
+        if piece.Rig ~= oldRig or pieces[id] ~= piece then return end
+
+        local rig = PieceRigClass.new(board, pieceType, piece.Team)
+        rig:SetTile(oldRig.Column, oldRig.Row)
+        rig:SetHealth(health, maxHealth)
+        rig.Sprite:Play("Hop")
+        rig:ShowHealth()
+        rig:HideHealth()
+
+        rig:SetMarked(piece.isMarked == true)
+
+        if piece.StunKind then
+            rig:SetStunned(true, piece.StunKind)
+        end
+
+        piece.Rig = rig
+        oldRig:Destroy()
+    end)
+end
+
 function PieceController.SetStunned(id, isStunned, kind)
     local piece = pieces[id]
     if not piece then return end
 
     piece.Rig:SetStunned(isStunned, kind)
+    piece.StunKind = isStunned and (kind or "Stars") or nil
 end
 
 function PieceController.SetMarked(id, isMarked)
@@ -92,6 +122,7 @@ function PieceController.SetMarked(id, isMarked)
     if not piece then return end
 
     piece.Rig:SetMarked(isMarked)
+    piece.isMarked = isMarked
 end
 
 -- Piece id -> arrow tint for every piece showing an arrow

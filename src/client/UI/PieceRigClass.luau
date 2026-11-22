@@ -44,6 +44,15 @@ local TICK_TRANSPARENCY = 0.35
 
 local OUTLINE_COLOR = Color3.fromHex("271F29")
 local EMPTY_COLOR = Color3.fromHex("4A3D48")
+-- Health an attack is about to take, marked white on the bar
+local PREVIEW_COLOR = Color3.new(1, 1, 1)
+local PREVIEW_PULSE_TIME = 0.45
+
+-- Name shown above the health bar, fading in and out with it, in tiles
+local NAME_HEIGHT = 0.3
+local NAME_GAP = PIXEL
+local NAME_COLOR = Color3.fromHex("E9E3D6")
+local NAME_FONT = Font.new("rbxasset://fonts/families/Fondamento.json", Enum.FontWeight.Bold)
 local HEALTH_COLORS = {
     White = Color3.fromHex("F1D4AC"),
     Black = Color3.fromHex("C8644F"),
@@ -137,6 +146,8 @@ function PieceRigClass.new(board, pieceType, team)
     self.Health = nil
     self.HideToken = 0
     self.isHovered = false
+    self.isBarShown = false
+    self.PreviewDamage = 0
 
     self.StunEffect = nil
     self.ArrowEffect = nil
@@ -158,6 +169,7 @@ function PieceRigClass.new(board, pieceType, team)
     end
 
     self:CreateHealthBar(board, pieceType, team)
+    self:CreateNameLabel(board, pieceType)
     self:CreateArrow()
 
     return self
@@ -191,6 +203,18 @@ function PieceRigClass:CreateHealthBar(board, pieceType, team)
     self.HealthFill.Size = UDim2.fromScale(1, 1)
     self.HealthFill.Parent = track
 
+    self.DamagePreview = Instance.new("Frame")
+    self.DamagePreview.Name = "DamagePreview"
+    self.DamagePreview.BackgroundColor3 = PREVIEW_COLOR
+    self.DamagePreview.BorderSizePixel = 0
+    self.DamagePreview.Visible = false
+    self.DamagePreview.ZIndex = 2
+    self.DamagePreview.Parent = track
+
+    TweenService:Create(self.DamagePreview, TweenInfo.new(PREVIEW_PULSE_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+        BackgroundTransparency = 0.45,
+    }):Play()
+
     self.HealthTrack = track
     self.TickCount = 0
 
@@ -198,6 +222,35 @@ function PieceRigClass:CreateHealthBar(board, pieceType, team)
 
     self.Rig:GetPropertyChangedSignal("Position"):Connect(function()
         self.HealthBar.Position = self.Rig.Position - barOffset
+    end)
+end
+
+-- "FallenKnight" -> "Fallen Knight"
+local function GetDisplayName(pieceType)
+    return (pieceType:gsub("(%l)(%u)", "%1 %2"))
+end
+
+function PieceRigClass:CreateNameLabel(board, pieceType)
+    self.NameLabel = Instance.new("TextLabel")
+    self.NameLabel.Name = self.Rig.Name .. "Name"
+    self.NameLabel.BackgroundTransparency = 1
+    self.NameLabel.AnchorPoint = Vector2.new(0.5, 1)
+    self.NameLabel.Size = UDim2.fromScale(2 / BoardConfig.SIZE, NAME_HEIGHT / BoardConfig.SIZE)
+    self.NameLabel.FontFace = NAME_FONT
+    self.NameLabel.Text = GetDisplayName(pieceType)
+    self.NameLabel.TextColor3 = NAME_COLOR
+    self.NameLabel.TextScaled = true
+    self.NameLabel.TextStrokeColor3 = OUTLINE_COLOR
+    self.NameLabel.TextTransparency = 1
+    self.NameLabel.TextStrokeTransparency = 1
+    self.NameLabel.Interactable = false
+    self.NameLabel.Parent = GetBarLayer(board)
+
+    local nameBottom = GetBarOffset(pieceType) - BAR_HEIGHT / 2 - NAME_GAP
+    local nameOffset = UDim2.fromScale(0, nameBottom / BoardConfig.SIZE)
+
+    self.Rig:GetPropertyChangedSignal("Position"):Connect(function()
+        self.NameLabel.Position = self.Rig.Position + nameOffset
     end)
 end
 
@@ -224,9 +277,13 @@ function PieceRigClass:SetStunned(isStunned, kind)
     end
 end
 
--- Height of an effect's center when it floats above the health bar
+-- Height of an effect's center when it floats above the health bar, and above the name while it shows
 function PieceRigClass:GetAboveBarPosition(effect)
     local barTop = GetHeadTop(self.PieceType) - BAR_GAP - BAR_HEIGHT
+
+    if self.isBarShown then
+        barTop -= NAME_GAP + NAME_HEIGHT
+    end
 
     return UDim2.fromScale(0.5, barTop - ARROW_GAP - effect.Height / 2)
 end
@@ -272,17 +329,21 @@ function PieceRigClass:SetArrow(isShown, color)
     if not arrow then return end
 
     if isShown then
-        arrow.BasePosition = self:GetAboveBarPosition(arrow)
-
-        -- A bounty mark already floats there, so the arrow sits on top of it
-        if self.MarkEffect then
-            arrow.BasePosition -= UDim2.fromScale(0, self.MarkEffect.Height + ARROW_GAP)
-        end
-
+        self:PlaceArrow()
         arrow.Image.ImageColor3 = color or Color3.new(1, 1, 1)
     end
 
     arrow:SetShown(isShown)
+end
+
+function PieceRigClass:PlaceArrow()
+    local arrow = self.ArrowEffect
+    arrow.BasePosition = self:GetAboveBarPosition(arrow)
+
+    -- A bounty mark already floats there, so the arrow sits on top of it
+    if self.MarkEffect then
+        arrow.BasePosition -= UDim2.fromScale(0, self.MarkEffect.Height + ARROW_GAP)
+    end
 end
 
 -- Draws a divider between every point of health so players can count the hits left
@@ -305,7 +366,7 @@ function PieceRigClass:DrawTicks()
         tick.AnchorPoint = Vector2.new(0.5, 0)
         tick.Position = UDim2.fromScale(i / self.MaxHealth, 0)
         tick.Size = UDim2.new(0, 1, 1, 0)
-        tick.ZIndex = 2
+        tick.ZIndex = 3
         tick.Parent = self.HealthTrack
     end
 
@@ -319,12 +380,56 @@ function PieceRigClass:SetHealth(health, maxHealth)
 
     local fill = UDim2.fromScale(math.clamp(health / self.MaxHealth, 0, 1), 1)
     TweenService:Create(self.HealthFill, TweenInfo.new(SpeedController.Scale(BAR_DRAIN_TIME)), {Size = fill}):Play()
+
+    self:SetDamagePreview(self.PreviewDamage)
+end
+
+-- Marks the slice of health an attack is about to take; 0 hides it
+function PieceRigClass:SetDamagePreview(damage)
+    local wasShown = self.PreviewDamage > 0
+    self.PreviewDamage = damage
+
+    local health = self.Health or 0
+    local lost = math.min(damage, health)
+
+    self.DamagePreview.Visible = lost > 0
+
+    if lost > 0 then
+        self.DamagePreview.Position = UDim2.fromScale((health - lost) / self.MaxHealth, 0)
+        self.DamagePreview.Size = UDim2.fromScale(lost / self.MaxHealth, 1)
+    end
+
+    if damage > 0 and not wasShown then
+        self:ShowHealth()
+    elseif damage <= 0 and wasShown then
+        self:HideHealth()
+    end
+end
+
+-- The name fades in and out with the bar; the mark and arrow move up to make room for it
+function PieceRigClass:FadeBar(isShown, duration)
+    local transparency = isShown and 0 or 1
+    local info = TweenInfo.new(duration)
+
+    TweenService:Create(self.HealthBar, info, {GroupTransparency = transparency}):Play()
+    TweenService:Create(self.NameLabel, info, {TextTransparency = transparency, TextStrokeTransparency = transparency}):Play()
+
+    if self.isBarShown == isShown then return end
+    self.isBarShown = isShown
+
+    if self.MarkEffect then
+        self.MarkEffect.BasePosition = self:GetAboveBarPosition(self.MarkEffect)
+    end
+
+    if self.ArrowEffect then
+        self:PlaceArrow()
+    end
 end
 
 function PieceRigClass:ShowHealth()
     self.HideToken += 1
 
-    TweenService:Create(self.HealthBar, TweenInfo.new(BAR_SHOW_TIME), {GroupTransparency = 0}):Play()
+    self:FadeBar(true, BAR_SHOW_TIME)
 end
 
 -- Fades the bar out after a delay unless it is shown again first
@@ -334,10 +439,10 @@ function PieceRigClass:HideHealth()
 
     task.delay(BAR_HIDE_DELAY, function()
         if self.HideToken ~= token then return end
-        if self.isHovered then return end
+        if self.isHovered or self.PreviewDamage > 0 then return end
         if not self.HealthBar.Parent then return end
 
-        TweenService:Create(self.HealthBar, TweenInfo.new(BAR_HIDE_TIME), {GroupTransparency = 1}):Play()
+        self:FadeBar(false, BAR_HIDE_TIME)
     end)
 end
 
@@ -465,9 +570,28 @@ function PieceRigClass:SetHovered(hovered)
     end
 end
 
+-- Calls back once the rig has stopped hopping, including the hop back from a lunge
+function PieceRigClass:WhenSettled(callback)
+    task.spawn(function()
+        local settledSince = time()
+
+        while self.Rig.Parent and time() - settledSince < SpeedController.Scale(LUNGE_PAUSE) + 0.05 do
+            if self.HopConnection then
+                settledSince = time()
+            end
+
+            task.wait()
+        end
+
+        if self.Rig.Parent then
+            callback()
+        end
+    end)
+end
+
 function PieceRigClass:FadeOut()
     self.HideToken += 1
-    TweenService:Create(self.HealthBar, TweenInfo.new(BAR_HIDE_TIME), {GroupTransparency = 1}):Play()
+    self:FadeBar(false, BAR_HIDE_TIME)
 
     local fade = TweenService:Create(self.Sprite.Image, TweenInfo.new(SpeedController.Scale(DEATH_FADE_TIME)), {ImageTransparency = 1})
 
@@ -483,9 +607,10 @@ function PieceRigClass:Die()
     self:SetArrow(false)
     self:SetMarked(false)
     self:RemoveAura()
+    self.PreviewDamage = 0
 
     self.HideToken += 1
-    TweenService:Create(self.HealthBar, TweenInfo.new(BAR_HIDE_TIME), {GroupTransparency = 1}):Play()
+    self:FadeBar(false, BAR_HIDE_TIME)
 
     self.Sprite:Play("Death", function()
         self:FadeOut()
@@ -519,6 +644,7 @@ function PieceRigClass:Destroy()
 
     self.Sprite:Destroy()
     self.HealthBar:Destroy()
+    self.NameLabel:Destroy()
     self.Rig:Destroy()
 end
 

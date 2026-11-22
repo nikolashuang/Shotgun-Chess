@@ -84,8 +84,7 @@ local function FinishRegion(player, regionId, summary)
         gold, exp = 0, 0
     end
 
-    ProfileService.AddGold(player, gold)
-    ProfileService.AddExp(player, exp)
+    gold, exp = ProfileService.AddEarned(player, gold, exp)
 
     if not region.DevOnly then
         data.Nodes[CampaignRules.GetNodeKey(regionId, region.Final)] = true

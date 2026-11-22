@@ -41,10 +41,12 @@ function DuelRewards.GetTeam(match, side, isWinner, reason)
     return DuelConfig.WIN_REWARD
 end
 
+-- Returns what was actually paid, after boosts
 function DuelRewards.PayOut(player, reward)
-    ProfileService.AddGold(player, reward.Gold)
-    ProfileService.AddExp(player, reward.Exp)
+    local gold, exp = ProfileService.AddEarned(player, reward.Gold, reward.Exp)
     ProfileService.Sync(player)
+
+    return {Gold = gold, Exp = exp}
 end
 
 return DuelRewards

@@ -165,13 +165,13 @@ end
 local function IsMultiplayerUnlocked()
     local level = Players.LocalPlayer:GetAttribute("Level") or ProgressionConfig.START_LEVEL
 
-    return level >= ProgressionConfig.DUELS_UNLOCK_LEVEL
+    return level >= ProgressionConfig.MULTIPLAYER_UNLOCK_LEVEL
 end
 
 local function UpdateMultiplayerLock(button)
     local isUnlocked = IsMultiplayerUnlocked()
 
-    button.Label.Text = isUnlocked and "Multiplayer" or "Multiplayer [Lv " .. ProgressionConfig.DUELS_UNLOCK_LEVEL .. "]"
+    button.Label.Text = isUnlocked and "Multiplayer" or "Multiplayer [Lv " .. ProgressionConfig.MULTIPLAYER_UNLOCK_LEVEL .. "]"
     button.Label.TextTransparency = isUnlocked and 0 or 0.5
 end
 

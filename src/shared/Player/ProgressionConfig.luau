@@ -6,6 +6,8 @@ local ProgressionConfig = {
 
     START_GOLD = 0,
 
+    -- The Multiplayer screen opens after Hunter Forest (about level 5); Duels inside it open later
+    MULTIPLAYER_UNLOCK_LEVEL = 5,
     DUELS_UNLOCK_LEVEL = 10,
 }
 

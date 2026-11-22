@@ -47,6 +47,7 @@ Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuni
 - **Enemy pieces** attack with chess capture rules and their normal damage, against the player's king or summoned pieces. Killing a summoned piece moves the attacker onto its square, and the AI scores that capture square (Position, Teamwork, Advance) as where the piece ends up.
 - **Enemy Kings** hold and fire a Pump shotgun (`ShotgunConfig.ENEMY_KING`) with the same rules as the player's, aimed straight at a target. The gun points at the player's king until they fire, then at their last shot. They don't track ammo (assumption).
 - **Ratings** set how often a piece takes a random option instead of its best one: 500 → 40%, 1000 → 25%, 1500 → 10%, 2000 → 5%, 2500 → 1% (max 2 per match). Campaign battles use 1000 (`CampaignConfig.AI_RATING`).
+- **Promotion (singleplayer only):** an enemy Pawn that reaches row 1 (moving or capturing) becomes a Knight (40%), Bishop (40%) or Rook (20%) at the new piece's full health (`PieceConfig.PROMOTIONS`). The player's pawns, Fallen Pawns and Practice AI pawns never promote.
 - **Defeat:** the player's king dying ends the match as a Defeat.
 
 ### Commanding Pieces
@@ -92,15 +93,15 @@ Aiming follows the Shotgun King style: a curved arc centered on the king.
 
 ## Shotguns
 
-Shotguns are bought in the Shop with gold and equipped in the Armory. Only the Pump is owned at the start; unowned shotguns show as LOCKED. Numbers marked *placeholder* are not in the design doc.
+Shotguns are bought in the Shop with gold and equipped in the Armory. Only the Pump is owned at the start; unowned shotguns show as LOCKED. Prices were raised by 5,000 each (Nov 22 2026) when gold became buyable with Robux. Numbers marked *placeholder* are not in the design doc.
 
 | Shotgun | Price | Ammo | Range | Arc | Damage | Notes |
 |---|---|---|---|---|---|---|
 | Pump (starter) | — | 5 | 3 | 64° | 5→2 | Basic shotgun |
-| Double Barrel | 2000 | 2 | 2 *(placeholder)* | 64° | 5→3.5, x2 | Every shot fires both barrels: 2 shells, double damage. Holds one shot, so it reloads after every blast (Nov 2026) |
-| Buck Barrel | 2100 | 4 | 3 | 64° | 5→3 | Knockback 1 tile |
-| Long Barrel | 3500 | 4 | 4 | 24° *(placeholder)* | 5→1 | Very tight cone; falloff nerfed to 1 at max range (Nov 2026) |
-| Knife Shotty | 2400 | 5 | 3 | 64° | 5→2 | Alt mode: knife swing |
+| Double Barrel | 7000 | 2 | 2 *(placeholder)* | 64° | 5→3.5, x2 | Every shot fires both barrels: 2 shells, double damage. Holds one shot, so it reloads after every blast (Nov 2026) |
+| Buck Barrel | 7100 | 4 | 3 | 64° | 5→3 | Knockback 1 tile |
+| Long Barrel | 8500 | 4 | 4 | 24° *(placeholder)* | 5→1 | Very tight cone; falloff nerfed to 1 at max range (Nov 2026) |
+| Knife Shotty | 7400 | 5 | 3 | 64° | 5→2 | Alt mode: knife swing |
 
 **Knockback (Buck Barrel):** every enemy the shot hits and doesn't kill is pushed 1 tile straight away from the king (one of the 8 directions). If the tile is off the board or occupied, it stays put with no extra damage. Kings can't be knocked back. Enemies farther from the king are pushed first, so a line of enemies all move back together. The precise shot was removed (Nov 2026).
 
@@ -227,14 +228,15 @@ A first completion pays the whole pouch; replays of a completed region pay 20%. 
 ### Progression
 
 - Gold buys shotguns. XP raises the account level. Each level needs 100 more XP than the last: 100 for level 2, 200 for level 3, and so on (`ProgressionRules.GetExpToLevel`).
-- **Duels unlock at level 10** (`ProgressionConfig.DUELS_UNLOCK_LEVEL`, 4,500 total XP), checked on the server.
+- **Multiplayer opens at level 5** (`ProgressionConfig.MULTIPLAYER_UNLOCK_LEVEL`, 1,000 total XP), about where players finish Hunter Forest, so they can play co-op with friends sooner.
+- **Duels unlock at level 10** (`ProgressionConfig.DUELS_UNLOCK_LEVEL`, 4,500 total XP), checked on the server. Below that the Duels card shows "Duels [Lv 10]" and can't be opened.
 - Back steps out one level at a time: area map → world map → main menu.
-- **Dev panel:** a Developer button on the main menu, shown only to the accounts in `DevConfig.USER_IDS` (Snoothe3rd). It can unlock everything (all shotguns, classes, campaign nodes and level 10), add 1000 Gold, or reset the profile. The server checks the account on every request.
+- **Dev panel:** a Developer button on the main menu, shown only to the accounts in `DevConfig.USER_IDS` (Snoothe3rd). It can unlock everything (all shotguns, classes, campaign nodes and the Multiplayer unlock level), add 1000 Gold, or reset the profile. The server checks the account on every request.
 - Saved in a DataStore (`PlayerProfile_v1`): gold, XP, owned shotguns, unlocked classes, completed regions, region runs, equipped loadout, settings and keybinds. If the profile can't load (e.g. Studio API access off), a temporary profile is used and never saved.
 
 ## Multiplayer (PvP Duels)
 
-Unlocks at level 10. Uses the same rules as the campaign (`MatchClass`), with two human sides instead of the AI.
+Unlocks at level 10 (the Multiplayer screen itself opens at level 5). Uses the same rules as the campaign (`MatchClass`), with two human sides instead of the AI.
 
 - **Screens:** Multiplayer opens on a **Duels** card (room for more multiplayer modes beside it). Duels opens two cards: **Queue** (searches in place, click again to cancel; pairs the two players who have waited longest) and **Challenge** (the player list on its own screen). Back steps out one screen at a time. Card drawings come from `art/tools/build_armory_icons.py` (sheet in `ArmoryArt`).
 - **Practice** (the last card on the **Singleplayer** screen, after Campaign and Siege; no level needed): Choose Difficulty picks the AI rating (500–2500 in steps of 500, `DuelConfig.PRACTICE_RATINGS`) and the AI king's shotgun and class. It's a normal duel (coin flip for White, 5:00 clock) against `PracticeAIService`, with no rewards.
@@ -294,6 +296,35 @@ Right click toggles a shotgun's alt mode while aiming.
 
 - **Interrupt Cards / defensive interrupts** — discarded entirely (Nov 2026).
 
+## Shop
+
+One scrolling page (`ShopController`, prices in `ShopConfig`), top to bottom:
+
+1. **Featured Skins** and **Skin Crates** — placeholders (Coming Soon) until skins exist. Crates will cost 1,000 Gold, or 8,000 for 10. Featured Mythical skins get boosted crate rates.
+2. **Shotguns** — bought with gold (see Shotguns).
+3. **Gold** (Robux): 1,000 for 50, 10,000 for 400, 50,000 for 1,400 ("Best Value!!!", tag pulses), 100,000 for 3,000.
+4. **Boosts** (Robux): 2x Gold or 2x XP, 50 Robux for 1 hour of **play time** each (only counts down while in a server, either place). Buying again adds another hour. Doubles what's earned from campaign payouts (applied when the pouch pays out) and duel rewards; bought gold is never doubled.
+5. **Donations** (Robux): 500, 1,000, 1,500, 2,000. Grant nothing.
+
+Robux items are Developer Products (ids in `ShopConfig`, icons in `art/shop`). `PurchaseService` grants each purchase once: the purchase id is saved with the profile before the receipt is marked granted, and both places take receipts.
+
+### Gold Economy (Nov 22 2026)
+
+First clear of each region, from the real maps (low end: lanes heavy on Mysteries; high end: battle lanes with good Treasure Hunts):
+
+| Region | Gold |
+|---|---|
+| King's Training | 525–1,275 |
+| Hunter Forest | 1,200–2,150 |
+| Cliffside | 1,875–3,025 |
+| Outskirts | 2,550–3,900 |
+| Gravehollow | 3,225–4,775 |
+| **Campaign** | **~9,400–15,100** |
+
+- Afterwards: replays pay 20% (~950 per Gravehollow run), duels 150 per win / 50 per loss.
+- All four buyable shotguns cost 30,000; a full first clear buys about 2. The rest is ~17 Gravehollow replays or ~107 duel wins.
+- Gold per Robux: 20 (1k pack), 25 (10k), 35.7 (50k, best value), 33.3 (100k). One shotgun ≈ 350–425 Robux at the base rate; the whole campaign's gold ≈ 730 Robux.
+
 ## Open Design Decisions
 
 Not yet specified in the design doc. Do not implement guesses without confirming.
@@ -302,7 +333,6 @@ Not yet specified in the design doc. Do not implement guesses without confirming
 - Starting energy (prototype uses 0)
 - Class placeholders: Collector energy amount, trap placement range, Deadeye cone/range numbers, what counts as an "isolated" piece
 - Enemy King shotgun ammo, and whether bosses use their class abilities
-- Pawn promotion: enemy pawns that reach row 1 just stop
 - Regional King and Queen boss abilities (the class abilities now exist for them to use)
 - What Treasure Hunts find beyond gold (items, upgrades); Treasure Hunt board art per region (colors only for now)
 - Elite campaign: +5 to the starting budget, AI 1500–2000, death restarts the region (not implemented)
@@ -310,6 +340,7 @@ Not yet specified in the design doc. Do not implement guesses without confirming
 - Exact ranges/arcs for Double Barrel and Long Barrel
 - Duel reward amounts and ranked play; whether bolas should skip 3 King turns or fewer
 - Duels with two Outlaws show only the most recent smoke cloud on each screen
+- Skins: what they change, rarities (incl. Mythical), crate odds and how much featured skins boost them
 
 ## Prototype Test Setup
 

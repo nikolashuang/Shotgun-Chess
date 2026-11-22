@@ -9,6 +9,7 @@ local DuelService = require(ServerScriptService.Duel.DuelService)
 local DuelPlaceService = require(ServerScriptService.Duel.DuelPlaceService)
 local DuelConfig = require(ReplicatedStorage.Shared.Duel.DuelConfig)
 local DevService = require(ServerScriptService.Player.DevService)
+local PurchaseService = require(ServerScriptService.Player.PurchaseService)
 local MirrorRules = require(ServerScriptService.Match.MirrorRules)
 
 local BoardRemote = ReplicatedStorage.Remotes.BoardRemote
@@ -37,6 +38,8 @@ local isDuelPlace = game.PlaceId == DuelConfig.DUEL_PLACE_ID
 
 ProfileService.Init()
 LoadoutService.Init()
+-- Both places take receipts, since Roblox retries an unfinished purchase wherever the player joins next
+PurchaseService.Init()
 
 if isDuelPlace then
     DuelPlaceService.Init(StartMatch)

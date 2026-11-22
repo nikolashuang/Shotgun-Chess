@@ -1,7 +1,10 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
+local TweenService = game:GetService("TweenService")
 
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
+local ShopConfig = require(ReplicatedStorage.Shared.Shop.ShopConfig)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 local AtlasImage = require(script.Parent.Parent.UI.AtlasImage)
 local PlayerCard = require(script.Parent.Parent.UI.PlayerCard)
@@ -12,16 +15,63 @@ local LoadoutRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Lo
 local AFFORDABLE_COLOR = Color3.fromHex("F1D4AC")
 local OWNED_COLOR = Color3.fromHex("D49A77")
 local LOCKED_COLOR = Color3.fromHex("C8644F")
-local DONATE_NOTICE_TIME = 1.5
--- Row width over height, so rows keep their shape at any screen size
-local ROW_ASPECT = 5
+local NOTICE_TIME = 1.5
+local PULSE_SCALE = 1.18
+local PULSE_TIME = 0.5
+-- Pulsing tags become a tilted sale badge hanging off the card's top right corner
+local BADGE_COLOR = Color3.fromHex("C8644F")
+local BADGE_TEXT_COLOR = Color3.fromHex("F1D4AC")
+local BADGE_STROKE_COLOR = Color3.fromHex("271F29")
+local BADGE_TILT = 12
+-- Shotgun row width over height, so rows keep their shape at any screen size
+local ROW_ASPECT = 11
 
 local player = Players.LocalPlayer
 local rows = {}
+local boostCards = {}
 
+-- The shop is one scrolling page: featured skins and crates, shotguns, gold packs, 2x boosts and donations
+-- Shotguns are bought with gold (the server checks price and ownership); everything with a Robux price is a Developer Product
 local ShopController = {}
 
-local function Refresh()
+local function FormatNumber(number)
+    local text = tostring(number)
+
+    while true do
+        local formatted, count = string.gsub(text, "^(%d+)(%d%d%d)", "%1,%2")
+        text = formatted
+        if count == 0 then return text end
+    end
+end
+
+local function FormatTime(seconds)
+    seconds = math.ceil(seconds)
+
+    return string.format("%d:%02d", seconds // 60, seconds % 60)
+end
+
+-- Briefly swaps a label's text, then puts it back
+local function Flash(label, text)
+    local original = label:GetAttribute("Original") or label.Text
+    label:SetAttribute("Original", original)
+    label.Text = text
+
+    task.delay(NOTICE_TIME, function()
+        label.Text = original
+    end)
+end
+
+-- Products without an id haven't been created on the experience yet
+local function Prompt(item, label)
+    if item.ProductId == 0 then
+        Flash(label, "Coming Soon")
+        return
+    end
+
+    MarketplaceService:PromptProductPurchase(player, item.ProductId)
+end
+
+local function RefreshShotguns()
     local gold = player:GetAttribute("Gold") or 0
 
     for name, row in pairs(rows) do
@@ -40,25 +90,23 @@ local function Refresh()
     end
 end
 
--- Shotguns are bought with gold; the server checks the price and ownership
--- Crates and Donate are placeholders until they're designed
-local init = false
-function ShopController.Init()
-    if init then return end
-    init = true
+local function RefreshBoosts()
+    for kind, card in pairs(boostCards) do
+        local left = player:GetAttribute(kind .. "Boost") or 0
 
-    local screen = player.PlayerGui:WaitForChild("ShopScreen")
-    local root = screen:WaitForChild("Root")
-    local template = root:WaitForChild("Template")
-    local list = root:WaitForChild("ShotgunList")
+        card.Status.Text = left > 0 and "Active: " .. FormatTime(left) .. " left" or "Not active"
+        card.Status.TextColor3 = left > 0 and AFFORDABLE_COLOR or OWNED_COLOR
+    end
+end
 
+local function BuildShotguns(list, template)
     for i, name in ipairs(ShotgunConfig.ORDER) do
         local weapon = ShotgunConfig.Shotguns[name]
 
         local row = template:Clone()
         row.Name = name
         row.Label.Text = weapon.DisplayName
-        row.Price.Text = weapon.Price > 0 and weapon.Price .. " Gold" or "Starter"
+        row.Price.Text = weapon.Price > 0 and FormatNumber(weapon.Price) .. " Gold" or "Starter"
         row.LayoutOrder = i
         AtlasImage.SetRect(row.Icon, SpriteConfig.Guns[name].Rect)
         row.Visible = true
@@ -73,54 +121,145 @@ function ShopController.Init()
 
         rows[name] = row
     end
+end
 
-    -- AutomaticCanvasSize ignores the rows' aspect ratio sizing, so the canvas follows the layout instead
-    local layout = list:WaitForChild("UIListLayout")
-    local padding = list:WaitForChild("UIPadding")
+local function BuildCards(container, template, items, fill)
+    for i, item in ipairs(items) do
+        local card = template:Clone()
+        card.Name = item.Id
+        card.LayoutOrder = i
+        card.Visible = true
+        fill(card, item)
+        card.Parent = container
 
-    local function FitCanvas()
-        local height = layout.AbsoluteContentSize.Y + padding.PaddingTop.Offset + padding.PaddingBottom.Offset
-
-        list.CanvasSize = UDim2.fromOffset(0, height)
+        card.Buy.Activated:Connect(function()
+            Prompt(item, card.Buy.Label)
+        end)
     end
+end
 
-    list.AutomaticCanvasSize = Enum.AutomaticSize.None
-    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(FitCanvas)
-    FitCanvas()
-
-    -- Rows are sized from the list's width and the canvas from the rows, so the list always scrolls to the last gun
-    local layout = list:WaitForChild("UIListLayout")
-    local padding = list:WaitForChild("UIPadding")
+-- Sections are sized from the page's width (each has an Aspect attribute), and the canvas follows the layout
+local function BindPage(page, shotgunList)
+    local layout = page:WaitForChild("UIListLayout")
+    local padding = page:WaitForChild("UIPadding")
+    local listLayout = shotgunList:WaitForChild("UIListLayout")
 
     local function Resize()
-        local rowHeight = list.AbsoluteSize.X * template.Size.X.Scale / ROW_ASPECT
+        local width = page.AbsoluteSize.X - padding.PaddingLeft.Offset - padding.PaddingRight.Offset - page.ScrollBarThickness
+
+        for _, section in pairs(page:GetChildren()) do
+            local aspect = section:GetAttribute("Aspect")
+
+            if aspect then
+                section.Size = UDim2.new(1, 0, 0, width / aspect)
+            end
+        end
+
+        local rowHeight = width / ROW_ASPECT
+        local count = #ShotgunConfig.ORDER
 
         for _, row in pairs(rows) do
-            row.Size = UDim2.new(template.Size.X.Scale, 0, 0, rowHeight)
+            row.Size = UDim2.new(1, 0, 0, rowHeight)
         end
+
+        shotgunList.Size = UDim2.new(1, 0, 0, rowHeight * count + listLayout.Padding.Offset * (count - 1))
     end
 
     local function UpdateCanvas()
-        local extra = padding.PaddingTop.Offset + padding.PaddingBottom.Offset
-        list.CanvasSize = UDim2.fromOffset(0, layout.AbsoluteContentSize.Y + extra)
+        page.CanvasSize = UDim2.fromOffset(0, layout.AbsoluteContentSize.Y + padding.PaddingTop.Offset + padding.PaddingBottom.Offset)
     end
 
-    list:GetPropertyChangedSignal("AbsoluteSize"):Connect(Resize)
+    page.AutomaticCanvasSize = Enum.AutomaticSize.None
+    page:GetPropertyChangedSignal("AbsoluteSize"):Connect(Resize)
     layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
     Resize()
     UpdateCanvas()
+end
 
-    local donateLabel = root:WaitForChild("DonateButton"):WaitForChild("Label")
-    root.DonateButton.Activated:Connect(function()
-        donateLabel.Text = "Coming Soon"
-        task.delay(DONATE_NOTICE_TIME, function()
-            donateLabel.Text = "Donate"
+local init = false
+function ShopController.Init()
+    if init then return end
+    init = true
+
+    local screen = player.PlayerGui:WaitForChild("ShopScreen")
+    local root = screen:WaitForChild("Root")
+    local page = root:WaitForChild("Page")
+    local templates = root:WaitForChild("Templates")
+
+    -- Skins don't exist yet, so the crate buttons only say so
+    local crates = page:WaitForChild("TopRow"):WaitForChild("Crates")
+    crates.OpenOne.Label.Text = "1 Crate - " .. FormatNumber(ShopConfig.CRATE_PRICE) .. " Gold"
+    crates.OpenTen.Label.Text = "10 Crates - " .. FormatNumber(ShopConfig.CRATE_TEN_PRICE) .. " Gold"
+
+    for _, button in pairs({crates.OpenOne, crates.OpenTen}) do
+        button.Activated:Connect(function()
+            Flash(button.Label, "Coming Soon")
         end)
+    end
+
+    local shotgunList = page:WaitForChild("ShotgunList")
+    BuildShotguns(shotgunList, templates:WaitForChild("ShotgunRow"))
+
+    BuildCards(page:WaitForChild("GoldRow"), templates:WaitForChild("GoldCard"), ShopConfig.GoldPacks, function(card, item)
+        card.Amount.Text = FormatNumber(item.Gold) .. " Gold"
+        card.Tag.Text = item.Tag or ""
+
+        if item.Pulse then
+            local tag = card.Tag
+
+            -- Anchored at its center so the pulse grows and shrinks in place
+            tag.AnchorPoint = Vector2.new(0.5, 0.5)
+            tag.Position = UDim2.fromScale(0.8, 0.03)
+            tag.Size = UDim2.fromScale(0.62, 0.15)
+            tag.Rotation = BADGE_TILT
+            tag.ZIndex = 3
+            -- Drawn above the next card, which the badge hangs over
+            card.ZIndex = 2
+            tag.BackgroundColor3 = BADGE_COLOR
+            tag.BackgroundTransparency = 0
+            tag.TextColor3 = BADGE_TEXT_COLOR
+            tag.TextXAlignment = Enum.TextXAlignment.Center
+
+            local stroke = Instance.new("UIStroke")
+            stroke.Color = BADGE_STROKE_COLOR
+            stroke.Thickness = 2
+            stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            stroke.Parent = tag
+
+            local padding = Instance.new("UIPadding")
+            padding.PaddingTop = UDim.new(0.12, 0)
+            padding.PaddingBottom = UDim.new(0.12, 0)
+            padding.Parent = tag
+
+            local scale = Instance.new("UIScale")
+            scale.Parent = tag
+
+            TweenService:Create(scale, TweenInfo.new(PULSE_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                Scale = PULSE_SCALE,
+            }):Play()
+        end
+        card.Buy.Label.Text = "R$ " .. FormatNumber(item.Robux)
     end)
 
-    player:GetAttributeChangedSignal("Gold"):Connect(Refresh)
-    ProfileController.OnChanged(Refresh)
-    Refresh()
+    BuildCards(page:WaitForChild("BoostRow"), templates:WaitForChild("BoostCard"), ShopConfig.Boosts, function(card, item)
+        card.Title.Text = item.DisplayName
+        card.Duration.Text = ShopConfig.BOOST_SECONDS // 3600 .. " hour of play time"
+        card.Buy.Label.Text = "R$ " .. FormatNumber(item.Robux)
+        boostCards[item.Kind] = card
+    end)
+
+    BuildCards(page:WaitForChild("DonationRow"), templates:WaitForChild("DonationCard"), ShopConfig.Donations, function(card, item)
+        card.Buy.Label.Text = "R$ " .. FormatNumber(item.Robux)
+    end)
+
+    BindPage(page, shotgunList)
+
+    player:GetAttributeChangedSignal("Gold"):Connect(RefreshShotguns)
+    player:GetAttributeChangedSignal("GoldBoost"):Connect(RefreshBoosts)
+    player:GetAttributeChangedSignal("ExpBoost"):Connect(RefreshBoosts)
+    ProfileController.OnChanged(RefreshShotguns)
+    RefreshShotguns()
+    RefreshBoosts()
 
     PlayerCard.Bind(screen:WaitForChild("Profile"))
 end

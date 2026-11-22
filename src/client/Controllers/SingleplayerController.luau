@@ -41,6 +41,9 @@ local function AddLock(art)
     end
 end
 
+-- Multiplayer locks its co-op Siege card the same way
+SingleplayerController.AddLock = AddLock
+
 local init = false
 function SingleplayerController.Init(openSettings)
     if init then return end

@@ -20,10 +20,12 @@ local DIVIDER_COLOR = Color3.fromHex("271F29")
 local DIVIDER_WIDTH = 2
 local HEALTH_DIVIDER_WIDTH = 1
 
--- Pieces that join the player's side and get their own health card, by the name shown beside it
-local COMPANION_NAMES = {
+-- Pieces that join the player's side and get their own health card, with the name shown above it
+local COMPANIONS = {
     FallenKnight = "Fallen Knight",
 }
+-- Gap between companion cards, as a fraction of the turn bar's width
+local COMPANION_GAP = 0.02
 -- Pixels of the companion's idle sprite cropped for its portrait, like the King's head on his card
 local PORTRAIT_SIZE = 12
 local PORTRAIT_INSET = 10
@@ -41,11 +43,10 @@ local dividerCount = 0
 local shotgunName = nil
 local kingCard = nil
 local kingMaxHealth = 1
-local companionCard = nil
-local companionLabel = nil
--- The companion piece on the board and the health its card last showed
-local companionId = nil
-local companionShown = nil
+local companionTemplate = nil
+-- Companion piece id -> its health card (and the health it last showed), in the order they joined
+local companionCards = {}
+local companionOrder = {}
 
 local CombatHudController = {}
 
@@ -163,12 +164,22 @@ end
 
 --COMPANIONS--
 
-local function ShowCompanion(id, pieceType)
-    companionId = id
-    companionShown = nil
-    companionLabel.Text = COMPANION_NAMES[pieceType]
+-- Cards line up to the right of the King's card, one per companion
+local function PlaceCompanionCards()
+    local step = companionTemplate.Size.X.Scale + COMPANION_GAP
 
-    local portrait = companionCard.Frame.PortraitFrame.Portrait
+    for i, id in ipairs(companionOrder) do
+        local frame = companionCards[id].Frame
+        frame.Position = UDim2.new(companionTemplate.Position.X.Scale + (i - 1) * step, 0, companionTemplate.Position.Y.Scale, 0)
+    end
+end
+
+local function AddCompanion(id, pieceType)
+    local frame = companionTemplate:Clone()
+    frame.Name = "Companion" .. id
+    frame.Caption.Text = COMPANIONS[pieceType]
+
+    local portrait = frame.PortraitFrame.Portrait
     portrait.Image = SpriteConfig.ASSET_ID
     portrait.ImageRectOffset = Vector2.new(
         SpriteConfig.Columns[pieceType] + PORTRAIT_INSET,
@@ -176,32 +187,44 @@ local function ShowCompanion(id, pieceType)
     )
     portrait.ImageRectSize = Vector2.new(PORTRAIT_SIZE, PORTRAIT_SIZE)
 
-    companionCard.Frame.Visible = true
-    companionLabel.Visible = true
+    frame.Visible = true
+    frame.Parent = companionTemplate.Parent
+
+    companionCards[id] = NewHealthCard(frame)
+    table.insert(companionOrder, id)
+    PlaceCompanionCards()
 end
 
-local function HideCompanion()
-    companionId = nil
-    companionCard.Frame.Visible = false
-    companionLabel.Visible = false
+local function RemoveCompanion(id)
+    companionCards[id].Frame:Destroy()
+    companionCards[id] = nil
+    table.remove(companionOrder, table.find(companionOrder, id))
+    PlaceCompanionCards()
 end
 
--- Follows the companion's board health, so every way it can be hurt or healed shows up; gone once it dies
-local function UpdateCompanion()
-    if not companionId then return end
-
-    local piece = PieceController.Get(companionId)
-    if not piece then
-        HideCompanion()
-        return
+local function ClearCompanions()
+    for _, id in ipairs(table.clone(companionOrder)) do
+        RemoveCompanion(id)
     end
+end
 
-    local health, maxHealth = piece.Rig.Health, piece.Rig.MaxHealth
-    if not health or not maxHealth then return end
-    if companionShown == health then return end
+-- Follows each companion's board health, so every way it can be hurt or healed shows up; a card goes once its piece dies
+local function UpdateCompanions()
+    for _, id in ipairs(table.clone(companionOrder)) do
+        local card = companionCards[id]
+        local piece = PieceController.Get(id)
 
-    companionShown = health
-    DrawHealthCard(companionCard, health, maxHealth)
+        if not piece then
+            RemoveCompanion(id)
+            continue
+        end
+
+        local health, maxHealth = piece.Rig.Health, piece.Rig.MaxHealth
+        if health and maxHealth and card.Shown ~= health then
+            card.Shown = health
+            DrawHealthCard(card, health, maxHealth)
+        end
+    end
 end
 
 local init = false
@@ -226,9 +249,8 @@ function CombatHudController.Init()
     energyCount = energyPanel:WaitForChild("EnergyCount")
 
     kingCard = NewHealthCard(root:WaitForChild("TurnBar"):WaitForChild("KingHealth"))
-    companionCard = NewHealthCard(root:WaitForChild("CompanionHealth"))
-    companionLabel = root:WaitForChild("CompanionLabel")
-    HideCompanion()
+    companionTemplate = root.TurnBar:WaitForChild("CompanionHealth")
+    companionTemplate.Visible = false
 
     ShotgunController.OnModeChanged = UpdateFireLabel
 
@@ -236,16 +258,16 @@ function CombatHudController.Init()
         if action == "TurnState" then
             Update(...)
         elseif action == "MatchStarted" then
-            HideCompanion()
+            ClearCompanions()
         elseif action == "PieceAdded" then
             local id, pieceType, team = ...
-            if team == "White" and COMPANION_NAMES[pieceType] then
-                ShowCompanion(id, pieceType)
+            if team == "White" and COMPANIONS[pieceType] then
+                AddCompanion(id, pieceType)
             end
         end
     end)
 
-    RunService.Heartbeat:Connect(UpdateCompanion)
+    RunService.Heartbeat:Connect(UpdateCompanions)
 end
 
 return CombatHudController

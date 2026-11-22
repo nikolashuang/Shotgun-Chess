@@ -173,7 +173,7 @@ local function StartTeamDuel(lobby)
             local reward = DuelRewards.GetTeam(match, side, isWinner, reason)
 
             if reward then
-                DuelRewards.PayOut(player, reward)
+                reward = DuelRewards.PayOut(player, reward)
             end
 
             DuelRemote:FireClient(player, "Result", {
@@ -252,7 +252,7 @@ local function StartDuel(first, second)
             local reward = DuelRewards.Get(isWinner, reason)
 
             if reward then
-                DuelRewards.PayOut(player, reward)
+                reward = DuelRewards.PayOut(player, reward)
             end
 
             DuelRemote:FireClient(player, "Result", {

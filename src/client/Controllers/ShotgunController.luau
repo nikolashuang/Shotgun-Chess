@@ -62,6 +62,9 @@ local lineRange = nil
 local ShotgunController = {}
 
 ShotgunController.OnModeChanged = nil
+-- Called with the shotgun's hit tiles and shot type whenever its preview changes; nil once it's cleared
+-- Ability aims (Fan the Hammer, bolas) don't report
+ShotgunController.OnPreviewChanged = nil
 
 local function ToBoardUDim(x, y)
     return UDim2.fromScale(x / BoardConfig.SIZE, 1 - y / BoardConfig.SIZE)
@@ -152,17 +155,29 @@ local function ClearPreviewTiles()
     end
 
     previewTiles = {}
+
+    if lastPreviewKey and ShotgunController.OnPreviewChanged then
+        ShotgunController.OnPreviewChanged(nil)
+    end
+
     lastPreviewKey = nil
 end
 
 -- Hit tiles are only recalculated when the preview key changes
-local function UpdatePreviewTiles(previewKey, getHitTiles)
+-- shotType is set for shotgun shots so their damage can be previewed
+local function UpdatePreviewTiles(previewKey, getHitTiles, shotType)
     if previewKey == lastPreviewKey then return end
 
     ClearPreviewTiles()
     lastPreviewKey = previewKey
 
-    for _, target in pairs(getHitTiles()) do
+    local hitTiles = getHitTiles()
+
+    if shotType and ShotgunController.OnPreviewChanged then
+        ShotgunController.OnPreviewChanged(hitTiles, shotType)
+    end
+
+    for _, target in pairs(hitTiles) do
         local tile = GetTile(target.Column, target.Row)
 
         if tile then
@@ -222,7 +237,7 @@ local function DrawArc()
 
         UpdatePreviewTiles(table.concat(tileNames, ","), function()
             return hitTiles
-        end)
+        end, not lineRange and not aimWeapon and "Knife" or nil)
 
         if hitTiles[1] then
             AimGun(math.atan2(hitTiles[1].Row - 0.5 - originY, hitTiles[1].Column - 0.5 - originX))
@@ -239,7 +254,7 @@ local function DrawArc()
 
         UpdatePreviewTiles("PointBlank" .. BoardRules.GetTileName(pointBlankColumn, pointBlankRow), function()
             return select(2, ShotgunRules.GetFireResult(column, row, targetX, targetY, weapon, "Normal", isBlockingTile))
-        end)
+        end, not aimWeapon and "PointBlank" or nil)
         AimGun(pointBlankAngle)
         HideDots(1)
         return
@@ -250,7 +265,7 @@ local function DrawArc()
     UpdatePreviewTiles(previewKey, function()
         local isBlocking = not weapon.Pierces and isBlockingTile or nil
         return select(2, ShotgunRules.GetShot(originX, originY, angle, radius, isBlocking, weapon))
-    end)
+    end, not aimWeapon and "Spread" or nil)
     AimGun(angle)
 
     local halfArc = math.rad(weapon.ArcDegrees) / 2

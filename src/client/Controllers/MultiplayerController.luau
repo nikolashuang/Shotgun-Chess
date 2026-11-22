@@ -5,6 +5,7 @@ local ProgressionConfig = require(ReplicatedStorage.Shared.Player.ProgressionCon
 local DuelConfig = require(ReplicatedStorage.Shared.Duel.DuelConfig)
 local ArmoryArt = require(ReplicatedStorage.Shared.UI.ArmoryArt)
 local DuelResult = require(script.Parent.Parent.UI.DuelResult)
+local SingleplayerController = require(script.Parent.SingleplayerController)
 
 local DuelRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DuelRemote")
 local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BoardRemote")
@@ -96,6 +97,15 @@ local function SetupCard(card, icon, onActivated)
     ArmoryArt.SetIcon(card.Art.Image, icon)
     BindHover(card)
     card.Activated:Connect(onActivated)
+end
+
+-- Duels open at a higher level than the Multiplayer screen itself
+local function UpdateDuelsLock(card)
+    local isUnlocked = IsUnlocked(Players.LocalPlayer)
+
+    card.Label.Text = isUnlocked and "Duels" or "Duels [Lv " .. ProgressionConfig.DUELS_UNLOCK_LEVEL .. "]"
+    card.Label.TextTransparency = isUnlocked and 0 or 0.5
+    card.Art.Image.ImageColor3 = isUnlocked and Color3.new(1, 1, 1) or LOCKED_COLOR
 end
 
 --QUEUE--
@@ -430,9 +440,25 @@ function MultiplayerController.Init()
     emptyLabel = playersPanel:WaitForChild("EmptyLabel")
 
     -- The hub has room for more multiplayer modes next to Duels
-    SetupCard(hub:WaitForChild("DuelsCard"), "Duels", function()
+    local duelsCard = hub:WaitForChild("DuelsCard")
+
+    SetupCard(duelsCard, "Duels", function()
+        if not IsUnlocked(Players.LocalPlayer) then return end
+
         ShowView("ModeView")
     end)
+
+    UpdateDuelsLock(duelsCard)
+    Players.LocalPlayer:GetAttributeChangedSignal("Level"):Connect(function()
+        UpdateDuelsLock(duelsCard)
+    end)
+
+    -- Co-op Siege is locked until the mode is built
+    local siegeCard = hub:WaitForChild("SiegeCard")
+    ArmoryArt.SetIcon(siegeCard.Art.Image, "SiegeCoop")
+    siegeCard.Art.Image.ImageColor3 = LOCKED_COLOR
+    siegeCard.Label.TextTransparency = 0.5
+    SingleplayerController.AddLock(siegeCard.Art)
 
     SetupCard(modeView:WaitForChild("OneCard"), "Duels", function()
         ShowView("DuelsView")

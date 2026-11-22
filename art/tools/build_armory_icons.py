@@ -18,7 +18,7 @@ RENDER_SIZES = {"RestUpgrade": (88, 48)}
 # Most icons are drawn flat-on like the gun sprites; these keep the angled 3D camera
 CAMERA_PITCH_2D = 90
 CAMERA_PITCH_3D = 72
-THREE_D = {"Siege", "RestBandage", "RestTrain", "RestUpgrade"}
+THREE_D = {"Siege", "SiegeCoop", "RestBandage", "RestTrain", "RestUpgrade"}
 
 
 def linear(hex_color):
@@ -430,6 +430,16 @@ def siege(icon):
     icon.cube(toon("Rust", *RUST), (0.22, 0, 1.0), (0.4, 0.04, 0.25))
 
 
+# Multiplayer's co-op Siege: the same castle guarded by the in-game pawn model, so they read as pawns
+def siege_coop(icon):
+    siege(icon)
+    cream = toon("Cream", *CREAM)
+    for x, y in ((-1.05, 0.25), (-0.8, -0.8), (0.8, -0.8), (1.05, 0.25)):
+        pawn = icon.copy("Pawn", (x, y, -0.95), scale=(0.5, 0.5, 0.5))
+        pawn.material_slots[0].link = "OBJECT"
+        pawn.material_slots[0].material = cream
+
+
 
 # One shotgun drawn flat in the X/Z plane: barrels toward direction (degrees), stock behind
 def shotgun(icon, angle, double=False):
@@ -678,7 +688,7 @@ BUILDERS = [
     ("HunterPassive", collector), ("HunterSpecial", trap_layout), ("HunterUltimate", hunting_strike),
     ("GunslingerPassive", deadly_rounds), ("GunslingerSpecial", fan_the_hammer), ("GunslingerUltimate", bounty),
     ("OutlawPassive", opportunist), ("OutlawSpecial", conceal), ("OutlawUltimate", ambush),
-    ("Siege", siege),
+    ("Siege", siege), ("SiegeCoop", siege_coop),
     ("Duels", duels), ("Practice", practice), ("Queue", queue), ("Challenge", challenge),
     ("Pouch", pouch), ("GlobalQueue", globe),
     ("RestBandage", rest_bandage), ("RestTrain", rest_train), ("RestUpgrade", rest_upgrade),

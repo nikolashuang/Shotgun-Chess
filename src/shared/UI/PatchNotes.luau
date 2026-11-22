@@ -1,10 +1,28 @@
 -- Game version shown in the corner of every screen, and the patch notes on the main menu
 -- One release per day: bump the last number each day, and the middle one (resetting the last) only for a huge update
 local PatchNotes = {
-    VERSION = "0.5.0",
+    VERSION = "0.5.1",
 
     -- Newest first
     Releases = {
+        {
+            Version = "0.5.1",
+            Date = "Nov 22",
+            Title = "New Shop",
+            Notes = {
+                "New Shop: one scrolling page with Featured Skins and Skin Crates (coming soon), Shotguns, Gold, Boosts and Donations.",
+                "Buy Gold with Robux: 1,000, 10,000, 50,000 (best value) or 100,000.",
+                "New 2x Gold and 2x XP boosts: each lasts 1 hour of play time and doubles what you earn from the campaign and duels. Buying more adds time.",
+                "Shotguns now cost 5,000 more Gold each.",
+                "Aiming a shot or commanding a piece at an enemy now marks the damage it's about to take in white on its health bar.",
+                "Hovering a piece shows its name above its health bar.",
+                "Multiplayer now opens at level 5, right around finishing Hunter Forest. Duels inside it still unlock at level 10.",
+                "Multiplayer now has a Siege card for co-op with friends (coming soon), with pawns guarding the castle.",
+                "Singleplayer: enemy pawns that reach your back row are promoted to a Knight (40%), Bishop (40%) or Rook (20%) at full health.",
+                "Fixed a black screen that could appear after challenging the Fallen Knight if you clicked the scene before choosing.",
+                "Clicks on the Mystery, Rest Site and Treasure Hunt screens no longer reach the map behind them.",
+            },
+        },
         {
             Version = "0.5.0",
             Date = "Nov 22",
@@ -22,7 +40,8 @@ local PatchNotes = {
                 "New card art: an Earth for Global Queue, and two crossed Pump shotguns for Duels.",
                 "Settings and Menu buttons now sit at the very bottom right of every screen, clear of the panels and the version number.",
                 "Every action now shows its energy cost, and a Move indicator beside Actions pulses while your King can still move this turn.",
-                "Your King's card is now labelled King's Health, and the Fallen Knight gets his own health card at the top right while he fights beside you.",
+                "The Queen summon card fades out and reads On Board while your Queen is in play, since you can only have one.",
+                "Your King's health card now sits at the top left of the board, with a health card for each companion, like the Fallen Knight, lined up beside it. Each card is named above it. The turn count moved below the board.",
             },
         },
         {

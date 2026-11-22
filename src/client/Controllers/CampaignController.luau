@@ -129,6 +129,9 @@ local mysteryPanel = nil
 local devButton = nil
 -- The encounter shown in the mystery panel
 local mysteryEncounter = nil
+-- The node the open encounter belongs to; choices always go to it, whatever is selected on the map behind
+local mysteryRegion = nil
+local mysteryNode = nil
 local mysteryBackground = nil
 local gunsmith = nil
 local eyeGlow = nil
@@ -768,6 +771,8 @@ local function ShowMystery(encounter)
     local run = GetRun(currentRegion)
 
     mysteryEncounter = encounter
+    mysteryRegion = currentRegion
+    mysteryNode = selectedNode
     isMysteryBusy = false
     mysteryBackground.Image = CampaignArt.MysteryBackgrounds[encounter]
     mysteryPanel.Title.Text = text.Title
@@ -846,7 +851,7 @@ local function ChooseMystery(index)
         PlayEyeGlow()
     end
 
-    CampaignRemote:FireServer("Mystery", currentRegion, selectedNode, choice)
+    CampaignRemote:FireServer("Mystery", mysteryRegion, mysteryNode, choice)
 end
 
 -- What a mystery choice did, shown in the panel before it closes
@@ -1149,6 +1154,9 @@ function CampaignController.Init(startMatchCallback, leaveMatchCallback)
         elseif action == "DevReset" then
             CampaignController.ShowRegion("Dev")
         elseif action == "MysteryFight" then
+            -- The fight is on the node the server confirmed
+            currentRegion = data.Region
+            selectedNode = data.Node
             mysteryPanel.Visible = false
             StartBattle()
         elseif action == "Result" then

@@ -22,6 +22,7 @@ local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Boar
 local ActionCost = CombatConfig.ActionCost
 local FanConfig = ClassConfig.Classes.Gunslinger.FanTheHammer
 local HuntingStrikeConfig = ClassConfig.Classes.Hunter.HuntingStrike
+local OutlawConfig = ClassConfig.Classes.Outlaw
 
 -- Seconds between Fan the Hammer shots, and how long the revolver stays out after the last
 local FAN_SHOT_INTERVAL = 0.12
@@ -63,6 +64,10 @@ local commandPieceId = nil
 local hoveredRig = nil
 local hoveredTile = nil
 local hoverOutline = nil
+-- Piece id -> damage about to be dealt, from the shotgun's aim and from the commanded piece
+local shotDamage = {}
+local commandDamage = {}
+local previewedDamage = {}
 
 local BoardController = {}
 
@@ -244,6 +249,105 @@ local function GetCommandTargets(piece)
     return targets
 end
 
+-- Marks every previewed hit on its target's health bar
+local function ApplyDamagePreview()
+    local damageById = table.clone(shotDamage)
+
+    for id, damage in pairs(commandDamage) do
+        damageById[id] = (damageById[id] or 0) + damage
+    end
+
+    for id in pairs(previewedDamage) do
+        local piece = PieceController.Get(id)
+
+        if piece and not damageById[id] then
+            piece.Rig:SetDamagePreview(0)
+        end
+    end
+
+    for id, damage in pairs(damageById) do
+        local piece = PieceController.Get(id)
+
+        if piece then
+            piece.Rig:SetDamagePreview(damage)
+        end
+    end
+
+    previewedDamage = damageById
+end
+
+-- Opportunist (Outlaw): enemies with no ally next to them take extra damage
+local function IsIsolated(piece)
+    for _, other in pairs(PieceController.GetTeamPieces(piece.Team)) do
+        if other ~= piece and BoardRules.GetDistance(piece.Rig.Column, piece.Rig.Row, other.Rig.Column, other.Rig.Row) <= 1 then
+            return false
+        end
+    end
+
+    return true
+end
+
+-- Mirrors MatchClass:Fire's damage; smoke's hit roll isn't shown
+local function GetShotDamage(piece, weapon, shotType)
+    local column, row = piece.Rig.Column, piece.Rig.Row
+    local damage = ShotgunRules.GetHitDamage(weapon, shotType, BoardRules.GetDistance(kingColumn, kingRow, column, row))
+
+    damage += turnState.NextShotBonus or 0
+    damage += (turnState.DamageBonus or 0) * (shotType == "Knife" and 1 or weapon.Blasts)
+
+    if turnState.Class == "Outlaw" and IsIsolated(piece) then
+        damage += OutlawConfig.Opportunist.Damage
+    end
+
+    if weapon.Pierces and shotType ~= "Knife" then
+        local originX, originY = ShotgunRules.GetKingOrigin(kingColumn, kingRow)
+        damage -= ShotgunRules.CountBlockers(originX, originY, column, row, IsEnemyTile) * weapon.PierceDamageLoss
+    end
+
+    return math.max(damage, 0)
+end
+
+local function OnShotPreviewChanged(hitTiles, shotType)
+    shotDamage = {}
+
+    if hitTiles and turnState and kingColumn then
+        local weapon = ShotgunController.GetWeapon()
+
+        for _, tile in pairs(hitTiles) do
+            local piece = IsEnemyTile(tile.Column, tile.Row) and PieceController.GetAt(tile.Column, tile.Row)
+
+            if piece then
+                shotDamage[piece.Id] = GetShotDamage(piece, weapon, shotType)
+            end
+        end
+    end
+
+    ApplyDamagePreview()
+end
+
+-- The commanded piece's attack on the enemy under the cursor
+local function UpdateCommandDamage()
+    commandDamage = {}
+
+    local selectedPiece = commandPieceId and PieceController.Get(commandPieceId)
+    local column = hoveredTile and hoveredTile:GetAttribute("Column")
+    local row = hoveredTile and hoveredTile:GetAttribute("Row")
+
+    if selectedPiece and column and actionPanel.SelectedAction == "Command" and CanAct(ActionCost.Command, "Command") then
+        local target = IsEnemyTile(column, row) and PieceController.GetAt(column, row)
+
+        if target then
+            for _, attack in pairs(PieceRules.GetAttacks(selectedPiece.Type, selectedPiece.Team, selectedPiece.Rig.Column, selectedPiece.Rig.Row, IsOccupied, IsEnemyTile)) do
+                if attack.Column == column and attack.Row == row then
+                    commandDamage[target.Id] = PieceConfig.Damage[selectedPiece.Type] or 0
+                end
+            end
+        end
+    end
+
+    ApplyDamagePreview()
+end
+
 -- Arrows point at the commanded piece, the ally or enemy under the cursor, and enemies already picked
 local function UpdateArrows()
     local arrows = {}
@@ -268,6 +372,7 @@ local function UpdateArrows()
     end
 
     PieceController.SetArrows(arrows)
+    UpdateCommandDamage()
 end
 
 local function DrawPreview()
@@ -323,6 +428,7 @@ local function DrawPreview()
     elseif selectedAction == "Summon" then
         if not SummonPanelController.SelectedPiece then return end
         if not CanAct(PieceConfig.Cost[SummonPanelController.SelectedPiece], "Summon") then return end
+        if SummonPanelController.IsMaxed(SummonPanelController.SelectedPiece) then return end
 
         local range = BoardConfig.SUMMON_RANGE
 
@@ -416,6 +522,7 @@ local function OnTileClicked(column, row)
 
         if not pieceType then return end
         if not CanAct(PieceConfig.Cost[pieceType], "Summon") then return end
+        if SummonPanelController.IsMaxed(pieceType) then return end
         if not IsSummonTile(column, row) then return end
 
         BoardRemote:FireServer("Summon", pieceType, column, row)
@@ -725,6 +832,7 @@ function BoardController.Init(actionPanelController)
 
     PieceController.Init(board)
     ShotgunController.Init(board, GetKingTile, IsEnemyTile)
+    ShotgunController.OnPreviewChanged = OnShotPreviewChanged
     BoardEffectsController.Init(board, GetKingTile)
 
     AbilityController.Init({
@@ -774,6 +882,8 @@ function BoardController.Init(actionPanelController)
         elseif action == "PieceMoved" then
             PieceController.Move(...)
             BoardController.RefreshPreview()
+        elseif action == "PiecePromoted" then
+            PieceController.Promote(...)
         elseif action == "ShotFired" then
             OnShotFired(...)
         elseif action == "FanFired" then

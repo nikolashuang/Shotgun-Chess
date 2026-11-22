@@ -202,7 +202,7 @@ local function StartDuel(info)
             local reward = not info.isStudio and DuelRewards.Get(isWinner, reason) or nil
 
             if reward then
-                DuelRewards.PayOut(player, reward)
+                reward = DuelRewards.PayOut(player, reward)
             end
 
             DuelRemote:FireClient(player, "Result", {

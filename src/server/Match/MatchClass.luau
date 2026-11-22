@@ -294,6 +294,7 @@ function MatchClass:GetTurnState(side)
         KingMaxHealth = side.King.MaxHealth,
         KingStunned = side.King:IsStunned(),
         NextShotBonus = side.NextShotBonus,
+        DamageBonus = side.King.DamageBonus,
         Ability = self:CallAbility(side, "GetState"),
         Clock = self:GetClock(side),
         EnemyClock = self:GetRivalClock(side),
@@ -1308,6 +1309,7 @@ function MatchClass:RunEnemyPlans(plans)
 
             self:SendAll("PieceMoved", piece.Id, plan.Column, plan.Row)
             self:OnUnitMoved(piece)
+            self:TryPromote(piece)
         end
     end
 
@@ -1354,7 +1356,39 @@ function MatchClass:EnemyAttack(piece, column, row)
 
     if isCapture then
         self:OnUnitMoved(piece)
+        self:TryPromote(piece)
     end
+end
+
+-- Enemy pawns reaching the player's back row are promoted at full health; the player's own pawns never are
+function MatchClass:TryPromote(piece)
+    if piece.Type ~= "Pawn" or piece.Team ~= "Black" then return end
+    if piece.Row ~= 1 then return end
+    if not self.Pieces[piece.Id] then return end
+
+    local total = 0
+
+    for _, option in ipairs(PieceConfig.PROMOTIONS) do
+        total += option.Weight
+    end
+
+    local roll = self.Random:NextNumber() * total
+    local pieceType = PieceConfig.PROMOTIONS[#PieceConfig.PROMOTIONS].Type
+
+    for _, option in ipairs(PieceConfig.PROMOTIONS) do
+        roll -= option.Weight
+
+        if roll < 0 then
+            pieceType = option.Type
+            break
+        end
+    end
+
+    piece.Type = pieceType
+    piece.MaxHealth = PieceConfig.Health[pieceType]
+    piece.Health = piece.MaxHealth
+
+    self:SendAll("PiecePromoted", piece.Id, pieceType, piece.Health, piece.MaxHealth)
 end
 
 function MatchClass:EnemyShoot(piece, aimX, aimY)

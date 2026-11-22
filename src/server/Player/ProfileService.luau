@@ -9,12 +9,15 @@ local KeybindConfig = require(ReplicatedStorage.Shared.Player.KeybindConfig)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local CampaignConfig = require(ReplicatedStorage.Shared.Campaign.CampaignConfig)
 local CampaignRules = require(ReplicatedStorage.Shared.Campaign.CampaignRules)
+local ShopConfig = require(ReplicatedStorage.Shared.Shop.ShopConfig)
 
 local ProfileRemote = ReplicatedStorage.Remotes.ProfileRemote
 
 local STORE_NAME = "PlayerProfile_v1"
 local LOAD_ATTEMPTS = 3
 local AUTOSAVE_INTERVAL = 120
+-- Robux purchases already granted, kept so a retried receipt is never granted twice
+local MAX_RECEIPTS = 50
 
 local store = nil
 local Profiles = {}
@@ -39,6 +42,10 @@ local function NewData()
         Settings = table.clone(SettingsConfig.DEFAULTS),
         -- Action -> Enum.KeyCode name, only for actions moved off their default key
         Keybinds = {},
+        -- Seconds of play time left on each 2x boost
+        Boosts = {Gold = 0, Exp = 0},
+        -- Robux purchase ids already granted, oldest first
+        Receipts = {},
     }
 end
 
@@ -53,6 +60,12 @@ local function Reconcile(data)
     end
 
     data.Shotguns[ShotgunConfig.STARTER] = true
+
+    for kind, seconds in pairs(NewData().Boosts) do
+        if data.Boosts[kind] == nil then
+            data.Boosts[kind] = seconds
+        end
+    end
 
     for name, value in pairs(SettingsConfig.DEFAULTS) do
         if data.Settings[name] == nil then
@@ -150,6 +163,8 @@ function ProfileService.Sync(player)
     player:SetAttribute("Class", data.Equipped.Class)
     -- Matches read this to shorten the wait for enemy animations
     player:SetAttribute("GameSpeed", SettingsConfig.SPEEDS[data.Settings.Speed] or 1)
+    player:SetAttribute("GoldBoost", data.Boosts.Gold)
+    player:SetAttribute("ExpBoost", data.Boosts.Exp)
 
     ProfileRemote:FireClient(player, "Profile", {
         Shotguns = data.Shotguns,
@@ -185,6 +200,63 @@ function ProfileService.AddExp(player, amount)
     profile.Data.Exp += amount
 end
 
+-- Gold and Exp won by playing (campaign payouts and duels), doubled by any active boost
+-- Returns what was actually added
+function ProfileService.AddEarned(player, gold, exp)
+    local profile = Profiles[player]
+    if not profile then return 0, 0 end
+
+    local boosts = profile.Data.Boosts
+
+    if boosts.Gold > 0 then
+        gold *= ShopConfig.BOOST_MULTIPLIER
+    end
+
+    if boosts.Exp > 0 then
+        exp *= ShopConfig.BOOST_MULTIPLIER
+    end
+
+    profile.Data.Gold += gold
+    profile.Data.Exp += exp
+
+    return gold, exp
+end
+
+function ProfileService.AddBoost(player, kind, seconds)
+    local profile = Profiles[player]
+    if not profile then return end
+
+    profile.Data.Boosts[kind] += seconds
+    player:SetAttribute(kind .. "Boost", profile.Data.Boosts[kind])
+end
+
+function ProfileService.HasReceipt(player, purchaseId)
+    local profile = Profiles[player]
+
+    return profile ~= nil and table.find(profile.Data.Receipts, purchaseId) ~= nil
+end
+
+function ProfileService.AddReceipt(player, purchaseId)
+    local receipts = Profiles[player].Data.Receipts
+    table.insert(receipts, purchaseId)
+
+    while #receipts > MAX_RECEIPTS do
+        table.remove(receipts, 1)
+    end
+end
+
+-- Boosts only run down while the player is in a server
+local function TickBoosts(seconds)
+    for player, profile in pairs(Profiles) do
+        for kind, left in pairs(profile.Data.Boosts) do
+            if left <= 0 then continue end
+
+            profile.Data.Boosts[kind] = math.max(left - seconds, 0)
+            player:SetAttribute(kind .. "Boost", profile.Data.Boosts[kind])
+        end
+    end
+end
+
 -- Wipes the player back to a new profile; saving stays allowed only if their data loaded
 function ProfileService.Reset(player)
     local profile = Profiles[player]
@@ -201,14 +273,15 @@ function ProfileService.ResetDevRegions(player)
     profile.Data = StripDevRegions(profile.Data)
 end
 
+-- Returns true once the profile is safely written
 function ProfileService.Save(player)
     local profile = Profiles[player]
-    if not profile then return end
+    if not profile then return false end
 
     -- Profiles that failed to load are never saved so they can't overwrite real data
-    if not profile.CanSave then return end
+    if not profile.CanSave then return false end
     -- Already saved for a teleport; a later save could overwrite what the next place writes
-    if profile.isTeleporting then return end
+    if profile.isTeleporting then return false end
 
     local ok, result = pcall(function()
         store:UpdateAsync(tostring(player.UserId), function()
@@ -219,6 +292,8 @@ function ProfileService.Save(player)
     if not ok then
         warn("[ProfileService] Save failed for " .. player.Name .. ": " .. tostring(result))
     end
+
+    return ok
 end
 
 -- Saves now and stops this server saving the player again, so the place they teleport to loads their latest data
@@ -317,6 +392,12 @@ function ProfileService.Init()
             if not keybinds then return end
 
             profile.Data.Keybinds = keybinds
+        end
+    end)
+
+    task.spawn(function()
+        while true do
+            TickBoosts(task.wait(1))
         end
     end)
 
