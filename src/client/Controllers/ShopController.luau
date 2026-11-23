@@ -6,16 +6,21 @@ local TweenService = game:GetService("TweenService")
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local ShopConfig = require(ReplicatedStorage.Shared.Shop.ShopConfig)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
+local SkinConfig = require(ReplicatedStorage.Shared.Skins.SkinConfig)
 local AtlasImage = require(script.Parent.Parent.UI.AtlasImage)
 local PlayerCard = require(script.Parent.Parent.UI.PlayerCard)
 local ProfileController = require(script.Parent.ProfileController)
+local BoardSkinController = require(script.Parent.BoardSkinController)
 
 local LoadoutRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("LoadoutRemote")
+local CrateRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CrateRemote")
 
 local AFFORDABLE_COLOR = Color3.fromHex("F1D4AC")
 local OWNED_COLOR = Color3.fromHex("D49A77")
 local LOCKED_COLOR = Color3.fromHex("C8644F")
 local NOTICE_TIME = 1.5
+local SINGLE_CELL = UDim2.fromScale(0.3, 1)
+local MULTI_CELL = UDim2.fromScale(0.18, 0.48)
 local PULSE_SCALE = 1.18
 local PULSE_TIME = 0.5
 -- Pulsing tags become a tilted sale badge hanging off the card's top right corner
@@ -29,8 +34,13 @@ local ROW_ASPECT = 11
 local player = Players.LocalPlayer
 local rows = {}
 local boostCards = {}
+local crateIndex = 1
+local crates = nil
+local crateResult = nil
+local resultTemplate = nil
 
--- The shop is one scrolling page: featured skins and crates, shotguns, gold packs, 2x boosts and donations
+-- The shop is one scrolling page: featured skins and skin crates, shotguns, gold packs, 2x boosts and donations
+-- Crates are rolled on the server; the results popup shows each drop and any duplicate refund
 -- Shotguns are bought with gold (the server checks price and ownership); everything with a Robux price is a Developer Product
 local ShopController = {}
 
@@ -123,6 +133,81 @@ local function BuildShotguns(list, template)
     end
 end
 
+local function GetCrateId()
+    return SkinConfig.CRATE_ORDER[crateIndex]
+end
+
+local function ShowCrate()
+    local crateId = GetCrateId()
+    local crate = SkinConfig.Crates[crateId]
+
+    crates.Title.Text = crate.DisplayName
+    crates.OpenOne.Label.Text = "1 Crate - " .. FormatNumber(crate.Price) .. " Gold"
+    crates.OpenTen.Label.Text = "10 Crates - " .. FormatNumber(crate.TenPrice) .. " Gold"
+
+    if SkinConfig.CanOpen(crateId) then
+        local odds = {}
+
+        for _, rarity in ipairs(SkinConfig.RARITY_ORDER) do
+            table.insert(odds, SkinConfig.Rarities[rarity].DisplayName .. " " .. SkinConfig.Rarities[rarity].Weight .. "%")
+        end
+
+        -- Two rarities per line
+        crates.Body.Text = odds[1] .. "   " .. odds[2] .. "\n" .. odds[3] .. "   " .. odds[4]
+    else
+        crates.Body.Text = "Coming Soon"
+    end
+end
+
+local function OpenCrate(count, label)
+    local crateId = GetCrateId()
+    local crate = SkinConfig.Crates[crateId]
+    local price = count == 1 and crate.Price or crate.TenPrice
+
+    if not SkinConfig.CanOpen(crateId) then
+        Flash(label, "Coming Soon")
+    elseif (player:GetAttribute("Gold") or 0) < price then
+        Flash(label, "Not enough Gold")
+    else
+        CrateRemote:FireServer("Open", crateId, count)
+    end
+end
+
+local function ShowResults(crateId, results)
+    for _, card in pairs(crateResult.Panel.Results:GetChildren()) do
+        if card:IsA("GuiObject") then
+            card:Destroy()
+        end
+    end
+
+    -- A single drop gets one big card; a 10-pack fills two rows
+    crateResult.Panel.Results.UIGridLayout.CellSize = #results == 1 and SINGLE_CELL or MULTI_CELL
+
+    local refund = 0
+
+    for i, result in ipairs(results) do
+        local skin = SkinConfig.Skins[SkinConfig.Crates[crateId].Kind][result.Name]
+        local rarity = SkinConfig.Rarities[skin.Rarity]
+
+        local card = resultTemplate:Clone()
+        card.LayoutOrder = i
+        card.SkinName.Text = skin.DisplayName
+        card.Rarity.Text = rarity.DisplayName
+        card.Rarity.TextColor3 = rarity.Color
+        card.UIStroke.Color = rarity.Color
+        card.Note.Text = result.Duplicate and "Duplicate +" .. FormatNumber(result.Refund) .. " Gold" or "New!"
+        card.Note.TextColor3 = result.Duplicate and OWNED_COLOR or AFFORDABLE_COLOR
+        BoardSkinController.BuildPreview(card.Preview, result.Name)
+        card.Parent = crateResult.Panel.Results
+
+        refund += result.Refund
+    end
+
+    crateResult.Panel.Title.Text = SkinConfig.Crates[crateId].DisplayName
+    crateResult.Panel.Summary.Text = refund > 0 and "Duplicates refunded " .. FormatNumber(refund) .. " Gold" or "Equip new boards in the Armory"
+    crateResult.Visible = true
+end
+
 local function BuildCards(container, template, items, fill)
     for i, item in ipairs(items) do
         local card = template:Clone()
@@ -186,16 +271,40 @@ function ShopController.Init()
     local page = root:WaitForChild("Page")
     local templates = root:WaitForChild("Templates")
 
-    -- Skins don't exist yet, so the crate buttons only say so
-    local crates = page:WaitForChild("TopRow"):WaitForChild("Crates")
-    crates.OpenOne.Label.Text = "1 Crate - " .. FormatNumber(ShopConfig.CRATE_PRICE) .. " Gold"
-    crates.OpenTen.Label.Text = "10 Crates - " .. FormatNumber(ShopConfig.CRATE_TEN_PRICE) .. " Gold"
+    -- Arrows cycle the crate types; crates without skins yet say Coming Soon
+    crates = page:WaitForChild("TopRow"):WaitForChild("Crates")
+    crateResult = screen:WaitForChild("CrateResult")
+    resultTemplate = templates:WaitForChild("ResultCard")
 
-    for _, button in pairs({crates.OpenOne, crates.OpenTen}) do
-        button.Activated:Connect(function()
-            Flash(button.Label, "Coming Soon")
-        end)
-    end
+    crates.Prev.Activated:Connect(function()
+        crateIndex = (crateIndex - 2) % #SkinConfig.CRATE_ORDER + 1
+        ShowCrate()
+    end)
+
+    crates.Next.Activated:Connect(function()
+        crateIndex = crateIndex % #SkinConfig.CRATE_ORDER + 1
+        ShowCrate()
+    end)
+
+    crates.OpenOne.Activated:Connect(function()
+        OpenCrate(1, crates.OpenOne.Label)
+    end)
+
+    crates.OpenTen.Activated:Connect(function()
+        OpenCrate(10, crates.OpenTen.Label)
+    end)
+
+    crateResult.Panel.Close.Activated:Connect(function()
+        crateResult.Visible = false
+    end)
+
+    CrateRemote.OnClientEvent:Connect(function(action, crateId, results)
+        if action == "Opened" then
+            ShowResults(crateId, results)
+        end
+    end)
+
+    ShowCrate()
 
     local shotgunList = page:WaitForChild("ShotgunList")
     BuildShotguns(shotgunList, templates:WaitForChild("ShotgunRow"))

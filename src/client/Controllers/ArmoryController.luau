@@ -7,15 +7,23 @@ local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 local ArmoryArt = require(ReplicatedStorage.Shared.UI.ArmoryArt)
+local SkinConfig = require(ReplicatedStorage.Shared.Skins.SkinConfig)
 local AtlasImage = require(script.Parent.Parent.UI.AtlasImage)
 local PlayerCard = require(script.Parent.Parent.UI.PlayerCard)
 local ProfileController = require(script.Parent.ProfileController)
+local BoardSkinController = require(script.Parent.BoardSkinController)
 
 local LoadoutRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("LoadoutRemote")
 
 local EQUIPPED_COLOR = Color3.fromHex("F1D4AC")
 local DEFAULT_COLOR = Color3.fromHex("E9E3D6")
 local NO_CLASS = "None"
+local LOCKED_COLOR = Color3.fromHex("6A5D66")
+local SELECTED_TAB_COLOR = Color3.fromHex("9C574B")
+local TAB_COLOR = Color3.fromHex("271F29")
+local LOCKED_SHADE = 0.35
+-- Skin card height over width
+local CARD_RATIO = 1.3
 local KINDS = {"Passive", "Special", "Ultimate"}
 
 local player = Players.LocalPlayer
@@ -25,8 +33,10 @@ local shotgunBar = nil
 local gunImage = nil
 local gunBody = nil
 local dropdowns = {}
+local skinCards = {}
 
--- Loadout screen: each side has a bar showing what's equipped; its dropdown lists what you own and picking one equips it
+-- Loadout tab: each side has a bar showing what's equipped; its dropdown lists what you own and picking one equips it
+-- Skins tab: every board skin as a card; owned ones equip on click
 local ArmoryController = {}
 
 local function CloseDropdowns()
@@ -172,6 +182,104 @@ local function GetOwnedShotguns()
     return options
 end
 
+-- Owned boards equip on click; boards you don't own yet show dimmed
+local function ShowSkins()
+    local owned = ProfileController.Data.Skins and ProfileController.Data.Skins.Board or {}
+    local equipped = player:GetAttribute("BoardSkin") or SkinConfig.DEFAULT_BOARD
+
+    for name, card in pairs(skinCards) do
+        local skin = SkinConfig.Skins.Board[name]
+        local isOwned = skin.Starter or owned[name] == true
+        local rarity = SkinConfig.Rarities[skin.Rarity]
+
+        card.UIStroke.Color = name == equipped and EQUIPPED_COLOR or rarity.Color
+        card.UIStroke.Thickness = name == equipped and 3 or 2
+        card.Preview.Shade.Visible = not isOwned
+        card.SkinName.TextColor3 = isOwned and DEFAULT_COLOR or LOCKED_COLOR
+
+        if name == equipped then
+            card.Status.Text = "Equipped"
+            card.Status.TextColor3 = EQUIPPED_COLOR
+        elseif isOwned then
+            card.Status.Text = rarity.DisplayName
+            card.Status.TextColor3 = rarity.Color
+        else
+            card.Status.Text = "Locked - " .. rarity.DisplayName
+            card.Status.TextColor3 = LOCKED_COLOR
+        end
+    end
+end
+
+local function BuildSkins(box)
+    local grid = box:WaitForChild("Grid")
+    local template = box:WaitForChild("SkinCard")
+    local layout = grid:WaitForChild("UIGridLayout")
+
+    for i, name in ipairs(SkinConfig.BOARD_ORDER) do
+        local card = template:Clone()
+        card.Name = name
+        card.LayoutOrder = i
+        card.SkinName.Text = SkinConfig.Skins.Board[name].DisplayName
+        card.Visible = true
+        BoardSkinController.BuildPreview(card.Preview, name)
+
+        -- Boards you don't own yet show dimmed under a shade
+        local shade = Instance.new("Frame")
+        shade.Name = "Shade"
+        shade.Size = UDim2.fromScale(1, 1)
+        shade.BackgroundColor3 = TAB_COLOR
+        shade.BackgroundTransparency = LOCKED_SHADE
+        shade.BorderSizePixel = 0
+        shade.ZIndex = card.Preview.ZIndex + 1
+        shade.Parent = card.Preview
+
+        card.Parent = grid
+
+        card.Activated:Connect(function()
+            if name == player:GetAttribute("BoardSkin") then return end
+            if card.Preview.Shade.Visible then return end
+
+            LoadoutRemote:FireServer("Equip", "BoardSkin", name)
+        end)
+
+        skinCards[name] = card
+    end
+
+    -- Cards keep their shape at any screen size
+    local function Resize()
+        local width = grid.AbsoluteSize.X * layout.CellSize.X.Scale
+        layout.CellSize = UDim2.new(layout.CellSize.X.Scale, 0, 0, width * CARD_RATIO)
+    end
+
+    grid:GetPropertyChangedSignal("AbsoluteSize"):Connect(Resize)
+    Resize()
+end
+
+local function BindTabs(root, loadoutBoxes, skinsBox)
+    local tabs = {Loadout = root:WaitForChild("LoadoutTab"), Skins = root:WaitForChild("SkinsTab")}
+
+    local function Select(name)
+        for _, box in pairs(loadoutBoxes) do
+            box.Visible = name == "Loadout"
+        end
+        skinsBox.Visible = name == "Skins"
+
+        for tabName, tab in pairs(tabs) do
+            tab.BackgroundColor3 = tabName == name and SELECTED_TAB_COLOR or TAB_COLOR
+        end
+
+        CloseDropdowns()
+    end
+
+    for name, tab in pairs(tabs) do
+        tab.Activated:Connect(function()
+            Select(name)
+        end)
+    end
+
+    Select("Loadout")
+end
+
 local init = false
 function ArmoryController.Init()
     if init then return end
@@ -211,10 +319,17 @@ function ArmoryController.Init()
 
     screen:GetPropertyChangedSignal("Enabled"):Connect(CloseDropdowns)
 
+    local skinsBox = root:WaitForChild("SkinsBox")
+    BuildSkins(skinsBox)
+    BindTabs(root, {classBox, shotgunBox}, skinsBox)
+
     player:GetAttributeChangedSignal("Class"):Connect(ShowClass)
     player:GetAttributeChangedSignal("Shotgun"):Connect(ShowShotgun)
+    player:GetAttributeChangedSignal("BoardSkin"):Connect(ShowSkins)
+    ProfileController.OnChanged(ShowSkins)
     ShowClass()
     ShowShotgun()
+    ShowSkins()
 end
 
 return ArmoryController

@@ -300,7 +300,7 @@ Right click toggles a shotgun's alt mode while aiming.
 
 One scrolling page (`ShopController`, prices in `ShopConfig`), top to bottom:
 
-1. **Featured Skins** and **Skin Crates** — placeholders (Coming Soon) until skins exist. Crates will cost 1,000 Gold, or 8,000 for 10. Featured Mythical skins get boosted crate rates.
+1. **Featured Skins** (placeholder) and **Skin Crates** (see Skins). Featured Mythical skins will get boosted crate rates.
 2. **Shotguns** — bought with gold (see Shotguns).
 3. **Gold** (Robux): 1,000 for 50, 10,000 for 400, 50,000 for 1,400 ("Best Value!!!", tag pulses), 100,000 for 3,000.
 4. **Boosts** (Robux): 2x Gold or 2x XP, 50 Robux for 1 hour of **play time** each (only counts down while in a server, either place). Buying again adds another hour. Doubles what's earned from campaign payouts (applied when the pouch pays out) and duel rewards; bought gold is never doubled.
@@ -325,6 +325,24 @@ First clear of each region, from the real maps (low end: lanes heavy on Mysterie
 - All four buyable shotguns cost 30,000; a full first clear buys about 2. The rest is ~17 Gravehollow replays or ~107 duel wins.
 - Gold per Robux: 20 (1k pack), 25 (10k), 35.7 (50k, best value), 33.3 (100k). One shotgun ≈ 350–425 Robux at the base rate; the whole campaign's gold ≈ 730 Robux.
 
+## Skins
+
+Cosmetic only. They come only from Shop crates and are equipped in the Armory's Skins tab. Config in `SkinConfig`, rolls on the server in `CrateService`.
+
+| Rarity | Style | Drop rate |
+|---|---|---|
+| Common | Plain recolors, no extra detail | 80% |
+| Rare | Richer palettes and pairings, thin accent border on every tile | 15% |
+| Epic | Detailed themed redesigns, mostly static | 4.5% |
+| Legendary | Animated (design pending) | 0.5% |
+
+- A rarity a crate has no skins for drops the next rarity down, so Legendary rolls give an Epic for now.
+- **Crates:** Gameboard Crate, Gun Skin Crate, Piece Skin Crate, each 1,000 Gold or 10 for 8,000. Only the Gameboard Crate opens for now; the gun and piece crates say Coming Soon.
+- **Duplicates** refund 10% of the gold paid for that crate (100 from a single, 80 each from a 10-pack). No pity system for now.
+- **Board skins:** Classic (default, owned by everyone, never drops). Common: Crimson, Azure, Onyx, Moss. Rare: Black & Gold, Ivory & Crimson, Royal Buckshot (Shotgun King-inspired palette). Epic: Ruined Chessboard (cracked stone slabs), Abandoned Castle.
+- Epic boards are one 192x192 pixel image of the whole board (16 px per tile), rendered by `art/tools/build_board_skins.py` into `art/skins/boards`, so cracks and rubble run across tiles.
+- Each player sees their own equipped board, in the campaign and in duels.
+
 ## Open Design Decisions
 
 Not yet specified in the design doc. Do not implement guesses without confirming.
@@ -340,7 +358,7 @@ Not yet specified in the design doc. Do not implement guesses without confirming
 - Exact ranges/arcs for Double Barrel and Long Barrel
 - Duel reward amounts and ranked play; whether bolas should skip 3 King turns or fewer
 - Duels with two Outlaws show only the most recent smoke cloud on each screen
-- Skins: what they change, rarities (incl. Mythical), crate odds and how much featured skins boost them
+- Skins: Legendary (animated) board design, Mythical rarity and how much featured skins boost crate rates, gun and piece skin designs
 
 ## Prototype Test Setup
 

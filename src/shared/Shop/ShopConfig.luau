@@ -1,8 +1,6 @@
 -- ProductIds are the experience's Developer Products (product icons are in art/shop); 0 means not created yet
 local ShopConfig = {
-    -- Skin crates are shown but not sold until skins exist
-    CRATE_PRICE = 1000,
-    CRATE_TEN_PRICE = 8000,
+    -- Skin crate prices live in SkinConfig
 
     -- Shop order, top to bottom; the 50k pack is the best gold per Robux (35.7, against 33.3 for 100k)
     -- Pulse makes the tag grow and shrink

@@ -1,17 +1,20 @@
 # Run inside Blender (Text Editor > Run Script) with art/ShotgunChessSprites.blend open.
 # Builds the Rest Site campfire that plays over art/campaign/RestCamp.png in a temporary scene:
-# a crackling fire in the stone pit, the King sitting on the right log, and either his party (two pawns on the left log,
+# the main menu's flame (flame.py) burning in the stone pit, the King sitting on the right log, and either his party (two pawns on the left log,
 # a knight and a bishop on the stumps) or the Fallen Knight on the left log once he has joined the run.
 # Renders FRAMES frames of each version to art/campaign/rest/<Version>_<i>.png, then removes the scene again.
 # build_rest_art.py outlines, tints and packs them.
-import bpy, bmesh, math, os
+import bpy, bmesh, math, os, sys
 from mathutils import Vector, Euler, Matrix
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(bpy.data.filepath)), "art", "tools"))
+import flame
 
 ROOT = os.path.dirname(os.path.dirname(bpy.data.filepath))
 OUT = os.path.join(ROOT, "art", "campaign", "rest")
 SCENE_NAME = "RestCamp"
 
-FRAMES = 8
+FRAMES = 12
 
 # The render covers this part of the 1672x941 background, in background pixels: left, top, right, bottom
 # One world unit is 100 background pixels; the render is a quarter of the background's resolution
@@ -93,8 +96,6 @@ def glow(name, color):
 WOOD = ("3A2018", "6A3A24", "94573A")
 BARK = ("2A1810", "4A2C1C", "6A4028")
 FALLEN = ("22333A", "3E5A63", "5E8A94")
-FLAME_COLORS = ["B8341E", "F0782A", "FFC24A", "FFF0B0"]
-EMBER = "FFB040"
 AURA = ["1F6F72", "2E9C8E", "7FE3C8"]
 
 
@@ -117,10 +118,6 @@ def cone(collection, name, mat, radius, height, segments=6):
         bmesh.ops.translate(bm, vec=(0, 0, height / 2), verts=bm.verts)
 
     return mesh_object(collection, name, build, mat)
-
-
-def ball(collection, name, mat, radius):
-    return mesh_object(collection, name, lambda bm: bmesh.ops.create_uvsphere(bm, u_segments=8, v_segments=4, radius=radius), mat)
 
 
 def log(collection, name, mat, length, radius):
@@ -159,20 +156,9 @@ def pose_piece(obj, x, y, t, phase, depth=0.0, yaw=0.0):
     obj.matrix_world = Matrix.Translation(at(x, y, depth)) @ Euler((math.radians(PIECE_TIP), 0, yaw)).to_matrix().to_4x4() @ Matrix.Diagonal((sx, PIECE_SCALE, sz, 1))
 
 
-# Fire in the stone pit: crossed logs with tongues of flame flickering over them and embers rising
+# Fire in the stone pit: crossed logs with the menu's flame over them, a bit bigger to fill the pit
 FIRE_BASE = (866, 585)
-TONGUES = [
-    # (x offset, depth offset, radius, height, colour index, phase)
-    (-0.42, 0.05, 0.2, 0.6, 0, 0.0),
-    (0.4, 0.05, 0.2, 0.65, 0, 0.4),
-    (-0.2, -0.05, 0.26, 1.0, 1, 0.15),
-    (0.2, -0.05, 0.26, 1.05, 1, 0.65),
-    (0.0, -0.1, 0.28, 1.35, 1, 0.3),
-    (-0.1, -0.15, 0.18, 0.85, 2, 0.8),
-    (0.12, -0.15, 0.18, 0.8, 2, 0.5),
-    (0.0, -0.2, 0.12, 0.5, 3, 0.2),
-]
-EMBERS = 5
+FLAME_SCALE = 1.2
 # The Fallen Knight's flame, matching build_effects.py's board aura: (x, z of the base, height, colour index)
 # in unscaled piece units; the right half is listed and mirrored, plus one peak over his head
 AURA_RIGHT = [(0.82, 0.1, 0.65, 2), (0.86, 0.5, 0.7, 0), (0.82, 0.9, 0.75, 1), (0.7, 1.3, 0.8, 0), (0.5, 1.7, 0.85, 1), (0.24, 2.0, 0.95, 0)]
@@ -201,10 +187,7 @@ class Camp:
             stick = log(col, "FireLog", bark if angle > 0 else wood, 0.85, 0.08)
             stick.matrix_world = Matrix.Translation(base + Vector((0, 0, 0.05))) @ Euler((0, math.radians(90 + angle), math.radians(12))).to_matrix().to_4x4()
 
-        flames = [glow(f"Flame{i}", c) for i, c in enumerate(FLAME_COLORS)]
-        self.tongues = [(cone(col, "Flame", flames[c], r, 1.0), dx, dz, h, ph) for dx, dz, r, h, c, ph in TONGUES]
-        self.embers = [ball(col, "Ember", glow("Ember", EMBER), 0.04) for _ in range(EMBERS)]
-        self.fire_base = base
+        self.fire = flame.Fire(col, base + Vector((0, -0.1, 0.02)), glow, FLAME_SCALE)
 
         self.king = piece(col, "King", "King", [piece_mat, bpy.data.materials["Gold"]])
 
@@ -244,16 +227,7 @@ class Camp:
             pose_piece(self.knight, 556, 556, t, 0.45, depth=-0.3, yaw=math.radians(20))
             pose_piece(self.bishop, 1186, 540, t, 0.8, depth=-0.3)
 
-        for obj, dx, dz, h, ph in self.tongues:
-            flicker = math.sin((t + ph) * 2 * math.pi)
-            sway = math.radians(7 * math.sin((t * 2 + ph) * 2 * math.pi))
-            height = h * (0.82 + 0.22 * flicker)
-            obj.matrix_world = Matrix.Translation(self.fire_base + Vector((dx, dz, 0.02))) @ Euler((0, sway, 0)).to_matrix().to_4x4() @ Matrix.Diagonal((1, 1, height, 1))
-
-        for i, ember in enumerate(self.embers):
-            rise = (t + i / EMBERS) % 1
-            drift = 0.25 * math.sin((rise + i * 0.3) * math.pi * 2)
-            ember.location = self.fire_base + Vector((-0.3 + i * 0.2 + drift, -0.3, 0.4 + rise * 1.3))
+        self.fire.pose(t)
 
 
 def setup_scene():
@@ -332,9 +306,12 @@ try:
         for other in camps:
             other.collection.hide_render = other is not camp
 
-        # The Fallen Knight's aura renders on its own so packing can lay it behind him see-through
+        # The Fallen Knight's aura renders on its own so packing can lay it behind him see-through,
+        # and the flame on its own so it goes on top unoutlined, like the main menu's
         aura = {obj for obj, *_ in getattr(camp, "aura", []) + getattr(camp, "aura_body", [])}
-        passes = [("", lambda obj: obj not in aura)] + ([("Aura", lambda obj: obj in aura)] if aura else [])
+        fire = set(camp.fire.objects)
+        passes = [("", lambda obj: obj not in aura and obj not in fire), ("Fire", lambda obj: obj in fire)]
+        passes += [("Aura", lambda obj: obj in aura)] if aura else []
 
         for suffix, shown in passes:
             for obj in camp.collection.all_objects:

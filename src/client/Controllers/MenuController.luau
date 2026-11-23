@@ -196,6 +196,41 @@ local function BindBackground(background)
     Fit()
 end
 
+-- The campfire in the background art plays its frames while the menu is open
+local function BindFire(menu, fire)
+    local frameSize = MenuArt.FIRE_FRAME
+
+    local fireRect = MenuArt.FIRE_RECT
+
+    fire.Image = MenuArt.FIRE
+    fire.ImageRectSize = frameSize
+    fire.Position = UDim2.fromScale(fireRect[1], fireRect[2])
+    fire.Size = UDim2.fromScale(fireRect[3], fireRect[4])
+
+    -- Reopening the menu mid-frame starts a new loop, so the old one stops on its next frame
+    local playing = 0
+
+    local function Play()
+        playing += 1
+        local id = playing
+        local frame = 0
+
+        while menu.Enabled and id == playing do
+            fire.ImageRectOffset = Vector2.new(frame % MenuArt.FIRE_COLUMNS * frameSize.X, frame // MenuArt.FIRE_COLUMNS * frameSize.Y)
+
+            frame = (frame + 1) % MenuArt.FIRE_FRAMES
+            task.wait(MenuArt.FIRE_TIME)
+        end
+    end
+
+    menu:GetPropertyChangedSignal("Enabled"):Connect(function()
+        if menu.Enabled then
+            task.spawn(Play)
+        end
+    end)
+    task.spawn(Play)
+end
+
 local init = false
 -- openSettings shows the settings overlay over whatever screen is open, openPatchNotes the patch notes overlay
 function MenuController.Init(openSettings, openPatchNotes)
@@ -207,7 +242,9 @@ function MenuController.Init(openSettings, openPatchNotes)
     local menu = playerGui:WaitForChild("MainMenu")
     root = menu:WaitForChild("Root")
 
-    BindBackground(menu:WaitForChild("Background"))
+    local background = menu:WaitForChild("Background")
+    BindBackground(background)
+    BindFire(menu, background.Art:WaitForChild("Fire"))
     PlayerCard.Bind(menu:WaitForChild("Profile"))
 
     local multiplayerButton = root:WaitForChild("MultiplayerButton")

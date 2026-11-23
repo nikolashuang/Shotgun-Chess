@@ -13,6 +13,7 @@ ProfileController.Data = {
     Nodes = {},
     Runs = {},
     Settings = {},
+    Skins = {Board = {}, Shotgun = {}, Piece = {}},
 }
 
 function ProfileController.OnChanged(callback)

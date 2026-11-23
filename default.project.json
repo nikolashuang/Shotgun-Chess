@@ -25,6 +25,9 @@
         },
         "DuelRemote": {
           "$className": "RemoteEvent"
+        },
+        "CrateRemote": {
+          "$className": "RemoteEvent"
         }
       }
     },

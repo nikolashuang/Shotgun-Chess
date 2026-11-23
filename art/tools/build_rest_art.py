@@ -1,4 +1,4 @@
-# Outlines, firelights and packs the build_rest_camp.py renders in art/campaign/rest into one sheet.
+# Outlines, firelights and packs (flame pass on top) the build_rest_camp.py renders in art/campaign/rest into one sheet.
 # Run from the repo root: python art/tools/build_rest_art.py
 # Also halves the background (art/campaign/RestCamp.png) to RestCampBackground.png so Roblox doesn't shrink it.
 # Upload RestCampBackground.png and RestCampFire.png and put the ids in CampaignArt.luau.
@@ -10,7 +10,7 @@ FRAMES_DIR = os.path.join(ROOT, "art", "campaign", "rest")
 OUT = os.path.join(ROOT, "art", "campaign", "RestCampFire.png")
 
 VERSIONS = ["Party", "Knight"]
-FRAMES = 8
+FRAMES = 12
 COLUMNS = 4
 OUTLINE = (0x1E, 0x18, 0x20, 255)
 # Night scene lit by the fire: everything that isn't flame is warmed and dimmed a little
@@ -86,6 +86,10 @@ for v, version in enumerate(VERSIONS):
             aura.putalpha(aura.getchannel("A").point(lambda a: AURA_ALPHA if a >= 128 else 0))
             aura.alpha_composite(frame)
             frame = aura
+        # The flame pass goes on top as is, with hard edges and no outline, like the main menu's fire
+        fire = Image.open(os.path.join(FRAMES_DIR, f"{version}Fire_{i}.png")).convert("RGBA")
+        fire.putalpha(fire.getchannel("A").point(lambda a: 255 if a >= 128 else 0))
+        frame.alpha_composite(fire)
         sheet.paste(frame, ((i % COLUMNS) * fw, (v * rows_per_version + i // COLUMNS) * fh))
 
 sheet.save(OUT)

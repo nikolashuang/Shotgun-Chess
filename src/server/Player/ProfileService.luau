@@ -10,6 +10,7 @@ local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local CampaignConfig = require(ReplicatedStorage.Shared.Campaign.CampaignConfig)
 local CampaignRules = require(ReplicatedStorage.Shared.Campaign.CampaignRules)
 local ShopConfig = require(ReplicatedStorage.Shared.Shop.ShopConfig)
+local SkinConfig = require(ReplicatedStorage.Shared.Skins.SkinConfig)
 
 local ProfileRemote = ReplicatedStorage.Remotes.ProfileRemote
 
@@ -38,7 +39,10 @@ local function NewData()
         Equipped = {
             Shotgun = ShotgunConfig.STARTER,
             Class = nil,
+            BoardSkin = SkinConfig.DEFAULT_BOARD,
         },
+        -- Kind -> skin name -> true, for skins won from crates
+        Skins = {Board = {}, Shotgun = {}, Piece = {}},
         Settings = table.clone(SettingsConfig.DEFAULTS),
         -- Action -> Enum.KeyCode name, only for actions moved off their default key
         Keybinds = {},
@@ -60,6 +64,16 @@ local function Reconcile(data)
     end
 
     data.Shotguns[ShotgunConfig.STARTER] = true
+
+    for kind in pairs(SkinConfig.Skins) do
+        if data.Skins[kind] == nil then
+            data.Skins[kind] = {}
+        end
+    end
+
+    if data.Equipped.BoardSkin == nil then
+        data.Equipped.BoardSkin = SkinConfig.DEFAULT_BOARD
+    end
 
     for kind, seconds in pairs(NewData().Boosts) do
         if data.Boosts[kind] == nil then
@@ -161,6 +175,7 @@ function ProfileService.Sync(player)
     player:SetAttribute("Exp", exp)
     player:SetAttribute("Shotgun", data.Equipped.Shotgun)
     player:SetAttribute("Class", data.Equipped.Class)
+    player:SetAttribute("BoardSkin", data.Equipped.BoardSkin)
     -- Matches read this to shorten the wait for enemy animations
     player:SetAttribute("GameSpeed", SettingsConfig.SPEEDS[data.Settings.Speed] or 1)
     player:SetAttribute("GoldBoost", data.Boosts.Gold)
@@ -173,6 +188,7 @@ function ProfileService.Sync(player)
         Runs = CampaignRules.GetClientRuns(data.Runs),
         Settings = data.Settings,
         Keybinds = data.Keybinds,
+        Skins = data.Skins,
     })
 end
 

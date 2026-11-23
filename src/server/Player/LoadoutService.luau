@@ -3,11 +3,12 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
+local SkinConfig = require(ReplicatedStorage.Shared.Skins.SkinConfig)
 local ProfileService = require(ServerScriptService.Player.ProfileService)
 
 local LoadoutRemote = ReplicatedStorage.Remotes.LoadoutRemote
 
--- Shotguns are bought with gold, classes are unlocked by defeating regional Kings
+-- Shotguns are bought with gold, classes are unlocked by defeating regional Kings, board skins come from crates
 local LoadoutService = {}
 
 function LoadoutService.IsUnlocked(player, kind, name)
@@ -16,6 +17,11 @@ function LoadoutService.IsUnlocked(player, kind, name)
 
     if kind == "Shotgun" then return ShotgunConfig.Shotguns[name] ~= nil and profile.Data.Shotguns[name] == true end
     if kind == "Class" then return ClassConfig.Classes[name] ~= nil and profile.Data.Classes[name] == true end
+
+    if kind == "BoardSkin" then
+        local skin = SkinConfig.Skins.Board[name]
+        return skin ~= nil and (skin.Starter == true or profile.Data.Skins.Board[name] == true)
+    end
 
     return false
 end
@@ -74,7 +80,7 @@ function LoadoutService.Init()
     init = true
 
     LoadoutRemote.OnServerEvent:Connect(function(player, action, kind, name)
-        if kind ~= "Shotgun" and kind ~= "Class" then return end
+        if kind ~= "Shotgun" and kind ~= "Class" and kind ~= "BoardSkin" then return end
 
         if action == "Unequip" then
             if kind ~= "Class" then return end

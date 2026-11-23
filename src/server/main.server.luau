@@ -10,6 +10,7 @@ local DuelPlaceService = require(ServerScriptService.Duel.DuelPlaceService)
 local DuelConfig = require(ReplicatedStorage.Shared.Duel.DuelConfig)
 local DevService = require(ServerScriptService.Player.DevService)
 local PurchaseService = require(ServerScriptService.Player.PurchaseService)
+local CrateService = require(ServerScriptService.Player.CrateService)
 local MirrorRules = require(ServerScriptService.Match.MirrorRules)
 
 local BoardRemote = ReplicatedStorage.Remotes.BoardRemote
@@ -47,6 +48,7 @@ else
     CampaignService.Init()
     DuelService.Init(StartMatch)
     DevService.Init()
+    CrateService.Init()
 end
 
 local function IsFiniteNumber(value)

@@ -12,6 +12,7 @@ local PieceRigClass = require(script.Parent.Parent.UI.PieceRigClass)
 local PieceController = require(script.Parent.PieceController)
 local AbilityController = require(script.Parent.AbilityController)
 local BoardEffectsController = require(script.Parent.BoardEffectsController)
+local BoardSkinController = require(script.Parent.BoardSkinController)
 local ShotgunController = require(script.Parent.ShotgunController)
 local SummonPanelController = require(script.Parent.SummonPanelController)
 local CombatHudController = require(script.Parent.CombatHudController)
@@ -834,6 +835,7 @@ function BoardController.Init(actionPanelController)
     ShotgunController.Init(board, GetKingTile, IsEnemyTile)
     ShotgunController.OnPreviewChanged = OnShotPreviewChanged
     BoardEffectsController.Init(board, GetKingTile)
+    BoardSkinController.Init(board)
 
     AbilityController.Init({
         GetTurnState = function()
