@@ -172,7 +172,7 @@ local function GetEnemies(run, regionId, nodeId)
 
         return enemies
     elseif mystery.Fight == "Ambush" then
-        return EncounterRules.Generate(CampaignRules.GetPoints(regionId, nodeId), "Combat")
+        return EncounterRules.Generate(CampaignRules.GetPoints(regionId, nodeId), "Combat", nil, MysteryConfig.Ambush)
     end
 
     return nil
@@ -212,6 +212,12 @@ function CampaignService.CreateMatch(player, regionId, nodeId)
 
     -- The King carries its health and upgrades from battle to battle
     local king = match.King
+
+    -- Ambushed mid-road: the King starts in the middle of the board with the army all around him
+    if node.Type == "Mystery" and run.Mystery.Fight == "Ambush" then
+        king.Column, king.Row = MysteryConfig.Ambush.KING_TILE[1], MysteryConfig.Ambush.KING_TILE[2]
+    end
+
     king.MaxHealth = run.MaxHealth
     king.Health = run.Health
     king.DamageBonus = run.DamageBonus

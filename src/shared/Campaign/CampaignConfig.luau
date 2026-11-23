@@ -77,6 +77,10 @@ local CampaignConfig = {
         Ambush = {
             DAMAGE = 3,
             Points = {Training = 6, Forest = 7, Cliffside = 8, Outskirts = 8, Gravehollow = 9, Dev = 6},
+            -- Fighting starts with the King mid-board and the army closing in from RING_MIN to RING_MAX tiles away
+            KING_TILE = {6, 6},
+            RING_MIN = 2,
+            RING_MAX = 3,
         },
 
         -- Each offering needs more health than it costs

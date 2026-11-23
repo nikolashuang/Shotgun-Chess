@@ -12,6 +12,7 @@ local PatchNotes = {
             Notes = {
                 "Double Barrel: each barrel now deals 3.5 up close down to 2.5 at max range (was 5 down to 3.5), so a full blast is 7 to 5.",
                 "Long Barrel: now deals 3 up close (was 5), still dropping to 1 at max range.",
+                "Ambush: fighting it now drops your King in the middle of the board with the enemy army closing in all around him.",
             },
         },
         {
