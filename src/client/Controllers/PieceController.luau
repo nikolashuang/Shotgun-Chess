@@ -117,6 +117,13 @@ function PieceController.SetStunned(id, isStunned, kind)
     piece.StunKind = isStunned and (kind or "Stars") or nil
 end
 
+function PieceController.SetShield(id, amount)
+    local piece = pieces[id]
+    if not piece then return end
+
+    piece.Rig:SetShield(amount)
+end
+
 function PieceController.SetMarked(id, isMarked)
     local piece = pieces[id]
     if not piece then return end

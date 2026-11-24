@@ -75,7 +75,7 @@ function CompanionAIService.Plan(match, piece)
 
     local function IsEnemy(column, row)
         local target = match:GetPieceAt(column, row)
-        return target ~= nil and target.Team ~= piece.Team and not match:IsProtected(column, row, match.Sides.White)
+        return target ~= nil and target.Team ~= piece.Team
     end
 
     local damage = PieceConfig.Damage[piece.Type]

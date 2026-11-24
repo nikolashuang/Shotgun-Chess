@@ -113,33 +113,47 @@ Shotguns are bought in the Shop with gold and equipped in the Armory. Only the P
 
 ## Classes
 
-Chosen in the Armory alongside the shotgun. All numbers live in `ClassConfig`; each class's logic is a component in `ServerScriptService.Match.Classes` (`ReaperClass`, `HunterClass`, `GunslingerClass`, `OutlawClass`) that `MatchClass` calls into.
+Chosen in the Armory alongside the shotgun. All numbers live in `ClassConfig`; each class's logic is a component in `ServerScriptService.Match.Classes` (`MonarchClass`, `ReaperClass`, `HunterClass`, `GunslingerClass`, `OutlawClass`) that `MatchClass` calls into.
 
 - The king starts with **no class**: normal turns and normal summons only. Special and Ultimate are hidden in the HUD while no class is equipped.
-- Each class is unlocked by defeating the regional King who uses it (see Campaign). Clicking the equipped class in the Armory unequips it.
+- Each class is unlocked by defeating a region's King (see Campaign): King's Training → Monarch, Hunter Forest → Hunter, Cliffside → Bandit, Outskirts → Gunslinger, Gravehollow → Reaper. Profiles that already cleared a region get its class when they load (this is how existing players got Monarch). Clicking the equipped class in the Armory unequips it.
 - **Special:** 2 energy, once per turn. **Ultimate:** needs 100 charge, costs no energy, once per turn, spends the whole charge.
-- Reaper's High has no target and fires as soon as it's selected; the other ultimates wait for an aim or clicks on the board.
+- Reaper's High and both of Monarch's abilities have no target and fire as soon as they're selected; the rest wait for an aim or clicks on the board.
 - Numbers marked *placeholder* aren't in the design doc.
+- **Class outfits (planned, Nov 2026):** equipping a class dresses the King in that class's outfit by default; with no class he's the classic King. The King keeps his classic cream body, with the class shown through clothing (previews in `art/skins/pieces/`, drawn by `art/tools/build_epic_kings.py`):
+  - **Hunter:** heavy shaggy fur coat hanging open behind him (down to the top of the base), fur collar behind the shoulders, bone-fang necklace.
+  - **Bandit:** gray cloth mask over the lower face (no eyes), layered tattered scarves round the neck and shoulders, dark leather vest with crossed straps, belt with pouches and a pocket knife on his right side drawn at an angle pushing back behind him (shaded brass end cap facing the viewer, wooden handle and crossguard, blade narrowing and darkening as it recedes behind the base; handle outlined dark), ragged cloth flaps hanging from the belt.
+  - **Gunslinger:** cowboy hat with the gold crown pinned to the band, red fringed poncho, bandolier of brass rounds, belt and buckle, and a leather holster high on the right hip, just under the poncho, with a revolver in it (outlined dark).
+  - **Reaper:** wrapped in a dark cloak from the neck down ending in ragged tendrils, crown and bare head, scythe slung across his back.
+  - These are class defaults, not crate skins, so Epic skins still need their own designs.
+
+### Monarch (added Nov 24 2026)
+- **Passive [Loyalty]:** your first Queen each match costs 4 energy instead of 6. The Queen summon card shows the lower cost until one is summoned.
+- **Special [Morale]:** every one of your pieces (not the King) gets a 1 health shield that soaks up damage before health. It lasts until the start of your next turn and shows as a light-blue border on the piece's health bar. Needs at least one piece.
+- **Ultimate [Unyielding]:** every one of your pieces deals +2 damage for the rest of the turn (commanded attacks, and the Fallen Knight's attack at the end of the turn). The command damage preview includes it. Needs at least one piece.
+- *Armory drawings for Monarch's three abilities aren't made yet, so those boxes are blank.*
 
 ### Reaper
 - **Passive [Reap]:** every piece that dies leaves a soul on its tile, allies included (Nov 2026): a black orb in greenish-blue flame with a faint ghost of its piece. Queens leave souls too. Kings end the match, so they never do. When your rival is a Reaper, you see their souls in red flame; your own stay blue.
 - **Special [Assimilate]:** pick a soul; it's used up and the king's move this turn uses that piece's movement (Knight jumps, Rook/Bishop/Queen slides, Pawn steps forward). It's a bonus move that doesn't count as the king's movement, so it works after the king has already moved (Nov 2026); unused, it expires at the end of the turn.
-- **Ultimate [Reaper's High]:** absorb every soul on the board. Heal 2 HP per soul (up to 15) and +1 damage per soul on every hit of the next shot. Needs at least one soul.
+- **Ultimate [Reaper's High]:** absorb every soul on the board. Heal 2 HP per soul, at most 8 HP per use (Nov 24 2026), and +1 damage per soul on every hit of the next shot. Needs at least one soul.
 
 ### Hunter
 - **Passive [Collector]:** each enemy death has a 25% chance to give +1 energy, shown as a lightning bolt floating up. *(+1 is a placeholder.)*
-- **Special [Trap Layout]:** place 3 bear traps on empty tiles within 2 of the king *(range placeholder)*; click 3 tiles (fewer if there aren't 3 free). Only the player sees them. An enemy that moves or is knocked onto one takes 3 damage and is stunned 1 turn. Any move or attack whose line crosses a trap stops on the trap's square and springs it, cancelling the rest of the move or attack, so traps also shield the king and allies. Knights jump over traps they cross and are only caught by landing on one; enemy Kings are affected. The trap clamps shut over the piece, floats up and fades.
-- **Ultimate [Hunting Strike]:** aimed and thrown exactly like a Pump shot (Nov 2026: was Double Barrel): same 3-tile cone, range, line of sight and point blank (`HuntingStrike.Weapon`), previewed with the same arc. Every non-King enemy in the hit tiles is stunned for 3 turns and deals no damage; a bolas flies to each one and stays wrapped around it while it's stunned. Kings are immune. Only throws if it would catch at least one non-King enemy, so the charge isn't wasted. (Replaced the old 5-tile radius in Nov 2026.)
+- **Special [Trap Layout]:** place 2 bear traps (Nov 24 2026: was 3) on empty tiles within 2 of the king; click 2 tiles (fewer if there aren't 2 free). Only the player sees them. An enemy that moves or is knocked onto one takes 1 damage (Nov 24 2026: was 3) and is stunned 1 turn. Any move or attack whose line crosses a trap stops on the trap's square and springs it, cancelling the rest of the move or attack, so traps also shield the king and allies. Knights jump over traps they cross and are only caught by landing on one; enemy Kings are affected. The trap clamps shut over the piece, floats up and fades.
+- **Ultimate [Hunting Strike]:** aimed and thrown exactly like a Pump shot (Nov 2026: was Double Barrel): same 3-tile cone, range, line of sight and point blank (`HuntingStrike.Weapon`), previewed with the same arc. Every enemy in the hit tiles is stunned for 3 turns and deals no damage; Kings, rival and campaign boss alike, are stunned for 1 turn (Nov 24 2026: boss Kings were immune, duel Kings took 3). A bolas flies to each one and stays wrapped around it while it's stunned. Only throws if it would catch at least one enemy, so the charge isn't wasted. (Replaced the old 5-tile radius in Nov 2026.)
 
 ### Gunslinger
 - **Passive [Deadly Rounds]** (Nov 2026, replaced Deadeye): no body blocking for any shotgun; blasts pass through every piece. Each target takes -2 damage for every enemy the blast passed through on the way to it (nerfed from -0.5, Nov 2026). Point blank shots go through the adjacent enemy and on in a straight line to max range. Applied to the weapon itself (`ShotgunRules.GetWeapon(name, "Gunslinger")` sets `Pierces`), so the aim preview matches.
-- **Special [Fan the Hammer]:** the king pulls out a revolver (shown while aiming and firing) and fires 6 shots down a 3-tile straight line (snapped to the 8 chess directions). Each shot has a 60% chance to hit and deals 1.5 damage. Shots don't pierce: each hits the first living enemy in the line, so once that enemy dies the remaining shots go to the next one.
+- **Special [Fan the Hammer]:** the king pulls out a revolver (shown while aiming and firing) and fires 6 shots down a 4-tile straight line (Nov 24 2026: was 3) (snapped to the 8 chess directions). Each shot has a 60% chance to hit and deals 1.5 damage. Shots don't pierce: each hits the first living enemy in the line, so once that enemy dies the remaining shots go to the next one. A target inside enemy smoke also rolls the smoke's 50%.
 - **Ultimate [High Noon's Bounty]:** click 2 enemies (Kings allowed; 1 if only one is left) to mark them with a red X. Each marked enemy pays 2 energy when it dies, however it dies. Marks last until the enemy dies.
 
-### Outlaw
-- **Passive [Opportunist]:** +1 damage on shotgun hits against an enemy with no other enemy next to it *(definition of "isolated" is a placeholder)*.
-- **Special [Conceal]:** throw a smoke bomb at any tile up to 3 away; a 3x3 cloud centers there for 1 enemy turn (Nov 2026: was 2). Enemy pieces can't attack anything inside it, the player's king included. Shotgun blasts into it have a 50% chance to hit, rolled separately for each target (pellets still stop on it). Hovering previews the cloud.
-- **Ultimate [Ambush]:** jump the king to any empty tile next to an enemy (`Ambush.MaxEnemyDistance`, 1). Doesn't use the turn's move. +2 damage on every hit of the next shot.
+### Bandit
+
+*Shown in game as the Bandit (renamed from Outlaw, Nov 2026). Code still uses the `Outlaw` key and `OutlawClass`, so saved unlocks and loadouts keep working.*
+- **Passive [Opportunist]:** +2 damage (Nov 24 2026: was +1) on shotgun hits against an isolated enemy, meaning one with no allied piece (its own King included) within 1 tile.
+- **Special [Conceal]:** throw a smoke bomb at any tile up to 3 away; a 3x3 cloud centers there for 1 enemy turn (Nov 2026: was 2). Every enemy attack into it has a 50% chance to hit, rolled separately for each target: piece attacks, knife swings, shotgun blasts and Fan the Hammer shots (Nov 24 2026: enemy pieces used to be unable to attack into it at all). A piece that misses still lunges but deals no damage. Pellets still stop on it. Hovering previews the cloud.
+- **Ultimate [Ambush]:** jump the king to any empty tile next to an enemy (`Ambush.MaxEnemyDistance`, 1). Doesn't use the turn's move. (Nov 24 2026: the +2 damage on the next shot was removed.)
 
 ### Health Bars
 
@@ -147,7 +161,7 @@ Every health bar (pieces and kings) has a divider between each point of health, 
 
 ## Campaign
 
-World map, bottom to top: **King's Training** (tutorial) → **Hunter Forest** (Hunter King) → **Cliffside** (Outlaw King) → **Outskirts** (Gunslinger King) → **Gravehollow** (Reaper King). Each region needs the one before it.
+World map, bottom to top: **King's Training** (tutorial, Monarch) → **Hunter Forest** (Hunter King) → **Cliffside** (Bandit King) → **Outskirts** (Gunslinger King) → **Gravehollow** (Reaper King). Each region needs the one before it.
 
 - The Campaign button opens its own screen. The world map scrolls vertically: King's Training at the bottom, Gravehollow at the top. It always opens scrolled to the bottom (King's Training) so players see where the campaign starts.
 - Each region is a floating pixel-art island that bobs gently, joined by dotted paths. Locked islands are gray, wrapped in two chains with a padlock.

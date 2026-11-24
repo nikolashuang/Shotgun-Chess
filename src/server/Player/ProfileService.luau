@@ -87,6 +87,13 @@ local function Reconcile(data)
         end
     end
 
+    -- Classes added to a region after a player already beat it (King's Training -> Monarch) are granted here
+    for regionId, region in pairs(CampaignConfig.Regions) do
+        if region.Class and not region.DevOnly and CampaignRules.IsRegionComplete(data.Nodes, regionId) then
+            data.Classes[region.Class] = true
+        end
+    end
+
     return data
 end
 

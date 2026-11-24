@@ -1,10 +1,23 @@
 -- Game version shown in the corner of every screen, and the patch notes on the main menu
 -- One release per day: bump the last number each day, and the middle one (resetting the last) only for a huge update
 local PatchNotes = {
-    VERSION = "0.5.4",
+    VERSION = "0.5.5",
 
     -- Newest first
     Releases = {
+        {
+            Version = "0.5.5",
+            Date = "Nov 24",
+            Title = "Monarch and Class Rework",
+            Notes = {
+                "New class: Monarch, unlocked by beating King's Training (players who already did have it).",
+                "Monarch - Loyalty: your first Queen each match costs 4 energy. Morale: every piece gets a 1 health shield until your next turn. Unyielding: every piece deals +2 damage this turn.",
+                "Reaper: Reaper's High now heals at most 8 health.",
+                "Hunter: Trap Layout lays 2 traps that deal 1 damage. Hunting Strike now stuns every King for 1 turn, campaign bosses included.",
+                "Gunslinger: Fan the Hammer reaches 4 tiles.",
+                "Bandit: Opportunist deals +2. Every enemy attack into Conceal's smoke now has a 50% chance to hit, including piece attacks. Ambush no longer adds damage to your next shot.",
+            },
+        },
         {
             Version = "0.5.4",
             Date = "Nov 23",
@@ -15,6 +28,7 @@ local PatchNotes = {
                 "Treasure Hunt boards are 10x10 too, with the same 5 digs.",
                 "Commanding a piece now costs 1 energy per 2 tiles it travels (rounded up), so short moves still cost 1.",
                 "Hovering or picking an action makes the energy it will spend flash red on your energy bar.",
+                "The Outlaw class is now called the Bandit. Its abilities are unchanged.",
             },
         },
         {

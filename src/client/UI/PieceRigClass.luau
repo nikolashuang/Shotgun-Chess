@@ -46,6 +46,8 @@ local OUTLINE_COLOR = Color3.fromHex("271F29")
 local EMPTY_COLOR = Color3.fromHex("4A3D48")
 -- Health an attack is about to take, marked white on the bar
 local PREVIEW_COLOR = Color3.new(1, 1, 1)
+-- Border of the health bar while a Morale shield is up
+local SHIELD_COLOR = Color3.fromHex("8CD3F2")
 local PREVIEW_PULSE_TIME = 0.45
 
 -- Name shown above the health bar, fading in and out with it, in tiles
@@ -148,6 +150,7 @@ function PieceRigClass.new(board, pieceType, team)
     self.isHovered = false
     self.isBarShown = false
     self.PreviewDamage = 0
+    self.Shield = 0
 
     self.StunEffect = nil
     self.ArrowEffect = nil
@@ -426,6 +429,18 @@ function PieceRigClass:FadeBar(isShown, duration)
     end
 end
 
+-- A shielded piece keeps its bar up, bordered in blue, until the shield is gone
+function PieceRigClass:SetShield(amount)
+    self.Shield = amount
+    self.HealthBar.BackgroundColor3 = amount > 0 and SHIELD_COLOR or OUTLINE_COLOR
+
+    if amount > 0 then
+        self:ShowHealth()
+    else
+        self:HideHealth()
+    end
+end
+
 function PieceRigClass:ShowHealth()
     self.HideToken += 1
 
@@ -439,7 +454,7 @@ function PieceRigClass:HideHealth()
 
     task.delay(BAR_HIDE_DELAY, function()
         if self.HideToken ~= token then return end
-        if self.isHovered or self.PreviewDamage > 0 then return end
+        if self.isHovered or self.PreviewDamage > 0 or self.Shield > 0 then return end
         if not self.HealthBar.Parent then return end
 
         self:FadeBar(false, BAR_HIDE_TIME)

@@ -6,8 +6,8 @@ local ArgumentRules = require(script.Parent.Parent.ArgumentRules)
 
 local OutlawConfig = ClassConfig.Classes.Outlaw
 
--- Opportunist adds damage against lone enemies, Conceal throws smoke enemies can't attack into,
--- Ambush jumps the king next to an enemy and powers up the next shot
+-- Opportunist adds damage against lone enemies, Conceal throws smoke that makes enemy attacks into it a coin flip,
+-- Ambush jumps the king next to an enemy
 local OutlawClass = {}
 
 OutlawClass.__index = OutlawClass
@@ -51,7 +51,7 @@ function OutlawClass:Special(payload)
     return true
 end
 
--- Enemies can't attack or shoot anything inside the smoke
+-- Whether the tile is inside the smoke
 function OutlawClass:IsProtected(column, row)
     local smoke = self.Smoke
     if not smoke then return false end
@@ -59,9 +59,9 @@ function OutlawClass:IsProtected(column, row)
     return BoardRules.GetDistance(smoke.Column, smoke.Row, column, row) <= OutlawConfig.Conceal.Radius
 end
 
--- Shotgun blasts into the smoke only land some of the time
-function OutlawClass:GetShotHitChance(column, row)
-    return self:IsProtected(column, row) and OutlawConfig.Conceal.ShotHitChance or 1
+-- Every enemy attack or shot into the smoke only lands some of the time
+function OutlawClass:GetHitChance(column, row)
+    return self:IsProtected(column, row) and OutlawConfig.Conceal.HitChance or 1
 end
 
 function OutlawClass:OnEnemyTurnEnd()
@@ -96,7 +96,6 @@ function OutlawClass:Ultimate(payload)
 
     local side = self.Side
     side.King:SetTile(column, row)
-    side.NextShotBonus += OutlawConfig.Ambush.Damage
 
     self.Match:SendKingMoved(side, "KingAmbushed")
     self.Match:OnUnitMoved(side.King)

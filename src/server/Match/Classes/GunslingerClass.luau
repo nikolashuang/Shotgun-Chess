@@ -41,13 +41,14 @@ function GunslingerClass:Special(payload)
         for _, tile in ipairs(lineTiles) do
             local piece = match:GetPieceAt(tile.Column, tile.Row)
 
-            if piece and piece.Team ~= side.Team and not match:IsProtected(tile.Column, tile.Row, side) then
+            if piece and piece.Team ~= side.Team then
                 target = piece
                 break
             end
         end
 
-        if target and match.Random:NextNumber() < fan.HitChance then
+        -- Each shot rolls its own hit chance, and again for a target inside smoke
+        if target and match.Random:NextNumber() < fan.HitChance and match:RollHit(target.Column, target.Row, side) then
             local column, row = target.Column, target.Row
             match:DamagePiece(target, fan.Damage, side)
             match:ShowDamage(target, side)

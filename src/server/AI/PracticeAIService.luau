@@ -84,7 +84,7 @@ local function GetBestShot(match, side, column, row)
                 for _, tile in pairs(hitTiles) do
                     local target = match:GetPieceAt(tile.Column, tile.Row)
 
-                    local hitChance = match:GetShotHitChance(tile.Column, tile.Row, side)
+                    local hitChance = match:GetHitChance(tile.Column, tile.Row, side)
 
                     if target and target.Team == side.EnemyTeam and hitChance > 0 then
                         local distance = BoardRules.GetDistance(column, row, tile.Column, tile.Row)
@@ -170,7 +170,7 @@ local function PlanAttack(match, side)
                 local target = match:GetPieceAt(tile.Column, tile.Row)
                 local cost = BoardRules.GetCommandCost(piece.Column, piece.Row, tile.Column, tile.Row)
 
-                if cost <= side.Energy and not match:IsProtected(tile.Column, tile.Row, side) then
+                if cost <= side.Energy then
                     local value = GetValue(side, target, PieceConfig.Damage[piece.Type])
 
                     if not best or value > best.Value then

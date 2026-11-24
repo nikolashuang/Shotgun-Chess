@@ -151,8 +151,7 @@ function HunterClass:Ultimate(payload)
     for _, tile in pairs(hitTiles) do
         local piece = match:GetPieceAt(tile.Column, tile.Row)
 
-        -- Boss Kings shrug off bolas in the campaign; in duels the rival King can be stunned
-        if piece and piece.Team == side.EnemyTeam and (piece.Type ~= "King" or match.isDuel) then
+        if piece and piece.Team == side.EnemyTeam then
             table.insert(targets, piece)
         end
     end
@@ -162,7 +161,8 @@ function HunterClass:Ultimate(payload)
 
     -- The client throws a bolas at each piece stunned with the "Bolas" look
     for _, piece in ipairs(targets) do
-        match:StunPiece(piece, strike.StunTurns, "Bolas", side)
+        -- Kings, rival and boss alike, shake off bolas faster
+        match:StunPiece(piece, piece.Type == "King" and strike.KingStunTurns or strike.StunTurns, "Bolas", side)
     end
 
     return true

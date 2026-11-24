@@ -102,6 +102,7 @@ local CampaignConfig = {
             DisplayName = "King's Training",
             Subtitle = "Tutorial / Practice Grounds",
             Requires = {},
+            Class = "Monarch",
             RewardScale = 0.5,
             StartPoints = 6,
             Start = "Start",
@@ -123,7 +124,7 @@ local CampaignConfig = {
 
         Cliffside = {
             DisplayName = "Cliffside",
-            Subtitle = "Outlaw King",
+            Subtitle = "Bandit King",
             Requires = {"Forest"},
             Class = "Outlaw",
             RewardScale = 1.5,

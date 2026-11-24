@@ -95,7 +95,7 @@ function ReaperClass:Ultimate()
 
     self.Souls = {}
 
-    side.King:Heal(high.HealPerSoul * count)
+    side.King:Heal(math.min(high.HealPerSoul * count, high.MaxHeal))
     side.NextShotBonus += high.DamagePerSoul * count
 
     self:RemoveSouls(absorbed, true)

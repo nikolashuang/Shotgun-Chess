@@ -310,16 +310,30 @@ function AbilityController.OnTileClicked(action, column, row)
     return false
 end
 
--- Reaper's High has no target, so it fires as soon as it's selected, like Reload
+-- Abilities with no target fire as soon as they're selected, like Reload:
+-- Reaper's High, and Monarch's Morale and Unyielding
 function AbilityController.OnSelected(action)
     picks = {}
 
-    if action ~= "Ultimate" then return false end
-
     local state = board.GetTurnState()
-    if not state or not CanUltimate() then return false end
+    if not state then return false end
+
+    if action == "Special" then
+        if state.Class ~= "Monarch" or not CanSpecial() then return false end
+        if #PieceController.GetTeamPieces("White") == 0 then return false end
+
+        Send("Special", {})
+        return true
+    end
+
+    if action ~= "Ultimate" or not CanUltimate() then return false end
 
     if state.Class == "Reaper" then
+        Send("Ultimate", {})
+        return true
+    end
+
+    if state.Class == "Monarch" and #PieceController.GetTeamPieces("White") > 0 then
         Send("Ultimate", {})
         return true
     end

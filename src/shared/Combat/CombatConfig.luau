@@ -21,7 +21,7 @@ local CombatConfig = {
     Ultimate = {
         MAX_CHARGE = 100,
         -- Charge per point of damage actually dealt to enemy pieces (overkill doesn't count)
-        CHARGE_PER_DAMAGE = 10,
+        CHARGE_PER_DAMAGE = 5,
     },
 }
 

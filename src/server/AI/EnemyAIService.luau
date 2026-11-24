@@ -350,7 +350,7 @@ local function AddShots(context, piece, options)
                     local hitTarget = context.Targets[GetKey(tile.Column, tile.Row)]
 
                     -- Blasts into the Outlaw's smoke only land part of the time, so they count for less
-                    local hitChance = context.Match:GetShotHitChance(tile.Column, tile.Row)
+                    local hitChance = context.Match:GetHitChance(tile.Column, tile.Row)
 
                     if hitTarget and hitChance > 0 then
                         local distance = BoardRules.GetDistance(piece.Column, piece.Row, tile.Column, tile.Row)
@@ -374,7 +374,7 @@ local function GetOptions(context, piece)
     end
 
     local function IsTarget(column, row)
-        return context.Targets[GetKey(column, row)] ~= nil and not context.Match:IsProtected(column, row)
+        return context.Targets[GetKey(column, row)] ~= nil
     end
 
     if piece.Type == "King" then

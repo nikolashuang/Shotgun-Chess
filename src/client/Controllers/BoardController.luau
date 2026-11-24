@@ -358,7 +358,9 @@ local function UpdateCommandDamage()
         if target then
             for _, attack in pairs(GetCommandAttacks(selectedPiece)) do
                 if attack.Column == column and attack.Row == row then
-                    commandDamage[target.Id] = PieceConfig.Damage[selectedPiece.Type] or 0
+                    -- Unyielding (Monarch) adds to every allied attack this turn
+                    local bonus = turnState.Ability and turnState.Ability.AllyDamageBonus or 0
+                    commandDamage[target.Id] = (PieceConfig.Damage[selectedPiece.Type] or 0) + bonus
                 end
             end
         end
@@ -374,7 +376,7 @@ local function UpdateEnergyPreview()
 
     if action == "Summon" then
         local pieceType = SummonPanelController.SelectedPiece
-        cost = pieceType and PieceConfig.Cost[pieceType] or 0
+        cost = pieceType and SummonPanelController.GetCost(pieceType) or 0
     elseif action == "Command" then
         cost = ActionCost.Command
 
@@ -483,7 +485,7 @@ local function DrawPreview()
         end
     elseif selectedAction == "Summon" then
         if not SummonPanelController.SelectedPiece then return end
-        if not CanAct(PieceConfig.Cost[SummonPanelController.SelectedPiece], "Summon") then return end
+        if not CanAct(SummonPanelController.GetCost(SummonPanelController.SelectedPiece), "Summon") then return end
         if SummonPanelController.IsMaxed(SummonPanelController.SelectedPiece) then return end
 
         local range = BoardConfig.SUMMON_RANGE
@@ -577,7 +579,7 @@ local function OnTileClicked(column, row)
         local pieceType = SummonPanelController.SelectedPiece
 
         if not pieceType then return end
-        if not CanAct(PieceConfig.Cost[pieceType], "Summon") then return end
+        if not CanAct(SummonPanelController.GetCost(pieceType), "Summon") then return end
         if SummonPanelController.IsMaxed(pieceType) then return end
         if not IsSummonTile(column, row) then return end
 
@@ -949,6 +951,8 @@ function BoardController.Init(actionPanelController)
             OnFanFired(...)
         elseif action == "PieceStunned" then
             OnPieceStunned(...)
+        elseif action == "PieceShielded" then
+            PieceController.SetShield(...)
         elseif action == "KingStunned" then
             -- Duels only: the player's own King is stunned (stars, or wrapped in bolas)
             if kingRig then
@@ -987,6 +991,9 @@ function BoardController.Init(actionPanelController)
         elseif action == "TurnState" then
             turnState = ...
             ShotgunController.SetWeapon(turnState.Shotgun, turnState.Class)
+            -- Loyalty (Monarch) makes the first Queen cheaper until one is summoned
+            local queenCost = turnState.Ability and turnState.Ability.QueenCost
+            SummonPanelController.SetCostOverrides(queenCost and {Queen = queenCost} or {})
 
             if kingRig then
                 kingRig:SetHealth(turnState.KingHealth, turnState.KingMaxHealth)

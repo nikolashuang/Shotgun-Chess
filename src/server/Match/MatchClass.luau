@@ -24,6 +24,7 @@ local ClassComponents = {
     Hunter = require(script.Parent.Classes.HunterClass),
     Gunslinger = require(script.Parent.Classes.GunslingerClass),
     Outlaw = require(script.Parent.Classes.OutlawClass),
+    Monarch = require(script.Parent.Classes.MonarchClass),
 }
 
 local BoardRemote = ReplicatedStorage.Remotes.BoardRemote
@@ -536,6 +537,14 @@ end
 -- attacker is the side dealing the damage, if any; hurting the other team builds its ultimate charge
 -- Returns true when the piece dies
 function MatchClass:DamagePiece(piece, amount, attacker)
+    -- A Morale shield soaks up damage before health
+    if (piece.Shield or 0) > 0 and amount > 0 then
+        local absorbed = math.min(piece.Shield, amount)
+        piece.Shield -= absorbed
+        amount -= absorbed
+        self:SendAll("PieceShielded", piece.Id, piece.Shield)
+    end
+
     local dealt = piece:TakeDamage(amount)
     local isEnemy = attacker ~= nil and piece.Team ~= attacker.Team
 
@@ -573,26 +582,20 @@ function MatchClass:SpendEnergy(side, cost, action)
 end
 
 -- Smoke belongs to the side being attacked; AI attacks (no attacker) are against White
-function MatchClass:IsProtected(column, row, attacker)
-    local defenders = attacker and self:GetOpponents(attacker) or {self.Sides.White}
-
-    for _, defender in ipairs(defenders) do
-        if self:CallAbility(defender, "IsProtected", column, row) == true then return true end
-    end
-
-    return false
-end
-
--- Chance a shotgun blast lands on the tile; lower inside the Outlaw's smoke
-function MatchClass:GetShotHitChance(column, row, attacker)
+-- Chance any attack (shot pellet, knife swing or piece attack) lands on the tile; lower inside the Bandit's smoke
+function MatchClass:GetHitChance(column, row, attacker)
     local defenders = attacker and self:GetOpponents(attacker) or {self.Sides.White}
     local chance = 1
 
     for _, defender in ipairs(defenders) do
-        chance = math.min(chance, self:CallAbility(defender, "GetShotHitChance", column, row) or 1)
+        chance = math.min(chance, self:CallAbility(defender, "GetHitChance", column, row) or 1)
     end
 
     return chance
+end
+
+function MatchClass:RollHit(column, row, attacker)
+    return self.Random:NextNumber() < self:GetHitChance(column, row, attacker)
 end
 
 -- Called whenever a piece or king ends up on a new tile; the other team's traps can catch it
@@ -835,11 +838,9 @@ function MatchClass:Fire(side, targetX, targetY, mode)
 
     local targets = {}
 
-    -- Knife swings can't reach into smoke; shotgun blasts into it roll to hit for each target
+    -- Knife swings and shotgun blasts into smoke roll to hit for each target
     local function IsHit(column, row)
-        if shotType == "Knife" then return not self:IsProtected(column, row, side) end
-
-        return self.Random:NextNumber() < self:GetShotHitChance(column, row, side)
+        return self:RollHit(column, row, side)
     end
 
     for _, tile in pairs(hitTiles) do
@@ -987,7 +988,7 @@ end
 function MatchClass:Summon(side, pieceType, column, row)
     if not table.find(PieceConfig.SUMMONABLE, pieceType) then return end
 
-    local cost = PieceConfig.Cost[pieceType]
+    local cost = self:CallAbility(side, "GetSummonCost", pieceType) or PieceConfig.Cost[pieceType]
     if not self:CanAct(side, cost, "Summon") then return end
 
     local king = side.King
@@ -1000,6 +1001,7 @@ function MatchClass:Summon(side, pieceType, column, row)
 
     self:SpendEnergy(side, cost, "Summon")
     self:AddPiece(pieceType, side.Team, column, row, nil, side)
+    self:CallAbility(side, "OnSummoned", pieceType)
 
     self:FinishEvent()
 end
@@ -1028,7 +1030,6 @@ function MatchClass:Command(side, pieceId, column, row)
     local target = self:GetPieceAt(column, row)
     if target then
         if target.Team == piece.Team then return end
-        if self:IsProtected(column, row, side) then return end
 
         local function IsEnemy(enemyColumn, enemyRow)
             local enemy = self:GetPieceAt(enemyColumn, enemyRow)
@@ -1046,7 +1047,15 @@ function MatchClass:Command(side, pieceId, column, row)
             return
         end
 
-        local isCapture = self:DamagePiece(target, PieceConfig.Damage[piece.Type], side)
+        -- Attacks into smoke can miss: the piece still lunges, but the target takes nothing
+        if not self:RollHit(column, row, side) then
+            self:SendAttack(piece, target, false)
+            self:FinishEvent()
+            return
+        end
+
+        local damage = PieceConfig.Damage[piece.Type] + (self:CallAbility(side, "GetAllyDamageBonus", piece) or 0)
+        local isCapture = self:DamagePiece(target, damage, side)
 
         if isCapture then
             piece.Column = column
@@ -1267,7 +1276,8 @@ function MatchClass:RunCompanion()
         local target = self:GetPieceAt(plan.Column, plan.Row)
         if not target or target.Team == piece.Team then return end
 
-        local isCapture = self:DamagePiece(target, PieceConfig.Damage[piece.Type], self.Sides.White)
+        local damage = PieceConfig.Damage[piece.Type] + (self:CallAbility(self.Sides.White, "GetAllyDamageBonus", piece) or 0)
+        local isCapture = self:DamagePiece(target, damage, self.Sides.White)
 
         if isCapture then
             piece.Column = plan.Column
@@ -1337,8 +1347,20 @@ end
 
 function MatchClass:EnemyAttack(piece, column, row)
     if not self.King:IsAlive() then return end
-    if self:IsProtected(column, row) then return end
     if self:CallAbility(self.Sides.White, "InterceptPath", piece, column, row) then return end
+
+    -- Attacks into smoke can miss: the piece lunges but nothing is hurt
+    if not self:RollHit(column, row) then
+        if self.King.Column == column and self.King.Row == row then
+            self:SendAll("KingAttacked", piece.Id, self.King.Health)
+        else
+            local target = self:GetPieceAt(column, row)
+            if target and target.Team == "White" then
+                self:SendAll("PieceAttacked", piece.Id, target.Id, target.Health, false)
+            end
+        end
+        return
+    end
 
     local health, targetId = self:DamageWhiteTile(column, row, PieceConfig.Damage[piece.Type])
     if not health then return end
@@ -1413,7 +1435,7 @@ function MatchClass:EnemyShoot(piece, aimX, aimY)
     local damaged = {}
 
     for _, tile in pairs(hitTiles) do
-        if IsWhiteTile(tile.Column, tile.Row) and self.Random:NextNumber() < self:GetShotHitChance(tile.Column, tile.Row) then
+        if IsWhiteTile(tile.Column, tile.Row) and self:RollHit(tile.Column, tile.Row) then
             local distance = BoardRules.GetDistance(piece.Column, piece.Row, tile.Column, tile.Row)
             local health, targetId = self:DamageWhiteTile(tile.Column, tile.Row, ShotgunRules.GetHitDamage(weapon, shotType, distance))
 

@@ -29,6 +29,8 @@ local spritesByPiece = {}
 -- Piece type -> true while its card shows as maxed out
 local maxedPieces = {}
 local energyLeft = 0
+-- Piece type -> cost replacing PieceConfig.Cost, from the equipped class (Monarch's Loyalty)
+local costOverrides = {}
 local hud = nil
 local root = nil
 local summonPanel = nil
@@ -70,13 +72,29 @@ function SummonPanelController.IsMaxed(pieceType)
     return count >= maxActive
 end
 
+function SummonPanelController.GetCost(pieceType)
+    return costOverrides[pieceType] or PieceConfig.Cost[pieceType]
+end
+
 -- Costs turn red when the player can't afford the piece
 function SummonPanelController.SetEnergy(energy)
     energyLeft = energy
 
     for pieceType, card in pairs(cardsByPiece) do
-        card.Cost.TextColor3 = energy >= PieceConfig.Cost[pieceType] and AFFORDABLE_COLOR or EXPENSIVE_COLOR
+        card.Cost.TextColor3 = energy >= SummonPanelController.GetCost(pieceType) and AFFORDABLE_COLOR or EXPENSIVE_COLOR
     end
+end
+
+function SummonPanelController.SetCostOverrides(overrides)
+    costOverrides = overrides
+
+    for pieceType, card in pairs(cardsByPiece) do
+        if not maxedPieces[pieceType] then
+            card.Cost.Text = SummonPanelController.GetCost(pieceType) .. " Energy"
+        end
+    end
+
+    SummonPanelController.SetEnergy(energyLeft)
 end
 
 local function SetMaxed(pieceType, isMaxed)
@@ -87,7 +105,7 @@ local function SetMaxed(pieceType, isMaxed)
     card.PieceName.TextTransparency = transparency
     card.Health.TextTransparency = transparency
     card.Cost.TextTransparency = transparency
-    card.Cost.Text = isMaxed and "On Board" or PieceConfig.Cost[pieceType] .. " Energy"
+    card.Cost.Text = isMaxed and "On Board" or SummonPanelController.GetCost(pieceType) .. " Energy"
     spritesByPiece[pieceType].Image.ImageTransparency = transparency
 
     if isMaxed and SummonPanelController.SelectedPiece == pieceType then
