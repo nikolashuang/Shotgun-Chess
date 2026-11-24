@@ -43,12 +43,12 @@ local CampaignConfig = {
         KING_BONUS = 6,
 
         RESERVED_PAWNS = 2,
-        MAX_PAWNS = 12,
+        MAX_PAWNS = 10,
 
-        -- Enemies spawn on rows FIRST_ROW to the back row; 12 pawns form a wall on FIRST_ROW
-        FIRST_ROW = 9,
-        QUEEN_TILE = {6, 12},
-        KING_TILE = {7, 12},
+        -- Enemies spawn on rows FIRST_ROW to the back row; 10 pawns form a wall on FIRST_ROW
+        FIRST_ROW = 8,
+        QUEEN_TILE = {5, 10},
+        KING_TILE = {6, 10},
     },
 
     Rest = {
@@ -78,7 +78,7 @@ local CampaignConfig = {
             DAMAGE = 3,
             Points = {Training = 6, Forest = 7, Cliffside = 8, Outskirts = 8, Gravehollow = 9, Dev = 6},
             -- Fighting starts with the King mid-board and the army closing in from RING_MIN to RING_MAX tiles away
-            KING_TILE = {6, 6},
+            KING_TILE = {5, 5},
             RING_MIN = 2,
             RING_MAX = 3,
         },
@@ -88,7 +88,7 @@ local CampaignConfig = {
 
         -- The Knight waits alone on his throne tile; beat him and he joins the run
         -- Three Fallen Pawns guard the steps in front of his throne
-        FallenKnight = {TILE = {6, 12}, PAWN_TILES = {{5, 11}, {6, 11}, {7, 11}}},
+        FallenKnight = {TILE = {5, 10}, PAWN_TILES = {{4, 9}, {5, 9}, {6, 9}}},
     },
 
     -- The Fallen Knight companion starts each battle this many columns right of the King

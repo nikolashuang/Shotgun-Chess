@@ -18,7 +18,7 @@ local PieceConfig = {
         Knight = 2,
         Bishop = 2,
         Rook = 3,
-        Queen = 4,
+        Queen = 5,
         FallenKnight = 4,
         FallenPawn = 1,
     },

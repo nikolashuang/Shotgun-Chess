@@ -1,10 +1,20 @@
 -- Game version shown in the corner of every screen, and the patch notes on the main menu
 -- One release per day: bump the last number each day, and the middle one (resetting the last) only for a huge update
 local PatchNotes = {
-    VERSION = "0.5.3",
+    VERSION = "0.5.4",
 
     -- Newest first
     Releases = {
+        {
+            Version = "0.5.4",
+            Date = "Nov 23",
+            Title = "Smaller Board",
+            Notes = {
+                "The board is now 10x10 (was 12x12) in every mode and every board skin, so fights close in faster.",
+                "Your King now starts on E1. Campaign enemies start on the back 3 rows, with a full pawn wall of 10 on row 8.",
+                "Treasure Hunt boards are 10x10 too, with the same 5 digs.",
+            },
+        },
         {
             Version = "0.5.3",
             Date = "Nov 22",

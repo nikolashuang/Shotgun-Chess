@@ -1,8 +1,8 @@
 local BoardConfig = {
-    SIZE = 12,
-    COLUMNS = "ABCDEFGHIJKL",
+    SIZE = 10,
+    COLUMNS = "ABCDEFGHIJ",
 
-    KING_START_COLUMN = 6,
+    KING_START_COLUMN = 5,
     KING_START_ROW = 1,
 
     -- Max tile distance from the king when summoning

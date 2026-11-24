@@ -10,7 +10,7 @@ Kill the enemy king.
 
 ## Board
 
-- 12x12 board (columns A–L, rows 1–12). The player's king starts at F1.
+- 10x10 board (columns A–J, rows 1–10). The player's king starts at E1.
 - Co-op matches use a 16x16 board (not implemented).
 
 ## Turn System
@@ -181,8 +181,8 @@ Enemy armies are rolled fresh every battle from a point budget (`CampaignConfig.
 | King Battle | 36 | 38 | 40 | 42 | 44 |
 
 - Queen battle = Normal 6 + 9, King battle = Queen battle + 6. Both always include the Queen (her 9 points come out of the budget, the King is free). Only one Queen.
-- 2 points are reserved for Pawns; Rooks, Knights and Bishops are picked at random to spend the rest, then Pawns fill what's left (max 12). Exactly 12 Pawns form a wall across row 9.
-- Everything is placed randomly on rows 9–12. In boss battles the Queen starts on column 6 and the King on column 7 of row 12.
+- 2 points are reserved for Pawns; Rooks, Knights and Bishops are picked at random to spend the rest, then Pawns fill what's left (max 10). Exactly 10 Pawns form a wall across row 8.
+- Everything is placed randomly on rows 8–10. In boss battles the Queen starts on column 5 and the King on column 6 of row 10.
 - Bishops alternate square colors, so neither color is safe.
 
 ### Mystery Encounters
@@ -208,7 +208,7 @@ The Rest Site panel shows `art/campaign/RestCamp.png` with an animated campfire 
 
 ### Treasure Hunt
 
-A 12×12 board in the region's colors with 5 digs; each dig uncovers a 3×3 square. The treasure's tile is rolled on the server when the hunt starts and kept in the run. Finding it on dig 1–5 pays 200 / 175 / 150 / 125 / 100 Gold to the pouch; not finding it pays 25.
+A 10×10 board in the region's colors with 5 digs; each dig uncovers a 3×3 square. The treasure's tile is rolled on the server when the hunt starts and kept in the run. Finding it on dig 1–5 pays 200 / 175 / 150 / 125 / 100 Gold to the pouch; not finding it pays 25.
 - **Win condition in campaign:** armies with a King are beaten by killing the King, armies without one by clearing every enemy piece.
 
 ### Rewards
@@ -242,7 +242,7 @@ Unlocks at level 10 (the Multiplayer screen itself opens at level 5). Uses the s
 - **Practice** (the last card on the **Singleplayer** screen, after Campaign and Siege; no level needed): Choose Difficulty picks the AI rating (500–2500 in steps of 500, `DuelConfig.PRACTICE_RATINGS`) and the AI king's shotgun and class. It's a normal duel (coin flip for White, 5:00 clock) against `PracticeAIService`, with no rewards.
 - **Practice AI (simple for now):** each turn it moves the king to the tile with the best shot (or toward your King), then shoots; with no shot it attacks with a piece if it can. It reloads when empty, saves energy for a randomly picked piece and summons it near its king, and uses spare energy to push a piece forward. The rating is its chance of picking a worse move (`AIConfig.Ratings`). It doesn't use class specials or ultimates yet. Smarter player techniques get added over time.
 - **Challenges:** a challenge shows the target an Accept/Decline popup on any menu screen for 30 seconds (`DuelConfig.CHALLENGE_TIMEOUT`). Players already in a match show as Busy.
-- **Setup:** kings only, no starting pieces. A coin flip picks White, who moves first from F1; Black starts on the mirrored tile (G12). Each player brings their equipped shotgun and class.
+- **Setup:** kings only, no starting pieces. A coin flip picks White, who moves first from E1; Black starts on the mirrored tile (F10). Each player brings their equipped shotgun and class.
 - **View:** the server turns the board 180° for Black, so both players see themselves at the bottom as White.
 - **Chess clock:** 5:00 per player (`DuelConfig.CLOCK`), running only on that player's turn. Shown next to End Turn.
 - **Winning:** kill the enemy King, or the enemy's clock reaches 0. Leaving the match (Back to Menu or quitting) forfeits.

@@ -1,6 +1,6 @@
 -- Cosmetic skins and the crates that drop them
 -- Board skins color the light and dark tiles; Epic boards also show one pixel image of the whole board
--- (art/skins/boards, 16 pixels per tile, row 12 at the top), each tile cut to its own square; 0 until uploaded
+-- (art/skins/boards, 16 pixels per tile, row 10 at the top), each tile cut to its own square; 0 until uploaded
 local SkinConfig = {
     DEFAULT_BOARD = "Classic",
 
