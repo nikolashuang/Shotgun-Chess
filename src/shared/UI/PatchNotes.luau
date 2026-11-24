@@ -8,11 +8,13 @@ local PatchNotes = {
         {
             Version = "0.5.4",
             Date = "Nov 23",
-            Title = "Smaller Board",
+            Title = "Smaller Board, Command Costs",
             Notes = {
                 "The board is now 10x10 (was 12x12) in every mode and every board skin, so fights close in faster.",
                 "Your King now starts on E1. Campaign enemies start on the back 3 rows, with a full pawn wall of 10 on row 8.",
                 "Treasure Hunt boards are 10x10 too, with the same 5 digs.",
+                "Commanding a piece now costs 1 energy per 2 tiles it travels (rounded up), so short moves still cost 1.",
+                "Hovering or picking an action makes the energy it will spend flash red on your energy bar.",
             },
         },
         {

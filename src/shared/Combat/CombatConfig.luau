@@ -15,6 +15,9 @@ local CombatConfig = {
         Ultimate = 0,
     },
 
+    -- Commands cost one energy per this many tiles the piece travels (rounded up), never less than ActionCost.Command
+    COMMAND_TILES_PER_ENERGY = 2,
+
     Ultimate = {
         MAX_CHARGE = 100,
         -- Charge per point of damage actually dealt to enemy pieces (overkill doesn't count)

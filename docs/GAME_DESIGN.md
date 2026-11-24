@@ -22,7 +22,7 @@ Turns are energy-based:
 - **Movement** — the king gets 1 free move per turn, like a chess king: one tile in any of the 8 directions.
 - **Actions** — each action can be used **once per turn**, in any order, as long as there's energy to pay for it (prevents spam; used actions fade out in the action panel):
    - **Fire shotgun** — 1 energy
-   - **Command a piece** — 1 energy (move or attack with one of your pieces using its normal chess movement)
+   - **Command a piece** — 1 energy per 2 tiles the piece travels, rounded up (min 1; a knight's jump counts as 2) — move or attack with one of your pieces using its normal chess movement
    - **Reload** — 1 energy, refills the shotgun's magazine
    - **Use special** — 2 energy
    - **Summon a piece** — the piece's cost (see Energy); placed on an empty tile within one tile of the king. Opening the summon menu is free.
@@ -64,7 +64,8 @@ Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuni
 - Each player gains 1 energy at the start of every turn (including the first), up to 8.
 - Starting energy is 0. *(Assumption — confirm.)*
 - Summon costs: Pawn 1, Knight 2, Bishop 2, Rook 3, Queen 6 (raised from 4 in Nov 2026 so the Queen is harder to get).
-- Action costs: Fire 1, Command 1, Reload 1, Special 2, Ultimate 0.
+- Action costs: Fire 1, Command 1+ (tiles ÷ 2, rounded up; `CombatConfig.COMMAND_TILES_PER_ENERGY`), Reload 1, Special 2, Ultimate 0. Only command tiles the player can afford are highlighted.
+- Hovering an action button, or having an action selected, makes the energy it will spend flash between red and the empty-bar color on the energy bar; for a command, the hovered target sets the cost.
 - Only one active Queen per king.
 - Energy is also spent on fusion (cost undecided).
 

@@ -21,6 +21,9 @@ local ActionPanelController = {}
 
 ActionPanelController.SelectedAction = nil
 ActionPanelController.OnSelectionChanged = nil
+-- The action button under the mouse, so its energy cost can be previewed before it's picked
+ActionPanelController.HoveredAction = nil
+ActionPanelController.OnHoverChanged = nil
 
 -- Summon costs depend on the piece, so it shows the cheapest to the dearest
 local function GetCostText(action)
@@ -38,6 +41,8 @@ local function GetCostText(action)
     local cost = CombatConfig.ActionCost[action]
     if not cost then return "" end
     if cost == 0 then return "Free" end
+    -- Longer commands cost more
+    if action == "Command" then return cost .. "+ Energy" end
 
     return cost .. " Energy"
 end
@@ -70,6 +75,20 @@ function ActionPanelController.Init()
 
             button.Activated:Connect(function()
                 ActionPanelController.Select(button)
+            end)
+
+            local action = button:GetAttribute("Action")
+
+            button.MouseEnter:Connect(function()
+                ActionPanelController.HoveredAction = action
+                if ActionPanelController.OnHoverChanged then ActionPanelController.OnHoverChanged() end
+            end)
+
+            button.MouseLeave:Connect(function()
+                if ActionPanelController.HoveredAction ~= action then return end
+
+                ActionPanelController.HoveredAction = nil
+                if ActionPanelController.OnHoverChanged then ActionPanelController.OnHoverChanged() end
             end)
         end
     end

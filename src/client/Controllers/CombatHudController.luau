@@ -1,5 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
@@ -16,6 +17,12 @@ local ALT_MODE_NAMES = {
 }
 
 local DIVIDER_COLOR = Color3.fromHex("271F29")
+-- Energy the planned action is about to spend
+local ENERGY_PREVIEW_COLOR = Color3.fromHex("C8644F")
+-- It blinks between red and the empty bar's color, so the energy looks like it's draining
+local ENERGY_PREVIEW_BLINK_COLOR = Color3.fromHex("332A35")
+-- Seconds per fade
+local ENERGY_PREVIEW_BLINK_TIME = 0.25
 -- In pixels
 local DIVIDER_WIDTH = 2
 local HEALTH_DIVIDER_WIDTH = 1
@@ -39,6 +46,10 @@ local chargeText = nil
 local energyFill = nil
 local energyBar = nil
 local energyCount = nil
+local energyPreview = nil
+local energyPreviewBlink = nil
+local energy, maxEnergy = 0, 1
+local previewCost = 0
 local dividerCount = 0
 local shotgunName = nil
 local kingCard = nil
@@ -101,7 +112,31 @@ local function DrawDividers(bar, fill, count, width)
     end
 end
 
-local function UpdateEnergy(energy, maxEnergy)
+-- The last segments of the fill turn white, as many as the planned action costs
+local function DrawEnergyPreview()
+    local cost = math.min(previewCost, energy)
+    local wasVisible = energyPreview.Visible
+
+    energyPreview.Visible = cost > 0
+
+    if cost <= 0 then
+        energyPreviewBlink:Cancel()
+        return
+    end
+
+    -- Restart from solid white whenever it appears
+    if not wasVisible then
+        energyPreview.BackgroundColor3 = ENERGY_PREVIEW_COLOR
+        energyPreviewBlink:Play()
+    end
+
+    energyPreview.Position = UDim2.fromScale((energy - cost) / energy, 0)
+    energyPreview.Size = UDim2.fromScale(cost / energy, 1)
+end
+
+local function UpdateEnergy(newEnergy, newMaxEnergy)
+    energy, maxEnergy = newEnergy, newMaxEnergy
+
     if dividerCount ~= maxEnergy then
         DrawDividers(energyBar, energyFill, maxEnergy, DIVIDER_WIDTH)
         dividerCount = maxEnergy
@@ -110,6 +145,12 @@ local function UpdateEnergy(energy, maxEnergy)
     energyFill.Size = UDim2.fromScale(energy / maxEnergy, 1)
     energyCount.Text = string.format("%d/%d", energy, maxEnergy)
     SummonPanelController.SetEnergy(energy)
+    DrawEnergyPreview()
+end
+
+function CombatHudController.SetEnergyPreview(cost)
+    previewCost = cost
+    DrawEnergyPreview()
 end
 
 local function Update(state)
@@ -247,6 +288,17 @@ function CombatHudController.Init()
     energyBar = energyPanel:WaitForChild("EnergyBar")
     energyFill = energyBar:WaitForChild("Fill")
     energyCount = energyPanel:WaitForChild("EnergyCount")
+
+    -- Inside the fill so it sits on the filled part and under the dividers
+    energyPreview = Instance.new("Frame")
+    energyPreview.Name = "Preview"
+    energyPreview.BorderSizePixel = 0
+    energyPreview.BackgroundColor3 = ENERGY_PREVIEW_COLOR
+    energyPreview.Visible = false
+    energyPreview.Parent = energyFill
+
+    local blinkInfo = TweenInfo.new(ENERGY_PREVIEW_BLINK_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+    energyPreviewBlink = TweenService:Create(energyPreview, blinkInfo, {BackgroundColor3 = ENERGY_PREVIEW_BLINK_COLOR})
 
     kingCard = NewHealthCard(root:WaitForChild("TurnBar"):WaitForChild("KingHealth"))
     companionTemplate = root.TurnBar:WaitForChild("CompanionHealth")

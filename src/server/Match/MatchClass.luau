@@ -1021,6 +1021,8 @@ function MatchClass:Command(side, pieceId, column, row)
         return self:IsOccupied(blockColumn, blockRow)
     end
 
+    local cost = BoardRules.GetCommandCost(piece.Column, piece.Row, column, row)
+
     -- Commanding onto an enemy attacks it; like a chess capture, a kill moves the attacker onto the enemy's square,
     -- otherwise it stays on its own
     local target = self:GetPieceAt(column, row)
@@ -1034,8 +1036,9 @@ function MatchClass:Command(side, pieceId, column, row)
         end
 
         if not PieceRules.IsValidAttack(piece.Type, piece.Team, piece.Column, piece.Row, column, row, IsBlocked, IsEnemy) then return end
+        if side.Energy < cost then return end
 
-        self:SpendEnergy(side, ActionCost.Command, "Command")
+        self:SpendEnergy(side, cost, "Command")
 
         -- The other team's traps on the way stop the attack
         if self:InterceptPath(side, piece, column, row) then
@@ -1056,8 +1059,9 @@ function MatchClass:Command(side, pieceId, column, row)
     end
 
     if not PieceRules.IsValidMove(piece.Type, piece.Team, piece.Column, piece.Row, column, row, IsBlocked) then return end
+    if side.Energy < cost then return end
 
-    self:SpendEnergy(side, ActionCost.Command, "Command")
+    self:SpendEnergy(side, cost, "Command")
 
     if self:InterceptPath(side, piece, column, row) then
         self:FinishEvent()

@@ -224,8 +224,26 @@ local function IsSummonTile(column, row)
     return true
 end
 
+-- Longer commands cost more, so tiles the player can't pay for are left out
+local function FilterAffordable(piece, tiles)
+    local energy = turnState and turnState.Energy or 0
+    local affordable = {}
+
+    for _, tile in pairs(tiles) do
+        if BoardRules.GetCommandCost(piece.Rig.Column, piece.Rig.Row, tile.Column, tile.Row) <= energy then
+            table.insert(affordable, tile)
+        end
+    end
+
+    return affordable
+end
+
 local function GetCommandMoves(piece)
-    return PieceRules.GetMoves(piece.Type, piece.Team, piece.Rig.Column, piece.Rig.Row, IsOccupied)
+    return FilterAffordable(piece, PieceRules.GetMoves(piece.Type, piece.Team, piece.Rig.Column, piece.Rig.Row, IsOccupied))
+end
+
+local function GetCommandAttacks(piece)
+    return FilterAffordable(piece, PieceRules.GetAttacks(piece.Type, piece.Team, piece.Rig.Column, piece.Rig.Row, IsOccupied, IsEnemyTile))
 end
 
 -- 2v2: ids of the teammate's summons, which only the teammate can command while they're still in
@@ -243,7 +261,7 @@ end
 local function GetCommandTargets(piece)
     local targets = GetCommandMoves(piece)
 
-    for _, attack in pairs(PieceRules.GetAttacks(piece.Type, piece.Team, piece.Rig.Column, piece.Rig.Row, IsOccupied, IsEnemyTile)) do
+    for _, attack in pairs(GetCommandAttacks(piece)) do
         table.insert(targets, attack)
     end
 
@@ -338,7 +356,7 @@ local function UpdateCommandDamage()
         local target = IsEnemyTile(column, row) and PieceController.GetAt(column, row)
 
         if target then
-            for _, attack in pairs(PieceRules.GetAttacks(selectedPiece.Type, selectedPiece.Team, selectedPiece.Rig.Column, selectedPiece.Rig.Row, IsOccupied, IsEnemyTile)) do
+            for _, attack in pairs(GetCommandAttacks(selectedPiece)) do
                 if attack.Column == column and attack.Row == row then
                     commandDamage[target.Id] = PieceConfig.Damage[selectedPiece.Type] or 0
                 end
@@ -347,6 +365,42 @@ local function UpdateCommandDamage()
     end
 
     ApplyDamagePreview()
+end
+
+-- Whites out the energy the hovered or selected action is about to spend
+local function UpdateEnergyPreview()
+    local action = actionPanel.HoveredAction or actionPanel.SelectedAction
+    local cost = 0
+
+    if action == "Summon" then
+        local pieceType = SummonPanelController.SelectedPiece
+        cost = pieceType and PieceConfig.Cost[pieceType] or 0
+    elseif action == "Command" then
+        cost = ActionCost.Command
+
+        -- Once a piece is picked, the tile under the cursor sets the real cost
+        local selectedPiece = commandPieceId and PieceController.Get(commandPieceId)
+        local column = hoveredTile and hoveredTile:GetAttribute("Column")
+        local row = hoveredTile and hoveredTile:GetAttribute("Row")
+
+        if action == actionPanel.SelectedAction and selectedPiece and column then
+            for _, target in pairs(GetCommandTargets(selectedPiece)) do
+                if target.Column == column and target.Row == row then
+                    cost = BoardRules.GetCommandCost(selectedPiece.Rig.Column, selectedPiece.Rig.Row, column, row)
+                end
+            end
+        end
+    elseif action == "Reload" then
+        cost = turnState and turnState.Ammo < turnState.MaxAmmo and ActionCost.Reload or 0
+    elseif action then
+        cost = ActionCost[action] or 0
+    end
+
+    if action and not CanAct(cost, action) then
+        cost = 0
+    end
+
+    CombatHudController.SetEnergyPreview(cost)
 end
 
 -- Arrows point at the commanded piece, the ally or enemy under the cursor, and enemies already picked
@@ -374,6 +428,7 @@ local function UpdateArrows()
 
     PieceController.SetArrows(arrows)
     UpdateCommandDamage()
+    UpdateEnergyPreview()
 end
 
 local function DrawPreview()
@@ -463,7 +518,7 @@ local function DrawPreview()
             HighlightTile(move.Column, move.Row, COMMAND_MOVE_COLOR, 0.35, true, COMMAND_OUTLINE_COLOR)
         end
 
-        for _, attack in pairs(PieceRules.GetAttacks(selectedPiece.Type, selectedPiece.Team, selectedPiece.Rig.Column, selectedPiece.Rig.Row, IsOccupied, IsEnemyTile)) do
+        for _, attack in pairs(GetCommandAttacks(selectedPiece)) do
             HighlightTile(attack.Column, attack.Row, ATTACK_COLOR, 0.3, true)
         end
     elseif selectedAction == "Special" or selectedAction == "Ultimate" then
@@ -818,6 +873,8 @@ function BoardController.Init(actionPanelController)
 
         BoardController.RefreshPreview()
     end
+
+    actionPanel.OnHoverChanged = UpdateEnergyPreview
 
     SummonPanelController.OnCardSelected = function()
         actionPanel.SelectAction("Summon")

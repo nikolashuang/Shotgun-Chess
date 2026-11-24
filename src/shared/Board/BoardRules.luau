@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
+local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
 
 local BoardRules = {}
 
@@ -10,6 +11,13 @@ end
 
 function BoardRules.GetDistance(fromColumn, fromRow, toColumn, toRow)
     return math.max(math.abs(toColumn - fromColumn), math.abs(toRow - fromRow))
+end
+
+-- A knight's jump counts as 2 tiles
+function BoardRules.GetCommandCost(fromColumn, fromRow, toColumn, toRow)
+    local tiles = BoardRules.GetDistance(fromColumn, fromRow, toColumn, toRow)
+
+    return math.max(CombatConfig.ActionCost.Command, math.ceil(tiles / CombatConfig.COMMAND_TILES_PER_ENERGY))
 end
 
 function BoardRules.GetTileName(column, row)

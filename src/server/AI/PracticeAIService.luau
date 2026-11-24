@@ -151,7 +151,7 @@ local function PlanMove(match, side)
     return options[1]
 end
 
--- Best attack any of its pieces can make this turn
+-- Best attack any of its pieces can make this turn with the energy it has
 local function PlanAttack(match, side)
     local best = nil
 
@@ -168,12 +168,13 @@ local function PlanAttack(match, side)
         if piece.Team == side.Team and piece.Type ~= "King" and not piece:IsStunned() then
             for _, tile in ipairs(PieceRules.GetAttacks(piece.Type, piece.Team, piece.Column, piece.Row, IsBlocked, IsEnemy)) do
                 local target = match:GetPieceAt(tile.Column, tile.Row)
+                local cost = BoardRules.GetCommandCost(piece.Column, piece.Row, tile.Column, tile.Row)
 
-                if not match:IsProtected(tile.Column, tile.Row, side) then
+                if cost <= side.Energy and not match:IsProtected(tile.Column, tile.Row, side) then
                     local value = GetValue(side, target, PieceConfig.Damage[piece.Type])
 
                     if not best or value > best.Value then
-                        best = {PieceId = piece.Id, Column = tile.Column, Row = tile.Row, Value = value}
+                        best = {PieceId = piece.Id, Column = tile.Column, Row = tile.Row, Value = value, Cost = cost}
                     end
                 end
             end
@@ -183,8 +184,8 @@ local function PlanAttack(match, side)
     return best
 end
 
--- Moves the piece that gets closest to the enemy King
-local function PlanAdvance(match, side)
+-- Moves the piece that gets closest to the enemy King, spending at most budget energy
+local function PlanAdvance(match, side, budget)
     local enemyKing = match:GetOpponent(side).King
     local best = nil
 
@@ -198,8 +199,9 @@ local function PlanAdvance(match, side)
 
             for _, tile in ipairs(PieceRules.GetMoves(piece.Type, piece.Team, piece.Column, piece.Row, IsBlocked)) do
                 local gain = current - BoardRules.GetDistance(tile.Column, tile.Row, enemyKing.Column, enemyKing.Row)
+                local cost = BoardRules.GetCommandCost(piece.Column, piece.Row, tile.Column, tile.Row)
 
-                if gain > 0 and (not best or gain > best.Gain) then
+                if gain > 0 and cost <= budget and (not best or gain > best.Gain) then
                     best = {PieceId = piece.Id, Column = tile.Column, Row = tile.Row, Gain = gain}
                 end
             end
@@ -286,7 +288,7 @@ function PracticeAIService.TakeTurn(match, side)
         else
             local attack = PlanAttack(match, side)
 
-            if attack and match:CanAct(side, ActionCost.Command, "Command") then
+            if attack and match:CanAct(side, attack.Cost, "Command") then
                 match:Command(side, attack.PieceId, attack.Column, attack.Row)
                 if not Pause(ACTION_TIME / speed) then return end
             end
@@ -303,9 +305,9 @@ function PracticeAIService.TakeTurn(match, side)
 
         -- Spare energy beyond the next summon moves a piece forward
         local goalCost = PieceConfig.Cost[side.AISummonGoal] or 0
-        local advance = PlanAdvance(match, side)
+        local advance = PlanAdvance(match, side, side.Energy - goalCost)
 
-        if advance and side.Energy - ActionCost.Command >= goalCost and match:CanAct(side, ActionCost.Command, "Command") then
+        if advance and match:CanAct(side, ActionCost.Command, "Command") then
             match:Command(side, advance.PieceId, advance.Column, advance.Row)
             if not Pause(ACTION_TIME / speed) then return end
         end
