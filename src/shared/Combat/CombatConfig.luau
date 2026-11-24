@@ -20,7 +20,8 @@ local CombatConfig = {
 
     Ultimate = {
         MAX_CHARGE = 100,
-        -- Charge per point of damage actually dealt to enemy pieces (overkill doesn't count)
+        -- Charge per point of damage the King's own weapons actually deal to enemy pieces (overkill doesn't count);
+        -- summoned pieces, companions and traps don't build it
         CHARGE_PER_DAMAGE = 5,
     },
 }

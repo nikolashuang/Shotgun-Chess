@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
+local ClassKingConfig = require(ReplicatedStorage.Shared.Sprites.ClassKingConfig)
 local SpeedController = require(script.Parent.Parent.Controllers.SpeedController)
 
 local activeSprites = {}
@@ -10,18 +11,16 @@ local AnimatedSpriteClass = {}
 
 AnimatedSpriteClass.__index = AnimatedSpriteClass
 
-function AnimatedSpriteClass.new(pieceName, parent, team)
+-- outfit is a class name: a King with one is drawn from the class King atlas, wearing that class's clothes
+function AnimatedSpriteClass.new(pieceName, parent, team, outfit)
     local self = setmetatable({}, AnimatedSpriteClass)
 
     self.PieceName = pieceName
-    self.Rows = SpriteConfig.Pieces[pieceName]
-    -- Special pieces (the Fallen Knight) have their own column and look the same on both teams
-    self.TeamOffset = SpriteConfig.Columns[pieceName] or SpriteConfig.Teams[team or "White"]
+    self.Team = team or "White"
 
     self.Image = Instance.new("ImageLabel")
     self.Image.Name = pieceName .. "Sprite"
     self.Image.BackgroundTransparency = 1
-    self.Image.Image = SpriteConfig.ASSET_ID
     self.Image.ImageRectSize = Vector2.new(SpriteConfig.CELL, SpriteConfig.CELL)
     self.Image.ResampleMode = Enum.ResamplerMode.Pixelated
     self.Image.Interactable = false
@@ -33,10 +32,36 @@ function AnimatedSpriteClass.new(pieceName, parent, team)
     self.isPlaying = false
     self.OnFinished = nil
 
+    self:SetOutfit(outfit)
+
     activeSprites[self] = true
     self:Play("Idle")
 
     return self
+end
+
+-- Swaps between the plain sprite and a class outfit (Kings only), keeping the current animation frame
+function AnimatedSpriteClass:SetOutfit(outfit)
+    -- Until the class King atlas is uploaded (id 0) every King keeps the classic look
+    local isUploaded = ClassKingConfig.ASSET_ID ~= "rbxassetid://0"
+    local classRows = isUploaded and self.PieceName == "King" and outfit and ClassKingConfig.Classes[outfit]
+
+    self.Outfit = classRows and outfit or nil
+
+    if classRows then
+        self.Rows = classRows
+        self.TeamOffset = ClassKingConfig.Teams[self.Team]
+        self.Image.Image = ClassKingConfig.ASSET_ID
+    else
+        self.Rows = SpriteConfig.Pieces[self.PieceName]
+        -- Special pieces (the Fallen Knight) have their own column and look the same on both teams
+        self.TeamOffset = SpriteConfig.Columns[self.PieceName] or SpriteConfig.Teams[self.Team]
+        self.Image.Image = SpriteConfig.ASSET_ID
+    end
+
+    if self.Anim then
+        self:SetFrame(self.Frame)
+    end
 end
 
 function AnimatedSpriteClass:SetFrame(frame)

@@ -50,7 +50,7 @@ function GunslingerClass:Special(payload)
         -- Each shot rolls its own hit chance, and again for a target inside smoke
         if target and match.Random:NextNumber() < fan.HitChance and match:RollHit(target.Column, target.Row, side) then
             local column, row = target.Column, target.Row
-            match:DamagePiece(target, fan.Damage, side)
+            match:DamagePiece(target, fan.Damage, side, true)
             match:ShowDamage(target, side)
 
             table.insert(shots, {Column = column, Row = row, Id = target.Id, Health = target.Health})

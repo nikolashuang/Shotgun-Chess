@@ -365,12 +365,12 @@ function MatchClass:Setup()
         local king = side.King
         side:Send("KingMoved", king.Column, king.Row)
 
-        -- Other Kings come with their shotgun so everyone can see what they are running
-        self:SendOthers(side, "PieceAdded", king.Id, king.Type, king.Team, king.Column, king.Row, king.Health, king.MaxHealth, king.ShotgunName)
+        -- Other Kings come with their shotgun and class so everyone can see what they are running and wearing
+        self:SendOthers(side, "PieceAdded", king.Id, king.Type, king.Team, king.Column, king.Row, king.Health, king.MaxHealth, king.ShotgunName, nil, side.ClassName)
     end
 
     for _, enemy in ipairs(self.Enemies) do
-        self:AddPiece(enemy.Type, "Black", enemy.Column, enemy.Row)
+        self:AddPiece(enemy.Type, "Black", enemy.Column, enemy.Row, nil, nil, enemy.Class)
     end
 
     self.HasEnemyKing = self:CountPieces("King", "Black") > 0
@@ -507,16 +507,18 @@ end
 
 -- health starts the piece hurt (a companion carrying its health between battles)
 -- owner is the side that summoned it; a 2v2 teammate is told the piece isn't theirs to command
-function MatchClass:AddPiece(pieceType, team, column, row, health, owner)
+-- className dresses a King in that class's outfit (campaign boss Kings wear their region's class)
+function MatchClass:AddPiece(pieceType, team, column, row, health, owner, className)
     local piece = PieceClass.new(self.NextPieceId, pieceType, team, column, row)
     piece.Health = health or piece.Health
     piece.Owner = owner
+    piece.ClassName = className
     self.NextPieceId += 1
     self.Pieces[piece.Id] = piece
 
     for _, side in pairs(self.Sides) do
         local isTeammates = owner ~= nil and owner ~= side and owner.Team == side.Team
-        self:SendTo(side, "PieceAdded", piece.Id, piece.Type, piece.Team, piece.Column, piece.Row, piece.Health, piece.MaxHealth, nil, isTeammates)
+        self:SendTo(side, "PieceAdded", piece.Id, piece.Type, piece.Team, piece.Column, piece.Row, piece.Health, piece.MaxHealth, nil, isTeammates, piece.ClassName)
     end
 
     return piece
@@ -534,9 +536,10 @@ function MatchClass:CountPieces(pieceType, team)
     return count
 end
 
--- attacker is the side dealing the damage, if any; hurting the other team builds its ultimate charge
+-- attacker is the side dealing the damage, if any; isKingHit marks damage from that side's King's own weapons
+-- (shotgun, knife, bleed, revolver), the only damage that builds ultimate charge
 -- Returns true when the piece dies
-function MatchClass:DamagePiece(piece, amount, attacker)
+function MatchClass:DamagePiece(piece, amount, attacker, isKingHit)
     -- A Morale shield soaks up damage before health
     if (piece.Shield or 0) > 0 and amount > 0 then
         local absorbed = math.min(piece.Shield, amount)
@@ -548,7 +551,7 @@ function MatchClass:DamagePiece(piece, amount, attacker)
     local dealt = piece:TakeDamage(amount)
     local isEnemy = attacker ~= nil and piece.Team ~= attacker.Team
 
-    if isEnemy then
+    if isEnemy and isKingHit then
         attacker.UltimateCharge = math.min(attacker.UltimateCharge + dealt * UltimateConfig.CHARGE_PER_DAMAGE, UltimateConfig.MAX_CHARGE)
     end
 
@@ -881,7 +884,7 @@ function MatchClass:Fire(side, targetX, targetY, mode)
     for _, piece in ipairs(targets) do
         local column, row = piece.Column, piece.Row
         local distance = BoardRules.GetDistance(king.Column, king.Row, column, row)
-        self:DamagePiece(piece, math.max(ShotgunRules.GetHitDamage(weapon, shotType, distance) + bonuses[piece], 0), side)
+        self:DamagePiece(piece, math.max(ShotgunRules.GetHitDamage(weapon, shotType, distance) + bonuses[piece], 0), side, true)
 
         if shotType == "Knife" and piece:IsAlive() then
             piece:ApplyBleed(weapon.Knife.BleedDamage, weapon.Knife.BleedTurns)
@@ -1446,13 +1449,14 @@ function MatchClass:EnemyShoot(piece, aimX, aimY)
     self:SendAll("EnemyShotFired", piece.Id, pellets, hitTiles, damaged)
 end
 
--- Bleeding pieces lose health at the start of their team's turn; it counts as the other side's damage
+-- Bleeding pieces lose health at the start of their team's turn; it counts as the other side's King's damage,
+-- since only the Knife Shotty causes it
 function MatchClass:TickBleed(team)
     local attacker = self:GetDefender(team)
 
     for _, piece in pairs(self.Pieces) do
         if piece.Team == team and piece:IsBleeding() then
-            self:DamagePiece(piece, piece:TickBleed(), attacker)
+            self:DamagePiece(piece, piece:TickBleed(), attacker, true)
             self:ShowDamage(piece)
         end
     end

@@ -5,8 +5,8 @@ local pieces = {}
 
 local PieceController = {}
 
-function PieceController.Add(id, pieceType, team, column, row, health, maxHealth)
-    local rig = PieceRigClass.new(board, pieceType, team)
+function PieceController.Add(id, pieceType, team, column, row, health, maxHealth, _shotgunName, _isTeammates, className)
+    local rig = PieceRigClass.new(board, pieceType, team, className)
     rig:SetTile(column, row)
     rig:SetHealth(health, maxHealth)
     rig.Sprite:Play("Hop")

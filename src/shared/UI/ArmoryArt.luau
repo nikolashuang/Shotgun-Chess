@@ -1,6 +1,6 @@
 -- Ability, menu card and campaign pouch drawings rendered by art/tools/build_armory_icons.py and packed by build_armory_art.py
 local ArmoryArt = {
-    ICONS = "rbxassetid://118444989961814",
+    ICONS = "rbxassetid://79420921378272",
     -- Pixels per icon (64 px render plus a 1 px outline each side), packed left to right, top to bottom
     TILE = 66,
     COLUMNS = 4,
@@ -13,6 +13,7 @@ local ArmoryArt = {
         "OutlawPassive", "OutlawSpecial", "OutlawUltimate",
         "Siege", "Duels", "Practice", "Queue", "Challenge",
         "Pouch", "GlobalQueue", "SiegeCoop",
+        "MonarchPassive", "MonarchSpecial", "MonarchUltimate",
     },
 }
 

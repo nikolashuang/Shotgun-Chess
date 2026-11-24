@@ -119,7 +119,8 @@ local function GetBarOffset(pieceType)
     return GetHeadTop(pieceType) - 0.5 - BAR_GAP - BAR_HEIGHT / 2
 end
 
-function PieceRigClass.new(board, pieceType, team)
+-- outfit is the class a King is dressed in, or nil for the classic look
+function PieceRigClass.new(board, pieceType, team, outfit)
     local self = setmetatable({}, PieceRigClass)
 
     self.Rig = Instance.new("Frame")
@@ -131,7 +132,7 @@ function PieceRigClass.new(board, pieceType, team)
     self.Rig.Interactable = false
     self.Rig.Parent = GetPieceLayer(board)
 
-    self.Sprite = AnimatedSpriteClass.new(pieceType, self.Rig, team)
+    self.Sprite = AnimatedSpriteClass.new(pieceType, self.Rig, team, outfit)
     self.Sprite.Image.AnchorPoint = Vector2.new(0.5, 1)
     self.Sprite.Image.Position = UDim2.fromScale(0.5, BODY_BOTTOM)
     self.Sprite.Image.Size = UDim2.fromScale(SpriteConfig.CELL_TILES, SpriteConfig.CELL_TILES)
@@ -427,6 +428,12 @@ function PieceRigClass:FadeBar(isShown, duration)
     if self.ArrowEffect then
         self:PlaceArrow()
     end
+end
+
+function PieceRigClass:SetOutfit(outfit)
+    if self.Sprite.Outfit == outfit then return end
+
+    self.Sprite:SetOutfit(outfit)
 end
 
 -- A shielded piece keeps its bar up, bordered in blue, until the shield is gone

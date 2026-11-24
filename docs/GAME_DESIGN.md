@@ -71,7 +71,7 @@ Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuni
 
 ### Ultimate Charge
 
-- Built by damaging enemy pieces: 10 charge per point of damage actually dealt (overkill doesn't count), including bleed.
+- Only the King builds it (Nov 24 2026): 5 charge (was 10) per point of damage his own weapons actually deal to enemies (overkill doesn't count). That's shotgun and knife hits, Knife Shotty bleed and Fan the Hammer's revolver. Damage from commanded pieces, the Fallen Knight and Hunter traps doesn't charge it.
 - 100 charge required to use an ultimate.
 
 ## Shotgun (Fire Action)
@@ -120,7 +120,8 @@ Chosen in the Armory alongside the shotgun. All numbers live in `ClassConfig`; e
 - **Special:** 2 energy, once per turn. **Ultimate:** needs 100 charge, costs no energy, once per turn, spends the whole charge.
 - Reaper's High and both of Monarch's abilities have no target and fire as soon as they're selected; the rest wait for an aim or clicks on the board.
 - Numbers marked *placeholder* aren't in the design doc.
-- **Class outfits (planned, Nov 2026):** equipping a class dresses the King in that class's outfit by default; with no class he's the classic King. The King keeps his classic cream body, with the class shown through clothing (previews in `art/skins/pieces/`, drawn by `art/tools/build_epic_kings.py`):
+- **Class outfits (Nov 24 2026):** equipping a class dresses the King in that class's outfit; with no class he's the classic King. Rival Kings in duels wear their class's outfit, and campaign boss Kings wear the class their region unlocks. The Armory has a "Your King" panel beside the abilities showing the King idling in the equipped outfit. Each outfit is drawn once in `art/tools/class_outfits.py` (stills and a preview sheet in `art/skins/pieces/`); `art/tools/build_class_kings.py` maps it onto every King animation frame (squash, stretch, death rubble), sways the cloth (each class's `FABRIC` colors) while rigid items like weapons and hats stay put, and packs both teams into `art/ClassKingAtlas.png` with `ClassKingConfig.luau`. The King keeps his classic cream body, with the class shown through clothing:
+  - **Monarch:** royal-red cloak fastened round his neck that wraps round him: the lighter front drapes over his shoulders and sides and ends mid-body with a gold hem, and the darker back hangs lower behind him, just past the top of the base; white ermine collar round the neck (flecks only at the sides); gold chain draped across the chest to a clasp in the front; crown and classic body unchanged.
   - **Hunter:** heavy shaggy fur coat hanging open behind him (down to the top of the base), fur collar behind the shoulders, bone-fang necklace.
   - **Bandit:** gray cloth mask over the lower face (no eyes), layered tattered scarves round the neck and shoulders, dark leather vest with crossed straps, belt with pouches and a pocket knife on his right side drawn at an angle pushing back behind him (shaded brass end cap facing the viewer, wooden handle and crossguard, blade narrowing and darkening as it recedes behind the base; handle outlined dark), ragged cloth flaps hanging from the belt.
   - **Gunslinger:** cowboy hat with the gold crown pinned to the band, red fringed poncho, bandolier of brass rounds, belt and buckle, and a leather holster high on the right hip, just under the poncho, with a revolver in it (outlined dark).
@@ -131,7 +132,7 @@ Chosen in the Armory alongside the shotgun. All numbers live in `ClassConfig`; e
 - **Passive [Loyalty]:** your first Queen each match costs 4 energy instead of 6. The Queen summon card shows the lower cost until one is summoned.
 - **Special [Morale]:** every one of your pieces (not the King) gets a 1 health shield that soaks up damage before health. It lasts until the start of your next turn and shows as a light-blue border on the piece's health bar. Needs at least one piece.
 - **Ultimate [Unyielding]:** every one of your pieces deals +2 damage for the rest of the turn (commanded attacks, and the Fallen Knight's attack at the end of the turn). The command damage preview includes it. Needs at least one piece.
-- *Armory drawings for Monarch's three abilities aren't made yet, so those boxes are blank.*
+- Armory drawings: Loyalty is the King's gold crown, Morale a silver heater shield, Unyielding the King's red banner rippling in the wind with his crown on it.
 
 ### Reaper
 - **Passive [Reap]:** every piece that dies leaves a soul on its tile, allies included (Nov 2026): a black orb in greenish-blue flame with a faint ghost of its piece. Queens leave souls too. Kings end the match, so they never do. When your rival is a Reaper, you see their souls in red flame; your own stay blue.

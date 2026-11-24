@@ -681,7 +681,7 @@ local function PlaceKing(column, row)
     kingRow = row
 
     if not kingRig then
-        kingRig = PieceRigClass.new(board, "King", "White")
+        kingRig = PieceRigClass.new(board, "King", "White", turnState and turnState.Class)
         kingRig:SetHealth(PieceConfig.Health.King, PieceConfig.Health.King)
         ShotgunController.AttachGun(kingRig.Rig)
     end
@@ -997,6 +997,8 @@ function BoardController.Init(actionPanelController)
 
             if kingRig then
                 kingRig:SetHealth(turnState.KingHealth, turnState.KingMaxHealth)
+                -- The King wears the equipped class's outfit
+                kingRig:SetOutfit(turnState.Class)
             end
             actionPanel.SetClassActionsVisible(turnState.Class ~= nil)
             actionPanel.SetUsedActions(turnState.UsedActions)

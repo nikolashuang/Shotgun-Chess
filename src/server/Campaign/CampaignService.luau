@@ -156,7 +156,16 @@ local function GetEnemies(run, regionId, nodeId)
     local node = CampaignRules.GetNode(regionId, nodeId)
 
     if CampaignRules.IsBattle(node) then
-        return EncounterRules.Generate(CampaignRules.GetPoints(regionId, nodeId), node.Type)
+        local enemies = EncounterRules.Generate(CampaignRules.GetPoints(regionId, nodeId), node.Type)
+
+        -- The region's King wears the class he unlocks
+        for _, enemy in ipairs(enemies) do
+            if enemy.Type == "King" then
+                enemy.Class = CampaignConfig.Regions[regionId].Class
+            end
+        end
+
+        return enemies
     end
 
     local mystery = run.Mystery

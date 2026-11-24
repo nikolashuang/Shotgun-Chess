@@ -38,8 +38,8 @@ local SkinConfig = {
             IvoryCrimson = {DisplayName = "Ivory & Crimson", Rarity = "Rare", Light = Color3.fromHex("EDE4D0"), Dark = Color3.fromHex("8C1C2B"), Accent = Color3.fromHex("C9A66B")},
             Buckshot = {DisplayName = "Royal Buckshot", Rarity = "Rare", Light = Color3.fromHex("C9C2B8"), Dark = Color3.fromHex("3B3544"), Accent = Color3.fromHex("B8342F")},
 
-            Ruined = {DisplayName = "Ruined Chessboard", Rarity = "Epic", Light = Color3.fromHex("A89C88"), Dark = Color3.fromHex("4A4038"), Image = 109582561838250},
-            Castle = {DisplayName = "Abandoned Castle", Rarity = "Epic", Light = Color3.fromHex("8F8678"), Dark = Color3.fromHex("3E3A3F"), Image = 101685175471318},
+            Ruined = {DisplayName = "Ruined Chessboard", Rarity = "Epic", Light = Color3.fromHex("A89C88"), Dark = Color3.fromHex("4A4038"), Image = 89255866749680},
+            Castle = {DisplayName = "Abandoned Castle", Rarity = "Epic", Light = Color3.fromHex("8F8678"), Dark = Color3.fromHex("3E3A3F"), Image = 70558882048680},
         },
         Shotgun = {},
         Piece = {},

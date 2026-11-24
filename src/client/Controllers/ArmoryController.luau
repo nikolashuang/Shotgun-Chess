@@ -9,6 +9,7 @@ local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 local ArmoryArt = require(ReplicatedStorage.Shared.UI.ArmoryArt)
 local SkinConfig = require(ReplicatedStorage.Shared.Skins.SkinConfig)
 local AtlasImage = require(script.Parent.Parent.UI.AtlasImage)
+local AnimatedSpriteClass = require(script.Parent.Parent.UI.AnimatedSpriteClass)
 local PlayerCard = require(script.Parent.Parent.UI.PlayerCard)
 local ProfileController = require(script.Parent.ProfileController)
 local BoardSkinController = require(script.Parent.BoardSkinController)
@@ -34,6 +35,9 @@ local gunImage = nil
 local gunBody = nil
 local dropdowns = {}
 local skinCards = {}
+-- The King idling in the equipped class's outfit, so players see how they'll look
+local kingPreview = nil
+local kingCaption = nil
 
 -- Loadout tab: each side has a bar showing what's equipped; its dropdown lists what you own and picking one equips it
 -- Skins tab: every board skin as a card; owned ones equip on click
@@ -65,6 +69,8 @@ local function ShowClass()
     local class = name and ClassConfig.Classes[name]
 
     classBar.Label.Text = class and class.DisplayName or "No Class"
+    kingPreview:SetOutfit(class and name or nil)
+    kingCaption.Text = class and class.DisplayName .. " outfit" or "Classic"
 
     for _, kind in ipairs(KINDS) do
         local row = classRows[kind]
@@ -298,6 +304,12 @@ function ArmoryController.Init()
     for _, kind in ipairs(KINDS) do
         classRows[kind] = classBox:WaitForChild(kind)
     end
+
+    local previewPanel = classBox:WaitForChild("KingPreview")
+    kingCaption = previewPanel:WaitForChild("Caption")
+    kingPreview = AnimatedSpriteClass.new("King", previewPanel:WaitForChild("Tiles"):WaitForChild("Stage"), "White")
+    kingPreview.Image.Size = UDim2.fromScale(1, 1)
+    kingPreview.Image.ZIndex = 3
 
     gunImage = shotgunBox:WaitForChild("Art"):WaitForChild("Gun")
     gunBody = shotgunBox:WaitForChild("Info"):WaitForChild("Body")
