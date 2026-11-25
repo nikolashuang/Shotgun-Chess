@@ -1,5 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
@@ -802,6 +803,38 @@ local function OnKingAmbushed(column, row)
     BoardController.RefreshPreview()
 end
 
+-- A boss King calling out the ability he just used, over the top of the board
+local BOSS_CALL_TIME = 1.6
+local BOSS_CALL_FONT = Font.new("rbxasset://fonts/families/Fondamento.json")
+
+local function OnBossAbility(_, abilityName)
+    local label = Instance.new("TextLabel")
+    label.Name = "BossCall"
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.Position = UDim2.fromScale(0.5, 0.12)
+    label.Size = UDim2.fromScale(0.8, 0.09)
+    label.BackgroundTransparency = 1
+    label.FontFace = BOSS_CALL_FONT
+    label.TextScaled = true
+    label.TextColor3 = Color3.fromHex("F1D4AC")
+    label.Text = abilityName .. "!"
+    label.ZIndex = 50
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromHex("1E1820")
+    stroke.Thickness = 3
+    stroke.Parent = label
+    label.Parent = board
+
+    local fade = TweenInfo.new(0.4)
+    task.delay(BOSS_CALL_TIME, function()
+        TweenService:Create(label, fade, {TextTransparency = 1}):Play()
+        TweenService:Create(stroke, fade, {Transparency = 1}):Play()
+        task.wait(0.4)
+        label:Destroy()
+    end)
+end
+
 local function OnPieceStunned(id, isStunned, kind)
     -- Bolas fly from the king first, then wrap the piece
     if isStunned and kind == "Bolas" then
@@ -953,6 +986,8 @@ function BoardController.Init(actionPanelController)
             OnPieceStunned(...)
         elseif action == "PieceShielded" then
             PieceController.SetShield(...)
+        elseif action == "BossAbility" then
+            OnBossAbility(...)
         elseif action == "KingStunned" then
             -- Duels only: the player's own King is stunned (stars, or wrapped in bolas)
             if kingRig then

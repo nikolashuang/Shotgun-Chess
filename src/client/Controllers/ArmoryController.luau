@@ -13,6 +13,7 @@ local AnimatedSpriteClass = require(script.Parent.Parent.UI.AnimatedSpriteClass)
 local PlayerCard = require(script.Parent.Parent.UI.PlayerCard)
 local ProfileController = require(script.Parent.ProfileController)
 local BoardSkinController = require(script.Parent.BoardSkinController)
+local IndexController = require(script.Parent.IndexController)
 
 local LoadoutRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("LoadoutRemote")
 
@@ -41,6 +42,7 @@ local kingCaption = nil
 
 -- Loadout tab: each side has a bar showing what's equipped; its dropdown lists what you own and picking one equips it
 -- Skins tab: every board skin as a card; owned ones equip on click
+-- Index tab: every enemy, built by IndexController
 local ArmoryController = {}
 
 local function CloseDropdowns()
@@ -261,14 +263,15 @@ local function BuildSkins(box)
     Resize()
 end
 
-local function BindTabs(root, loadoutBoxes, skinsBox)
-    local tabs = {Loadout = root:WaitForChild("LoadoutTab"), Skins = root:WaitForChild("SkinsTab")}
+local function BindTabs(root, loadoutBoxes, skinsBox, indexBox)
+    local tabs = {Loadout = root:WaitForChild("LoadoutTab"), Skins = root:WaitForChild("SkinsTab"), Index = root:WaitForChild("IndexTab")}
 
     local function Select(name)
         for _, box in pairs(loadoutBoxes) do
             box.Visible = name == "Loadout"
         end
         skinsBox.Visible = name == "Skins"
+        indexBox.Visible = name == "Index"
 
         for tabName, tab in pairs(tabs) do
             tab.BackgroundColor3 = tabName == name and SELECTED_TAB_COLOR or TAB_COLOR
@@ -333,7 +336,10 @@ function ArmoryController.Init()
 
     local skinsBox = root:WaitForChild("SkinsBox")
     BuildSkins(skinsBox)
-    BindTabs(root, {classBox, shotgunBox}, skinsBox)
+
+    local indexBox = root:WaitForChild("IndexBox")
+    IndexController.Build(indexBox)
+    BindTabs(root, {classBox, shotgunBox}, skinsBox, indexBox)
 
     player:GetAttributeChangedSignal("Class"):Connect(ShowClass)
     player:GetAttributeChangedSignal("Shotgun"):Connect(ShowShotgun)

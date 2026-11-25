@@ -6,10 +6,12 @@ local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local AIConfig = require(script.Parent.AIConfig)
+local BossAbilityService = require(script.Parent.BossAbilityService)
 
 local Weights = AIConfig.Weights
 
 local NEIGHBORS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}}
+local PAWNS = {Pawn = true, FallenPawn = true}
 
 -- Plans the enemy turn: which Black pieces act and what each one does
 -- Every plan is made against the same board snapshot, then MatchClass runs them all together
@@ -62,6 +64,12 @@ local function GetControlledTiles(context, pieceType, team, column, row, ignoreK
     end
 
     return tiles
+end
+
+-- Pieces press the attack until they're hurt enough, then start evading
+local function IsEvading(piece)
+    local threshold = AIConfig.EVADE_HEALTH[piece.Type] or AIConfig.EVADE_HEALTH.Default
+    return piece.Health < piece.MaxHealth * threshold
 end
 
 local function BuildContext(match)
@@ -276,13 +284,20 @@ local function ScoreOption(context, piece, weights, option)
 
     -- An attack scores Position, Teamwork and Advance from the tile it ends on: its own, or the captured one
     -- Attacking outranks Evade unless the piece's weights say otherwise
+    local isEvading = IsEvading(piece)
+
     if option.Hits then
         score += weights.Attack * GetAttackValue(context, option)
 
-        if AIConfig.EVADE_BEFORE_ATTACK[piece.Type] then
+        if isEvading and AIConfig.EVADE_BEFORE_ATTACK[piece.Type] then
             score -= weights.Evade * GetRisk(context, piece, option.Column, option.Row)
         end
-    else
+
+        -- Bait check: a summoned piece next to the player's King can be a trap for a point blank blast
+        if not option.Hits[1].Target.isKing then
+            score -= weights.Attack * AIConfig.BAIT_PENALTY * GetRisk(context, piece, option.Column, option.Row)
+        end
+    elseif isEvading then
         score -= weights.Evade * GetRisk(context, piece, option.Column, option.Row)
     end
 
@@ -306,6 +321,13 @@ local function ScoreOption(context, piece, weights, option)
         end
     end
 
+    -- Pawns advance toward promotion: every row stepped forward counts fully, wherever the player is
+    if PAWNS[piece.Type] then
+        local rowsGained = (option.Row - piece.Row) * PieceRules.GetForward(piece.Team)
+        score += weights.Advance * math.clamp(rowsGained, 0, 1)
+        return score
+    end
+
     local before = BoardRules.GetDistance(piece.Column, piece.Row, player.Column, player.Row)
     local after = BoardRules.GetDistance(option.Column, option.Row, player.Column, player.Row)
 
@@ -316,6 +338,7 @@ end
 
 local function GetWeights(context, piece)
     if piece.Type == "King" then return Weights.King end
+    if PAWNS[piece.Type] then return Weights.Pawn end
 
     if piece.Type == "Queen" then
         -- Once only the King and Queen are left, guarding the King comes first
@@ -404,8 +427,13 @@ local function GetOptions(context, piece)
         return context.Occupied[key] == true or context.Reserved[key] == true
     end
 
+    -- Evading sliders don't flee across the whole board
+    local moveCap = IsEvading(piece) and AIConfig.SLIDE_CAP[piece.Type] or nil
+
     for _, move in pairs(PieceRules.GetMoves(piece.Type, piece.Team, piece.Column, piece.Row, IsMoveBlocked)) do
-        table.insert(options, {Type = "Move", Column = move.Column, Row = move.Row})
+        if not moveCap or BoardRules.GetDistance(piece.Column, piece.Row, move.Column, move.Row) <= moveCap then
+            table.insert(options, {Type = "Move", Column = move.Column, Row = move.Row})
+        end
     end
 
     return options
@@ -490,6 +518,25 @@ function EnemyAIService.PlanTurn(match)
         if option.Type ~= "Stay" then
             table.insert(plans, option)
         end
+    end
+
+    -- Abilities come third for the boss King: after every piece has its move, see what the turn needs
+    if match.Boss then
+        local info = {TrappedAllies = 0, AllyAttacks = 0}
+
+        for piece, position in pairs(context.Positions) do
+            if piece.Type ~= "King" and GetDanger(context, position.Column, position.Row) > 0 then
+                info.TrappedAllies += 1
+            end
+        end
+
+        for _, plan in ipairs(plans) do
+            if plan.Type == "Attack" then
+                info.AllyAttacks += 1
+            end
+        end
+
+        plans.Boss = BossAbilityService.Decide(match.Boss, info)
     end
 
     return plans

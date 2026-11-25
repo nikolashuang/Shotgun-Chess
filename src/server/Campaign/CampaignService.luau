@@ -158,10 +158,12 @@ local function GetEnemies(run, regionId, nodeId)
     if CampaignRules.IsBattle(node) then
         local enemies = EncounterRules.Generate(CampaignRules.GetPoints(regionId, nodeId), node.Type)
 
-        -- The region's King wears the class he unlocks
+        -- The region's King fights with the class he unlocks (the Dev region names one to test instead)
+        local region = CampaignConfig.Regions[regionId]
+
         for _, enemy in ipairs(enemies) do
             if enemy.Type == "King" then
-                enemy.Class = CampaignConfig.Regions[regionId].Class
+                enemy.Class = region.BossClass or region.Class
             end
         end
 

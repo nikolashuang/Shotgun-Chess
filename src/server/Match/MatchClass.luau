@@ -15,6 +15,7 @@ local KingClass = require(script.Parent.KingClass)
 local PieceClass = require(script.Parent.PieceClass)
 local SideClass = require(script.Parent.SideClass)
 local EnemyAIService = require(ServerScriptService.AI.EnemyAIService)
+local BossAbilityService = require(ServerScriptService.AI.BossAbilityService)
 local PracticeAIService = require(ServerScriptService.AI.PracticeAIService)
 local CompanionAIService = require(ServerScriptService.AI.CompanionAIService)
 
@@ -374,6 +375,8 @@ function MatchClass:Setup()
     end
 
     self.HasEnemyKing = self:CountPieces("King", "Black") > 0
+    -- Campaign boss Kings fight with their class's abilities
+    self.Boss = self.AIRating and BossAbilityService.New(self) or nil
 
     local ally = self.CompanionStart
     if ally and not self:IsOccupied(ally.Column, ally.Row) then
@@ -1240,6 +1243,10 @@ function MatchClass:StartEnemyTurn()
         return
     end
 
+    if self.Boss then
+        BossAbilityService.StartTurn(self.Boss)
+    end
+
     local plans = EnemyAIService.PlanTurn(self)
 
     task.delay(MatchConfig.ENEMY_THINK_TIME, function()
@@ -1306,6 +1313,10 @@ end
 function MatchClass:RunEnemyPlans(plans)
     local white = self.Sides.White
 
+    if self.Boss then
+        BossAbilityService.Use(self.Boss, plans.Boss)
+    end
+
     for _, plan in ipairs(plans) do
         local piece = self.Pieces[plan.PieceId]
 
@@ -1328,6 +1339,10 @@ function MatchClass:RunEnemyPlans(plans)
             self:OnUnitMoved(piece)
             self:TryPromote(piece)
         end
+    end
+
+    if self.Boss then
+        BossAbilityService.EndTurn(self.Boss)
     end
 
     self:ClearEndedStuns()
@@ -1365,7 +1380,8 @@ function MatchClass:EnemyAttack(piece, column, row)
         return
     end
 
-    local health, targetId = self:DamageWhiteTile(column, row, PieceConfig.Damage[piece.Type])
+    local damage = PieceConfig.Damage[piece.Type] + BossAbilityService.GetDamageBonus(self.Boss)
+    local health, targetId = self:DamageWhiteTile(column, row, damage)
     if not health then return end
 
     if not targetId then

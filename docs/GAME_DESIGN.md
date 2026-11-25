@@ -38,9 +38,11 @@ Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuni
 - **Stuns:** a stunned piece skips its enemy turns until the stun runs out. `MatchClass:StunPiece` applies one and shows stars circling the piece's head until it wears off (nothing applies stuns yet).
 - **Rotating priority:** acting pieces plan in Id order, rotated by one each enemy turn. Earlier pieces reserve their destination tiles first.
 - **Simultaneous execution:** every plan is made against the same board snapshot, then all attacks resolve and all moves happen together.
-- **Priorities** (weights in `AIConfig.Weights`): Defend > Attack > Evade > Position > Teamwork > Advance. Queens put Attack above Defend until only their King and Queen are left. Enemy Kings: Evade > Attack > Teamwork > Position > Advance.
+- **Priorities** (weights in `AIConfig.Weights`): Defend > Attack > Evade > Position > Teamwork > Advance. Queens put Attack above Defend until only their King and Queen are left. Enemy Kings: Evade > Attack > Ability > Teamwork > Position > Advance. Pawns and Fallen Pawns (Nov 25 2026): Advance > Attack, where Advance means stepping toward the promotion row, so they only attack when they can't step forward.
    - Defend: attack whatever threatens the enemy King, or stand next to it on the threat's side.
-   - Evade: avoid tiles the player's king could shoot after one step, or that a white piece could hit.
+   - Evade: avoid tiles the player's king could shoot after one step, or that a white piece could hit Pieces press the attack until they're hurt: they only start evading below 30% health, Kings below 50% (`AIConfig.EVADE_HEALTH`, Nov 25 2026).
+   - Bait check (Nov 25 2026): attacking a summoned piece from a tile the player can hit is scored down (`AIConfig.BAIT_PENALTY`), so pieces don't walk into pawns planted next to the player's King for a free point blank blast.
+   - Slide cap (Nov 25 2026): an evading enemy Rook or Bishop slides at most 4 tiles per turn (`AIConfig.SLIDE_CAP`, number is an assumption) so the player isn't chasing it from side to side. Attacks and normal moves use the full slide.
    - Position: line up an attack on the player's king and cover the tiles it could step to.
    - Teamwork: near an ally, cover escape tiles no ally covers yet.
    - Advance: close distance to the player's king.
@@ -49,6 +51,13 @@ Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuni
 - **Ratings** set how often a piece takes a random option instead of its best one: 500 → 40%, 1000 → 25%, 1500 → 10%, 2000 → 5%, 2500 → 1% (max 2 per match). Campaign battles use 1000 (`CampaignConfig.AI_RATING`).
 - **Promotion (singleplayer only):** an enemy Pawn that reaches row 1 (moving or capturing) becomes a Knight (40%), Bishop (40%) or Rook (20%) at the new piece's full health (`PieceConfig.PROMOTIONS`). The player's pawns, Fallen Pawns and Practice AI pawns never promote.
 - **Defeat:** the player's king dying ends the match as a Defeat.
+- **Boss abilities (Nov 25 2026):** campaign boss Kings use their class's special and ultimate (`AI/BossAbilityService`, rules in `AIConfig.Boss`). They have no energy or charge: the special comes back every 3 enemy turns, the ultimate can be used once per fight after dropping to half health. Using one doesn't cost the King his move or shot, and the board shows its name ("Morale!"). Passives aren't used. When to use each, per class:
+   - Monarch (built): Morale whenever at least one ally ends the turn where the player can hit it; Unyielding on a turn where allies attack.
+   - Reaper (to do): when he can safely attack and get away right after.
+   - Hunter (to do): place bear traps from the start to catch the player's King if it advances on him.
+   - Bandit (to do): Conceal whenever he feels endangered.
+   - Gunslinger (to do): maximize damage on the player's King with the shotgun + Fan the Hammer combo.
+   - The Dev Campaign King fights as `CampaignConfig.Regions.Dev.BossClass` so each boss can be tested.
 
 ### Commanding Pieces
 

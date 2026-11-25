@@ -1,10 +1,21 @@
 -- Game version shown in the corner of every screen, and the patch notes on the main menu
 -- One release per day: bump the last number each day, and the middle one (resetting the last) only for a huge update
 local PatchNotes = {
-    VERSION = "0.5.5",
+    VERSION = "0.5.6",
 
     -- Newest first
     Releases = {
+        {
+            Version = "0.5.6",
+            Date = "Nov 25",
+            Title = "Enemy Index",
+            Notes = {
+                "New Index tab in the Armory: every enemy you can meet, with its health, damage, where you find it and a diagram of how it moves and attacks.",
+                "Enemy pawns now march for promotion first and only attack when they can't step forward.",
+                "Enemy pieces no longer fall for pawns planted next to your King and keep pressing the attack until badly hurt (enemy Kings until half health); fleeing Rooks and Bishops can't dart from one side of the board to the other anymore.",
+                "The Monarch King now fights with his class: he shields his pieces with Morale when they're cornered, and calls Unyielding once he's down to half health.",
+            },
+        },
         {
             Version = "0.5.5",
             Date = "Nov 24",

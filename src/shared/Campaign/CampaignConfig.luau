@@ -166,6 +166,8 @@ local CampaignConfig = {
             Requires = {},
             DevOnly = true,
             AllNodesOpen = true,
+            -- Class the dev King fights with, to test each boss
+            BossClass = "Monarch",
             RewardScale = 1,
             StartPoints = 6,
             Start = "Start",
