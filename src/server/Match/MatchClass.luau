@@ -6,7 +6,6 @@ local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
-local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
 local DuelConfig = require(ReplicatedStorage.Shared.Duel.DuelConfig)
 local MatchConfig = require(script.Parent.MatchConfig)
@@ -73,6 +72,8 @@ function MatchClass.new(player, shotgunName, className, enemies, aiRating)
 
     self.AIRating = aiRating
     self.AIMistakes = 0
+    -- Enemy AI notes kept between turns, by piece Id: the tile it last left, turns spent backing off
+    self.AIMemory = {}
 
     self.isDuel = false
     self.isTeamDuel = false
@@ -570,6 +571,8 @@ function MatchClass:DamagePiece(piece, amount, attacker, isKingHit)
         self:CallAbility(side, "OnPieceKilled", piece)
     end
 
+    BossAbilityService.OnPieceKilled(self.Boss, piece)
+
     return true
 end
 
@@ -597,6 +600,11 @@ function MatchClass:GetHitChance(column, row, attacker)
         chance = math.min(chance, self:CallAbility(defender, "GetHitChance", column, row) or 1)
     end
 
+    -- The campaign boss's smoke only covers Black, against the player's attacks
+    if attacker and attacker.Team == "White" then
+        chance = math.min(chance, BossAbilityService.GetHitChance(self.Boss, column, row))
+    end
+
     return chance
 end
 
@@ -611,6 +619,8 @@ function MatchClass:OnUnitMoved(piece)
             self:CallAbility(side, "OnEnemyMoved", piece)
         end
     end
+
+    BossAbilityService.OnUnitMoved(self.Boss, piece)
 end
 
 -- The other team's traps on the way stop a commanded piece
@@ -619,7 +629,7 @@ function MatchClass:InterceptPath(side, piece, column, row)
         if self:CallAbility(opponent, "InterceptPath", piece, column, row) then return true end
     end
 
-    return false
+    return BossAbilityService.InterceptPath(self.Boss, piece, column, row)
 end
 
 -- kind is the look of the stun ("Stars" or "Bolas"); bolas are only thrown on the attacker's screen
@@ -647,6 +657,14 @@ end
 
 -- Stun stars come off once the stun has run out
 function MatchClass:ClearEndedStuns()
+    -- The campaign king isn't one of the pieces
+    local king = self.King
+
+    if not self.isDuel and king.isStunShown and not king:IsStunned() then
+        king.isStunShown = false
+        self.Sides.White:Send("KingStunned", false)
+    end
+
     for _, piece in pairs(self.Pieces) do
         if piece.isStunShown and not piece:IsStunned() then
             piece.isStunShown = false
@@ -758,6 +776,8 @@ end
 -- Actions are limited by energy and once per turn each, so the turn ends through End Turn
 function MatchClass:FinishEvent()
     if self:CheckVictory() then return end
+    -- A boss Hunter's trap can finish the player's king on their own turn
+    if not self.isDuel and self:CheckDefeat() then return end
     if self:CheckTeamTurnDone() then return end
 
     -- A King that walks into a trap loses the rest of this turn (and the next one, see EndTeamTurn)
@@ -768,15 +788,17 @@ function MatchClass:FinishEvent()
     self:SendTurnState()
 end
 
--- A stunned duel King loses its turn: it shows as stunned for a moment, then play passes on
--- Its clock stops while the turn is skipped
+-- A stunned King loses its turn: it shows as stunned for a moment, then play passes on
+-- A duel King's clock stops while the turn is skipped; a campaign King's turn goes straight to the enemies
 function MatchClass:CheckStunSkip(side)
-    if not self.isDuel then return false end
     if side.isSkipping then return true end
     if not self:IsSideTurn(side) then return false end
     if not side.King:IsStunned() then return false end
 
-    side.Clock = self:GetClock(side)
+    if self.isDuel then
+        side.Clock = self:GetClock(side)
+    end
+
     side.isSkipping = true
     self:SendTurnState()
 
@@ -786,7 +808,12 @@ function MatchClass:CheckStunSkip(side)
         if not self.isActive then return end
         if self.Turn ~= turn then return end
 
-        self:EndDuelTurn(side)
+        if self.isDuel then
+            self:EndDuelTurn(side)
+        else
+            side.isSkipping = false
+            self:StartEnemyTurn()
+        end
     end)
 
     return true
@@ -1221,6 +1248,13 @@ end
 function MatchClass:StartEnemyTurn()
     self.Phase = "EnemyTurn"
 
+    -- The player's king shakes off a stun once per enemy turn, but not on the turn it was stunned (a trap stepped on
+    -- during the player's turn costs the rest of that turn and the next)
+    local king = self.King
+    if king:IsStunned() and king.StunnedOnTurn ~= self.Turn then
+        king:TickStun()
+    end
+
     self:TickBleed("Black")
     if self:CheckVictory() then return end
 
@@ -1245,6 +1279,7 @@ function MatchClass:StartEnemyTurn()
 
     if self.Boss then
         BossAbilityService.StartTurn(self.Boss)
+        BossAbilityService.PrepareTurn(self.Boss)
     end
 
     local plans = EnemyAIService.PlanTurn(self)
@@ -1314,7 +1349,7 @@ function MatchClass:RunEnemyPlans(plans)
     local white = self.Sides.White
 
     if self.Boss then
-        BossAbilityService.Use(self.Boss, plans.Boss)
+        BossAbilityService.Use(self.Boss, plans.Boss, "Before")
     end
 
     for _, plan in ipairs(plans) do
@@ -1342,6 +1377,7 @@ function MatchClass:RunEnemyPlans(plans)
     end
 
     if self.Boss then
+        BossAbilityService.Use(self.Boss, plans.Boss, "After")
         BossAbilityService.EndTurn(self.Boss)
     end
 
@@ -1439,7 +1475,8 @@ end
 function MatchClass:EnemyShoot(piece, aimX, aimY)
     if not self.King:IsAlive() then return end
 
-    local weapon = ShotgunRules.GetWeapon(ShotgunConfig.ENEMY_KING)
+    local weapon = BossAbilityService.GetKingWeapon(self.Boss)
+    local originX, originY = ShotgunRules.GetKingOrigin(piece.Column, piece.Row)
 
     local function IsWhiteTile(column, row)
         if self.King.Column == column and self.King.Row == row then return true end
@@ -1456,11 +1493,21 @@ function MatchClass:EnemyShoot(piece, aimX, aimY)
     for _, tile in pairs(hitTiles) do
         if IsWhiteTile(tile.Column, tile.Row) and self:RollHit(tile.Column, tile.Row) then
             local distance = BoardRules.GetDistance(piece.Column, piece.Row, tile.Column, tile.Row)
-            local health, targetId = self:DamageWhiteTile(tile.Column, tile.Row, ShotgunRules.GetHitDamage(weapon, shotType, distance))
+            -- Boss class bonuses (Reaper's High, Opportunist); Deadly Rounds loses damage per white unit passed
+            local damage = ShotgunRules.GetHitDamage(weapon, shotType, distance) + BossAbilityService.GetShotBonus(self.Boss, tile.Column, tile.Row)
 
-            table.insert(damaged, {Id = targetId, Column = tile.Column, Row = tile.Row, Health = health})
+            if weapon.Pierces then
+                damage -= ShotgunRules.CountBlockers(originX, originY, tile.Column, tile.Row, IsWhiteTile) * weapon.PierceDamageLoss
+            end
+
+            if damage > 0 then
+                local health, targetId = self:DamageWhiteTile(tile.Column, tile.Row, damage)
+                table.insert(damaged, {Id = targetId, Column = tile.Column, Row = tile.Row, Health = health})
+            end
         end
     end
+
+    BossAbilityService.ConsumeShotBonus(self.Boss)
 
     self:SendAll("EnemyShotFired", piece.Id, pellets, hitTiles, damaged)
 end
@@ -1487,11 +1534,16 @@ function MatchClass:StartPlayerTurn()
     self.Turn += 1
     white.HasMoved = false
     white.UsedActions = {}
+    white.isSkipping = false
 
     self:CallAbility(white, "OnPlayerTurnStart")
 
     white:GainEnergy()
     self:TickBleed("White")
+
+    -- A king stunned by a boss Hunter's trap or bolas loses this turn
+    if self:CheckStunSkip(white) then return end
+
     self:SendTurnState()
 end
 

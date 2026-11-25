@@ -4,196 +4,87 @@ local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
-local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local AIConfig = require(script.Parent.AIConfig)
+local AIBoard = require(script.Parent.AIBoard)
+local AIDebug = require(script.Parent.AIDebug)
 local BossAbilityService = require(script.Parent.BossAbilityService)
 
 local Weights = AIConfig.Weights
+local GetKey = AIBoard.GetKey
 
-local NEIGHBORS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}}
 local PAWNS = {Pawn = true, FallenPawn = true}
 
 -- Plans the enemy turn: which Black pieces act and what each one does
--- Every plan is made against the same board snapshot, then MatchClass runs them all together
+-- Each piece scores every option against all its directives (weight x how well the option serves it, minus risk),
+-- picks the best, and commits it to the shared board before the next piece plans; MatchClass then runs them all
 local EnemyAIService = {}
 
-local function GetKey(column, row)
-    return column * 100 + row
+--WEIGHTS--
+
+local function GetBaseWeights(context, piece)
+    if piece.Type == "King" then return Weights.King end
+    if PAWNS[piece.Type] then return Weights.Pawn end
+
+    if piece.Type == "Queen" then
+        -- Once only the King and Queen are left, guarding the King comes first
+        if context.EnemyKing and #context.Blacks == 2 then return Weights.Default end
+
+        return Weights.Queen
+    end
+
+    return Weights[piece.Type] or Weights.Default
 end
 
---BOARD SNAPSHOT--
+-- The board shifts the weights: a King in danger needs defending, a weak player king invites the attack,
+-- and a lone King that keeps backing off gets tired of running
+local function AdjustWeights(context, piece)
+    local weights = table.clone(GetBaseWeights(context, piece))
+    local king = context.EnemyKing
 
--- Tiles a piece standing on column, row could hit next turn; ignoreKey is the piece's own current tile
-local function GetControlledTiles(context, pieceType, team, column, row, ignoreKey)
-    local tiles = {}
+    if king and piece ~= king then
+        local position = context.Positions[king]
+        local kingRisk = AIBoard.GetRisk(king, AIBoard.GetDanger(context, position.Column, position.Row, king))
 
-    if pieceType == "Pawn" or pieceType == "FallenPawn" then
-        local forward = PieceRules.GetForward(team)
-        tiles[GetKey(column - 1, row + forward)] = true
-        tiles[GetKey(column + 1, row + forward)] = true
-        return tiles
+        weights.Defend *= 1 + AIConfig.KING_DANGER_DEFEND * kingRisk
     end
 
-    -- Enemy Kings shoot, so they control everything in shotgun range
-    if pieceType == "King" and team == "Black" then
-        local range = context.KingWeapon.MaxRange
+    local playerHealth = math.max(context.Health[context.PlayerKing], 0)
+    weights.Attack *= 1 + AIConfig.LOW_KING_ATTACK * (1 - playerHealth / context.PlayerMaxHealth)
 
-        for deltaColumn = -range, range do
-            for deltaRow = -range, range do
-                tiles[GetKey(column + deltaColumn, row + deltaRow)] = true
-            end
-        end
+    -- A piece that hasn't gone anywhere for a while gets pushed forward, so nobody sits still all fight
+    local memory = context.Memory[piece.Id]
 
-        return tiles
+    if memory and piece ~= king and not PAWNS[piece.Type] then
+        weights.Advance *= 1 + AIConfig.IDLE_ADVANCE * math.min(memory.IdleTurns or 0, AIConfig.IDLE_TURNS_MAX)
     end
 
-    local function IsBlocked(blockColumn, blockRow)
-        local key = GetKey(blockColumn, blockRow)
-        if key == ignoreKey then return false end
+    if piece == king and #context.Blacks == 1 then
+        local retreats = memory and memory.RetreatTurns or 0
 
-        return context.Occupied[key] == true
+        weights.Evade *= math.max(1 - AIConfig.KING_FATIGUE * retreats, 0)
+        weights.Attack *= AIConfig.ISOLATED_KING_ATTACK
     end
 
-    for _, move in pairs(PieceRules.GetMoves(pieceType, team, column, row, IsBlocked)) do
-        tiles[GetKey(move.Column, move.Row)] = true
-    end
-
-    -- The first piece in each sliding line, or a knight's landing tile, can be hit too
-    for _, attack in pairs(PieceRules.GetAttacks(pieceType, team, column, row, IsBlocked, IsBlocked)) do
-        tiles[GetKey(attack.Column, attack.Row)] = true
-    end
-
-    return tiles
+    return weights
 end
+
+--DIRECTIVES--
 
 -- Pieces press the attack until they're hurt enough, then start evading
+local function GetEvadeThreshold(piece)
+    return AIConfig.EVADE_HEALTH[piece.Type] or AIConfig.EVADE_HEALTH.Default
+end
+
 local function IsEvading(piece)
-    local threshold = AIConfig.EVADE_HEALTH[piece.Type] or AIConfig.EVADE_HEALTH.Default
-    return piece.Health < piece.MaxHealth * threshold
+    return piece.Health < piece.MaxHealth * GetEvadeThreshold(piece)
 end
 
-local function BuildContext(match)
-    local king = match.King
+-- 1 at the evade threshold, up to EVADE_MAX_URGENCY at 0 health
+local function GetUrgency(piece)
+    local threshold = GetEvadeThreshold(piece)
+    local missing = (threshold - piece.Health / piece.MaxHealth) / threshold
 
-    local context = {
-        Match = match,
-        PlayerKing = {isKing = true, Column = king.Column, Row = king.Row},
-        PlayerWeapon = king.Shotgun,
-        KingWeapon = ShotgunRules.GetWeapon(ShotgunConfig.ENEMY_KING),
-        EnemyKing = nil,
-
-        Whites = {},
-        Blacks = {},
-
-        Occupied = {},
-        Reserved = {},
-        Targets = {},
-
-        -- Health left on each white target after the attacks planned so far
-        Health = {},
-        -- Tiles each white piece can hit next turn
-        Threats = {},
-        -- Tiles each black piece controls from its planned tile
-        Coverage = {},
-        Positions = {},
-
-        EscapeTiles = {},
-        KingThreats = {},
-    }
-
-    context.Health[context.PlayerKing] = king.Health
-    context.Occupied[GetKey(king.Column, king.Row)] = true
-    context.Targets[GetKey(king.Column, king.Row)] = context.PlayerKing
-    table.insert(context.Whites, context.PlayerKing)
-
-    for _, piece in pairs(match.Pieces) do
-        local key = GetKey(piece.Column, piece.Row)
-        context.Occupied[key] = true
-
-        if piece.Team == "White" then
-            local target = {Piece = piece, Type = piece.Type, Column = piece.Column, Row = piece.Row}
-
-            context.Health[target] = piece.Health
-            context.Targets[key] = target
-            table.insert(context.Whites, target)
-        else
-            if piece.Type == "King" then
-                context.EnemyKing = piece
-            end
-
-            context.Positions[piece] = {Column = piece.Column, Row = piece.Row}
-            table.insert(context.Blacks, piece)
-        end
-    end
-
-    for _, target in ipairs(context.Whites) do
-        if not target.isKing then
-            context.Threats[target] = GetControlledTiles(context, target.Type, "White", target.Column, target.Row)
-        end
-    end
-
-    for _, piece in ipairs(context.Blacks) do
-        context.Coverage[piece] = GetControlledTiles(context, piece.Type, piece.Team, piece.Column, piece.Row)
-    end
-
-    -- Empty tiles the player's king could step to
-    for _, offset in ipairs(NEIGHBORS) do
-        local column = king.Column + offset[1]
-        local row = king.Row + offset[2]
-
-        if BoardRules.IsOnBoard(column, row) and not context.Occupied[GetKey(column, row)] then
-            table.insert(context.EscapeTiles, GetKey(column, row))
-        end
-    end
-
-    -- Whatever could hit the enemy King next turn
-    local enemyKing = context.EnemyKing
-
-    if enemyKing then
-        local kingKey = GetKey(enemyKing.Column, enemyKing.Row)
-
-        if BoardRules.GetDistance(king.Column, king.Row, enemyKing.Column, enemyKing.Row) <= king.Shotgun.MaxRange + 1 then
-            table.insert(context.KingThreats, context.PlayerKing)
-        end
-
-        for target, tiles in pairs(context.Threats) do
-            if tiles[kingKey] then
-                table.insert(context.KingThreats, target)
-            end
-        end
-    end
-
-    return context
-end
-
---SCORING--
-
--- Expected damage the player could deal to a piece on this tile next turn
-local function GetDanger(context, column, row)
-    local player = context.PlayerKing
-    local weapon = context.PlayerWeapon
-    local danger = 0
-
-    -- The player's king can step once before firing
-    local distance = BoardRules.GetDistance(player.Column, player.Row, column, row)
-
-    if distance <= weapon.MaxRange + 1 then
-        danger += ShotgunRules.GetDamage(math.max(distance - 1, 1), weapon) * weapon.Blasts
-    end
-
-    local key = GetKey(column, row)
-
-    for target, tiles in pairs(context.Threats) do
-        if tiles[key] and context.Health[target] > 0 then
-            danger += PieceConfig.Damage[target.Type]
-        end
-    end
-
-    return danger
-end
-
-local function GetRisk(context, piece, column, row)
-    return math.min(GetDanger(context, column, row) * AIConfig.RISK_SCALE / piece.MaxHealth, 1)
+    return 1 + (AIConfig.EVADE_MAX_URGENCY - 1) * math.clamp(missing, 0, 1)
 end
 
 local function GetAttackValue(context, option)
@@ -207,11 +98,61 @@ local function GetAttackValue(context, option)
 
             if hit.Target.isKing then
                 value += AIConfig.KING_TARGET_BONUS
+            elseif hit.Damage >= health then
+                value += AIConfig.KILL_VALUE * AIBoard.GetValue(hit.Target.Type)
             end
         end
     end
 
     return value
+end
+
+local function KillsPlayerKing(context, option)
+    for _, hit in ipairs(option.Hits) do
+        if hit.Target.isKing and hit.Damage >= context.Health[hit.Target] then return true end
+    end
+
+    return false
+end
+
+-- How much of a threat to the allied King a white piece still is with this piece standing on the option's tile
+local function IsLineBlocked(context, piece, option, threat)
+    local king = context.EnemyKing
+    local kingPosition = context.Positions[king]
+    local oldKey = GetKey(context.Positions[piece].Column, context.Positions[piece].Row)
+    local newKey = GetKey(option.Column, option.Row)
+    if oldKey == newKey then return 0 end
+
+    -- Try the piece on its new tile, then put the board back
+    local wasOccupied = context.Occupied[newKey]
+    local wasBlack = context.BlackTiles[newKey]
+
+    context.Occupied[oldKey] = nil
+    context.Occupied[newKey] = true
+    context.BlackTiles[oldKey] = nil
+    context.BlackTiles[newKey] = piece
+
+    local blocked = 0
+
+    if threat.isKing then
+        -- Share of the open line's damage the piece soaks up
+        local open = context.KingLineDamage or 0
+
+        if open > 0 then
+            local damage = AIBoard.GetKingDamage(context, kingPosition.Column, kingPosition.Row, king)
+            blocked = math.clamp(1 - damage / open, 0, 1)
+        end
+    else
+        local tiles = AIBoard.GetControlledTiles(context, threat.Type, "White", threat.Column, threat.Row)
+        blocked = tiles[GetKey(kingPosition.Column, kingPosition.Row)] and 0 or 1
+    end
+
+    context.Occupied[newKey] = wasOccupied
+    context.Occupied[oldKey] = true
+    context.BlackTiles[newKey] = wasBlack
+    context.BlackTiles[oldKey] = piece
+
+    return blocked
 end
 
 local function GetDefendValue(context, piece, option)
@@ -222,24 +163,35 @@ local function GetDefendValue(context, piece, option)
     -- Taking out whatever threatens the King is the best defense
     if option.Hits then
         for _, hit in ipairs(option.Hits) do
-            if context.Health[hit.Target] > 0 and table.find(context.KingThreats, hit.Target) then return 1 end
+            local health = context.Health[hit.Target]
+
+            if health > 0 and table.find(context.KingThreats, hit.Target) then
+                return hit.Damage >= health and AIConfig.DEFEND_KILL or AIConfig.DEFEND_KILL * 0.5
+            end
         end
 
         return 0
     end
 
-    -- Otherwise stand next to the King on the threat's side
-    if BoardRules.GetDistance(option.Column, option.Row, king.Column, king.Row) > 1 then return 0 end
+    local value = 0
+    local kingPosition = context.Positions[king]
 
     for _, threat in ipairs(context.KingThreats) do
-        local kingDistance = BoardRules.GetDistance(king.Column, king.Row, threat.Column, threat.Row)
+        if context.Health[threat] > 0 then
+            -- Step into the line of fire
+            value = math.max(value, AIConfig.DEFEND_BLOCK * IsLineBlocked(context, piece, option, threat))
 
-        if BoardRules.GetDistance(option.Column, option.Row, threat.Column, threat.Row) < kingDistance then
-            return 0.6
+            -- Or stand next to the King on the threat's side
+            local kingDistance = BoardRules.GetDistance(kingPosition.Column, kingPosition.Row, threat.Column, threat.Row)
+
+            if BoardRules.GetDistance(option.Column, option.Row, kingPosition.Column, kingPosition.Row) <= 1
+                and BoardRules.GetDistance(option.Column, option.Row, threat.Column, threat.Row) < kingDistance then
+                value = math.max(value, AIConfig.DEFEND_GUARD)
+            end
         end
     end
 
-    return 0
+    return value
 end
 
 -- Returns how many escape tiles are covered, and how many of those no ally covers
@@ -279,75 +231,235 @@ local function IsNearAlly(context, piece, column, row)
     return false
 end
 
-local function ScoreOption(context, piece, weights, option)
-    local score = weights.Defend * GetDefendValue(context, piece, option)
+-- Which of the 8 directions around the player's king a tile sits in
+local function GetSide(context, column, row)
+    local player = context.PlayerKing
+    return math.sign(column - player.Column) * 3 + math.sign(row - player.Row)
+end
 
-    -- An attack scores Position, Teamwork and Advance from the tile it ends on: its own, or the captured one
-    -- Attacking outranks Evade unless the piece's weights say otherwise
-    local isEvading = IsEvading(piece)
+local function IsNewFlank(context, piece, column, row)
+    local player = context.PlayerKing
+    if BoardRules.GetDistance(column, row, player.Column, player.Row) > AIConfig.FLANK_RANGE then return false end
 
-    if option.Hits then
-        score += weights.Attack * GetAttackValue(context, option)
+    local side = GetSide(context, column, row)
+    local hasAllyNear = false
 
-        if isEvading and AIConfig.EVADE_BEFORE_ATTACK[piece.Type] then
-            score -= weights.Evade * GetRisk(context, piece, option.Column, option.Row)
+    for other, position in pairs(context.Positions) do
+        if other ~= piece and BoardRules.GetDistance(position.Column, position.Row, player.Column, player.Row) <= AIConfig.FLANK_RANGE then
+            hasAllyNear = true
+
+            if GetSide(context, position.Column, position.Row) == side then return false end
         end
-
-        -- Bait check: a summoned piece next to the player's King can be a trap for a point blank blast
-        if not option.Hits[1].Target.isKing then
-            score -= weights.Attack * AIConfig.BAIT_PENALTY * GetRisk(context, piece, option.Column, option.Row)
-        end
-    elseif isEvading then
-        score -= weights.Evade * GetRisk(context, piece, option.Column, option.Row)
     end
 
-    local player = context.PlayerKing
-    local controlled = GetControlledTiles(context, piece.Type, piece.Team, option.Column, option.Row, GetKey(piece.Column, piece.Row))
+    -- A flank needs someone on the other side
+    return hasAllyNear
+end
 
-    -- Position: line up an attack on the king's tile and close off the tiles it could step to
+-- True when the option threatens a white piece that threatens an ally
+local function ProtectsAlly(context, piece, controlled)
+    for target, tiles in pairs(context.Threats) do
+        if context.Health[target] > 0 and controlled[GetKey(target.Column, target.Row)] then
+            for other, position in pairs(context.Positions) do
+                if other ~= piece and tiles[GetKey(position.Column, position.Row)] then return true end
+            end
+        end
+    end
+
+    return false
+end
+
+local function GetTeamworkValue(context, piece, option, controlled, fresh)
+    local value = 0
+    local escapeCount = #context.EscapeTiles
+
+    -- Close off escape tiles nobody else holds yet
+    if escapeCount > 0 and IsNearAlly(context, piece, option.Column, option.Row) then
+        value += fresh / escapeCount
+    end
+
+    -- Finish what an ally started
+    if option.Hits then
+        for _, hit in ipairs(option.Hits) do
+            if context.Damaged[hit.Target] and context.Health[hit.Target] > 0 then
+                value += AIConfig.FOCUS_VALUE
+                break
+            end
+        end
+    end
+
+    if IsNewFlank(context, piece, option.Column, option.Row) then
+        value += AIConfig.FLANK_VALUE
+    end
+
+    if ProtectsAlly(context, piece, controlled) then
+        value += AIConfig.PROTECT_VALUE
+    end
+
+    return value
+end
+
+local function GetPositionValue(context, piece, controlled, covered, option)
+    local player = context.PlayerKing
+    local value = 0
+
+    -- Line up an attack on the king's tile and close off the tiles it could step to
     if controlled[GetKey(player.Column, player.Row)] then
-        score += weights.Position * AIConfig.KING_LINE_VALUE
+        value += AIConfig.KING_LINE_VALUE
     end
 
     local escapeCount = #context.EscapeTiles
 
     if escapeCount > 0 then
-        local covered, fresh = CountCovered(context, piece, controlled)
+        value += (1 - AIConfig.KING_LINE_VALUE) * covered / escapeCount
+    end
 
-        score += weights.Position * (1 - AIConfig.KING_LINE_VALUE) * covered / escapeCount
+    local range = AIConfig.PREFERRED_RANGE[piece.Type]
 
-        if IsNearAlly(context, piece, option.Column, option.Row) then
-            score += weights.Teamwork * fresh / escapeCount
+    if range then
+        local distance = BoardRules.GetDistance(option.Column, option.Row, player.Column, player.Row)
+
+        if distance >= range.Min and distance <= range.Max then
+            value += range.Value
         end
     end
+
+    return value
+end
+
+local function GetAdvanceValue(context, piece, option)
+    local value
 
     -- Pawns advance toward promotion: every row stepped forward counts fully, wherever the player is
     if PAWNS[piece.Type] then
         local rowsGained = (option.Row - piece.Row) * PieceRules.GetForward(piece.Team)
-        score += weights.Advance * math.clamp(rowsGained, 0, 1)
-        return score
+        value = math.clamp(rowsGained, 0, 1)
+    else
+        local player = context.PlayerKing
+        local before = BoardRules.GetDistance(piece.Column, piece.Row, player.Column, player.Row)
+        local after = BoardRules.GetDistance(option.Column, option.Row, player.Column, player.Row)
+
+        value = math.clamp((before - after) / AIConfig.ADVANCE_STEP, -1, 1)
     end
 
-    local before = BoardRules.GetDistance(piece.Column, piece.Row, player.Column, player.Row)
-    local after = BoardRules.GetDistance(option.Column, option.Row, player.Column, player.Row)
-
-    score += weights.Advance * math.clamp((before - after) / AIConfig.ADVANCE_STEP, -1, 1)
-
-    return score
+    return value
 end
 
-local function GetWeights(context, piece)
-    if piece.Type == "King" then return Weights.King end
-    if PAWNS[piece.Type] then return Weights.Pawn end
+-- Expected cost of ending the turn on a tile: damage taken, the piece's value times its chance of dying,
+-- and allies close enough to share the blast
+-- A bait trade counts the share of health lost instead of the death chance: a Rook blasted to 2 HP for a pawn is
+-- most of a Rook gone
+local function GetLoss(context, piece, column, row, danger, isBait)
+    if danger <= 0 then return 0 end
 
-    if piece.Type == "Queen" then
-        -- Once only the King and Queen are left, guarding the King comes first
-        if context.EnemyKing and #context.Blacks == 2 then return Weights.Default end
+    local lost = isBait and AIBoard.GetHealthShare(piece, danger) or AIBoard.GetDeathChance(piece, danger)
+    local loss = AIConfig.RISK_WEIGHT * AIBoard.GetRisk(piece, danger) + AIConfig.LOSS_WEIGHT * AIBoard.GetValue(piece.Type) * lost
 
-        return Weights.Queen
+    if isBait then
+        loss *= AIConfig.BAIT_MULTIPLIER
+    elseif danger < piece.Health + (piece.Shield or 0) then
+        -- The player's king only blasts one target a turn, so pieces closing in together each risk less
+        -- A tile where the piece would die isn't shared: that's the shot the player takes
+        loss /= 1 + AIConfig.SHARED_TARGET * context.ExposedAllies
     end
 
-    return Weights.Default
+    return loss + AIConfig.CLUSTER_PENALTY * AIBoard.CountExposedNeighbors(context, piece, column, row)
+end
+
+-- Danger on the option's tile once its kills are taken off the board
+local function GetDangerAfter(context, piece, option)
+    local killed = {}
+
+    if option.Hits then
+        for _, hit in ipairs(option.Hits) do
+            if not hit.Target.isKing and context.Health[hit.Target] > 0 and hit.Damage >= context.Health[hit.Target] then
+                killed[hit.Target] = context.Health[hit.Target]
+                context.Health[hit.Target] = 0
+            end
+        end
+    end
+
+    local danger = AIBoard.GetDanger(context, option.Column, option.Row, piece)
+
+    for target, health in pairs(killed) do
+        context.Health[target] = health
+    end
+
+    return danger
+end
+
+-- Returns the option's score and its parts by directive, for debugging
+local function ScoreOption(context, piece, weights, option)
+    local parts = {}
+
+    if weights.Defend > 0 then
+        parts.Defend = weights.Defend * GetDefendValue(context, piece, option)
+    end
+
+    local isPieceAttack = option.Type == "Attack"
+
+    if option.Hits then
+        parts.Attack = weights.Attack * GetAttackValue(context, option)
+
+        if KillsPlayerKing(context, option) then
+            parts.Attack += AIConfig.KING_KILL_SCORE
+        end
+    end
+
+    local dangerAfter = GetDangerAfter(context, piece, option)
+
+    -- Avoiding a bad move: every piece pays for where it ends up
+    -- Piece attacks on a cheaper summoned piece are weighed as a trade (bait)
+    local isBait = false
+
+    if isPieceAttack then
+        local target = option.Hits[1].Target
+        isBait = not target.isKing and AIBoard.GetValue(target.Type) < AIBoard.GetValue(piece.Type)
+    end
+
+    parts.Risk = -GetLoss(context, piece, option.Column, option.Row, dangerAfter, isBait)
+
+    -- What the tile sets up for next turn only counts if the piece is still around to use it
+    local survival = 1 - AIBoard.GetDeathChance(piece, dangerAfter)
+
+    -- Actively retreating: hurt pieces score for getting somewhere safer than where they stand
+    if weights.Evade > 0 and IsEvading(piece) then
+        local position = context.Positions[piece]
+        local before = AIBoard.GetRisk(piece, AIBoard.GetDanger(context, position.Column, position.Row, piece))
+        local after = AIBoard.GetRisk(piece, dangerAfter)
+
+        parts.Evade = weights.Evade * GetUrgency(piece) * (before - after)
+    end
+
+    -- Position, Teamwork and Advance come from the tile the option ends on: its own, or the captured one
+    local controlled = AIBoard.GetControlledTiles(context, piece.Type, piece.Team, option.Column, option.Row, GetKey(piece.Column, piece.Row))
+    local covered, fresh = CountCovered(context, piece, controlled)
+
+    if weights.Position > 0 then
+        parts.Position = weights.Position * GetPositionValue(context, piece, controlled, covered, option) * survival
+    end
+
+    if weights.Teamwork > 0 then
+        parts.Teamwork = weights.Teamwork * GetTeamworkValue(context, piece, option, controlled, fresh) * survival
+    end
+
+    -- Pawns keep marching whatever is in front of them, so players can read and exploit them
+    parts.Advance = weights.Advance * GetAdvanceValue(context, piece, option) * (PAWNS[piece.Type] and 1 or survival)
+
+    -- Stepping straight back to last turn's tile goes nowhere
+    local memory = context.Memory[piece.Id]
+
+    if option.Type == "Move" and memory and memory.FromColumn == option.Column and memory.FromRow == option.Row then
+        parts.Advance -= AIConfig.BACKTRACK_PENALTY
+    end
+
+    local score = 0
+
+    for _, value in pairs(parts) do
+        score += value
+    end
+
+    return score, parts
 end
 
 --OPTIONS--
@@ -355,13 +467,16 @@ end
 -- Enemy Kings aim straight at every white target in range
 local function AddShots(context, piece, options)
     local weapon = context.KingWeapon
+    local boss = context.Match.Boss
+    local originX, originY = ShotgunRules.GetKingOrigin(piece.Column, piece.Row)
 
     local function IsBlocking(column, row)
-        return context.Targets[GetKey(column, row)] ~= nil
+        local target = context.Targets[GetKey(column, row)]
+        return target ~= nil and context.Health[target] > 0
     end
 
     for _, target in ipairs(context.Whites) do
-        if BoardRules.GetDistance(piece.Column, piece.Row, target.Column, target.Row) <= weapon.MaxRange then
+        if context.Health[target] > 0 and BoardRules.GetDistance(piece.Column, piece.Row, target.Column, target.Row) <= weapon.MaxRange then
             local aimX = target.Column - 0.5
             local aimY = target.Row - 0.5
             local _, hitTiles, shotType = ShotgunRules.GetFireResult(piece.Column, piece.Row, aimX, aimY, weapon, "Normal", IsBlocking)
@@ -375,9 +490,19 @@ local function AddShots(context, piece, options)
                     -- Blasts into the Outlaw's smoke only land part of the time, so they count for less
                     local hitChance = context.Match:GetHitChance(tile.Column, tile.Row)
 
-                    if hitTarget and hitChance > 0 then
+                    if hitTarget and context.Health[hitTarget] > 0 and hitChance > 0 then
                         local distance = BoardRules.GetDistance(piece.Column, piece.Row, tile.Column, tile.Row)
-                        table.insert(hits, {Target = hitTarget, Damage = ShotgunRules.GetHitDamage(weapon, shotType, distance) * hitChance})
+                        local damage = ShotgunRules.GetHitDamage(weapon, shotType, distance)
+                            + BossAbilityService.GetShotBonus(boss, tile.Column, tile.Row)
+
+                        -- Deadly Rounds (Gunslinger boss) loses damage for every white unit passed through
+                        if weapon.Pierces then
+                            damage -= ShotgunRules.CountBlockers(originX, originY, tile.Column, tile.Row, IsBlocking) * weapon.PierceDamageLoss
+                        end
+
+                        if damage > 0 then
+                            table.insert(hits, {Target = hitTarget, Damage = damage * hitChance})
+                        end
                     end
                 end
 
@@ -392,17 +517,19 @@ end
 local function GetOptions(context, piece)
     local options = {{Type = "Stay", Column = piece.Column, Row = piece.Row}}
 
-    local function IsBlocked(column, row)
-        return context.Occupied[GetKey(column, row)] == true
-    end
-
-    local function IsTarget(column, row)
-        return context.Targets[GetKey(column, row)] ~= nil
-    end
-
     if piece.Type == "King" then
         AddShots(context, piece, options)
     else
+        -- Attacks resolve before anyone moves, so their lines are checked against the board at the start of the turn
+        local function IsBlocked(column, row)
+            return context.StartOccupied[GetKey(column, row)] == true
+        end
+
+        local function IsTarget(column, row)
+            local target = context.Targets[GetKey(column, row)]
+            return target ~= nil and context.Health[target] > 0
+        end
+
         for _, attack in pairs(PieceRules.GetAttacks(piece.Type, piece.Team, piece.Column, piece.Row, IsBlocked, IsTarget)) do
             local target = context.Targets[GetKey(attack.Column, attack.Row)]
             local damage = PieceConfig.Damage[piece.Type]
@@ -421,10 +548,9 @@ local function GetOptions(context, piece)
         end
     end
 
-    -- Destinations already claimed by pieces earlier in the order are off limits
+    -- Moves run in plan order after the attacks, so tiles freed or claimed by earlier pieces are already settled
     local function IsMoveBlocked(column, row)
-        local key = GetKey(column, row)
-        return context.Occupied[key] == true or context.Reserved[key] == true
+        return context.Occupied[GetKey(column, row)] == true
     end
 
     -- Evading sliders don't flee across the whole board
@@ -447,43 +573,68 @@ local function CanMakeMistake(match, rating)
     return match.Random:NextNumber() < rating.MistakeChance
 end
 
+-- Allies other than the piece that the player's king could hit next turn
+local function CountExposedAllies(context, piece)
+    local count = 0
+
+    for other, position in pairs(context.Positions) do
+        if other ~= piece and AIBoard.GetKingDamage(context, position.Column, position.Row, other) > 0 then
+            count += 1
+        end
+    end
+
+    return count
+end
+
 local function ChooseOption(context, piece, rating)
-    local weights = GetWeights(context, piece)
+    local weights = AdjustWeights(context, piece)
+    context.ExposedAllies = CountExposedAllies(context, piece)
     local options = GetOptions(context, piece)
 
     for _, option in ipairs(options) do
-        option.Score = ScoreOption(context, piece, weights, option)
+        option.Score, option.Parts = ScoreOption(context, piece, weights, option)
     end
 
     table.sort(options, function(a, b)
         return a.Score > b.Score
     end)
 
+    local choice = options[1]
+    local isMistake = false
+
     -- A mistake is any option other than the best one
     if #options > 1 and CanMakeMistake(context.Match, rating) then
         context.Match.AIMistakes += 1
 
-        return options[context.Match.Random:NextInteger(2, #options)]
+        choice = options[context.Match.Random:NextInteger(2, #options)]
+        isMistake = true
     end
 
-    return options[1]
+    if AIDebug.IsOn() then
+        AIDebug.LogPiece(context, piece, weights, options, choice, isMistake)
+    end
+
+    return choice
 end
 
-local function Commit(context, piece, option)
-    option.PieceId = piece.Id
+-- Notes kept for next turn: where the piece came from, and how long a King has been backing off
+local function Remember(context, piece, option)
+    local memory = context.Memory[piece.Id] or {RetreatTurns = 0, IdleTurns = 0}
+    local hasMoved = option.Column ~= piece.Column or option.Row ~= piece.Row
 
-    if option.Hits then
-        for _, hit in ipairs(option.Hits) do
-            context.Health[hit.Target] -= hit.Damage
-        end
+    memory.FromColumn = hasMoved and piece.Column or nil
+    memory.FromRow = hasMoved and piece.Row or nil
+    memory.IdleTurns = (hasMoved or option.Hits) and 0 or memory.IdleTurns + 1
+
+    if piece.Type == "King" then
+        local player = context.PlayerKing
+        local before = BoardRules.GetDistance(piece.Column, piece.Row, player.Column, player.Row)
+        local after = BoardRules.GetDistance(option.Column, option.Row, player.Column, player.Row)
+
+        memory.RetreatTurns = after > before and memory.RetreatTurns + 1 or 0
     end
 
-    if option.Type == "Move" then
-        context.Reserved[GetKey(option.Column, option.Row)] = true
-    end
-
-    context.Positions[piece] = {Column = option.Column, Row = option.Row}
-    context.Coverage[piece] = GetControlledTiles(context, piece.Type, piece.Team, option.Column, option.Row, GetKey(piece.Column, piece.Row))
+    context.Memory[piece.Id] = memory
 end
 
 -- Ticks every Black piece's stun and returns the plans of the ones that act
@@ -502,9 +653,21 @@ function EnemyAIService.PlanTurn(match)
         return a.Id < b.Id
     end)
 
-    local context = BuildContext(match)
+    local context = AIBoard.BuildContext(match)
+    context.KingWeapon = BossAbilityService.GetKingWeapon(match.Boss)
     local rating = AIConfig.Ratings[match.AIRating]
     local plans = {}
+
+    -- How hard the player's king can hit the allied King with no one in the way, for measuring blocks
+    local king = context.EnemyKing
+
+    if king then
+        context.KingLineDamage = AIBoard.GetKingDamage(context, king.Column, king.Row, king)
+    end
+
+    if AIDebug.IsOn() then
+        AIDebug.LogTurn(context)
+    end
 
     -- Conveyor order: the piece that reserves first moves down one place every enemy turn
     local offset = (match.Turn - 1) % #acting
@@ -513,30 +676,24 @@ function EnemyAIService.PlanTurn(match)
         local piece = acting[(i + offset - 1) % #acting + 1]
         local option = ChooseOption(context, piece, rating)
 
-        Commit(context, piece, option)
+        Remember(context, piece, option)
+        AIBoard.Commit(context, piece, option)
+        option.PieceId = piece.Id
 
         if option.Type ~= "Stay" then
             table.insert(plans, option)
         end
     end
 
-    -- Abilities come third for the boss King: after every piece has its move, see what the turn needs
+    -- Abilities come third for the boss King: once every piece has its plan, score what the turn needs
+    -- A stunned boss doesn't act, so it can't use them either
     if match.Boss then
-        local info = {TrappedAllies = 0, AllyAttacks = 0}
+        local isActing = table.find(acting, match.Boss.King) ~= nil
+        plans.Boss = BossAbilityService.Decide(match.Boss, context, plans, isActing)
 
-        for piece, position in pairs(context.Positions) do
-            if piece.Type ~= "King" and GetDanger(context, position.Column, position.Row) > 0 then
-                info.TrappedAllies += 1
-            end
+        if AIDebug.IsOn() and plans.Boss then
+            AIDebug.LogBoss(match.Boss, plans.Boss)
         end
-
-        for _, plan in ipairs(plans) do
-            if plan.Type == "Attack" then
-                info.AllyAttacks += 1
-            end
-        end
-
-        plans.Boss = BossAbilityService.Decide(match.Boss, info)
     end
 
     return plans
