@@ -55,6 +55,8 @@ local shotgunName = nil
 local kingCard = nil
 local kingMaxHealth = 1
 local companionTemplate = nil
+-- Duels only: the rival King's health on the right of the turn bar
+local rivalCard = nil
 -- Companion piece id -> its health card (and the health it last showed), in the order they joined
 local companionCards = {}
 local companionOrder = {}
@@ -167,6 +169,11 @@ local function Update(state)
     chargeText.Text = string.format("%d/%d", state.UltimateCharge, state.MaxUltimateCharge)
 
     CombatHudController.SetKingHealth(state.KingHealth, state.KingMaxHealth)
+
+    -- Duels are the matches with clocks
+    if rivalCard then
+        rivalCard.Frame.Visible = state.Clock ~= nil
+    end
 end
 
 -- A portrait card's health text and bar, with one tick per point of max health
@@ -268,6 +275,31 @@ local function UpdateCompanions()
     end
 end
 
+--RIVAL--
+
+local function GetRivalKing()
+    for _, piece in ipairs(PieceController.GetTeamPieces("Black")) do
+        if piece.Type == "King" then return piece end
+    end
+
+    return nil
+end
+
+-- Follows the rival King's board health like the companion cards; a dead King leaves the board, so it drops to 0
+local function UpdateRival()
+    if not rivalCard or not rivalCard.Frame.Visible then return end
+
+    local piece = GetRivalKing()
+    local health = piece and piece.Rig.Health or 0
+    local maxHealth = piece and piece.Rig.MaxHealth or rivalCard.MaxHealth
+
+    if not maxHealth or rivalCard.Shown == health then return end
+
+    rivalCard.Shown = health
+    rivalCard.MaxHealth = maxHealth
+    DrawHealthCard(rivalCard, health, maxHealth)
+end
+
 local init = false
 function CombatHudController.Init()
     if init then return end
@@ -304,6 +336,15 @@ function CombatHudController.Init()
     companionTemplate = root.TurnBar:WaitForChild("CompanionHealth")
     companionTemplate.Visible = false
 
+    -- Missing from HUDs that haven't been updated yet (the Duels place)
+    local rivalFrame = root.TurnBar:FindFirstChild("RivalHealth")
+    if rivalFrame then
+        rivalCard = NewHealthCard(rivalFrame)
+        rivalFrame.Visible = false
+        -- Follows the atlas when it's re-uploaded
+        rivalFrame.PortraitFrame.Portrait.Image = SpriteConfig.ASSET_ID
+    end
+
     ShotgunController.OnModeChanged = UpdateFireLabel
 
     BoardRemote.OnClientEvent:Connect(function(action, ...)
@@ -311,6 +352,11 @@ function CombatHudController.Init()
             Update(...)
         elseif action == "MatchStarted" then
             ClearCompanions()
+
+            if rivalCard then
+                rivalCard.Shown = nil
+                rivalCard.MaxHealth = nil
+            end
         elseif action == "PieceAdded" then
             local id, pieceType, team = ...
             if team == "White" and COMPANIONS[pieceType] then
@@ -320,6 +366,7 @@ function CombatHudController.Init()
     end)
 
     RunService.Heartbeat:Connect(UpdateCompanions)
+    RunService.Heartbeat:Connect(UpdateRival)
 end
 
 return CombatHudController

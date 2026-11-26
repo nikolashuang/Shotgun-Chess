@@ -48,9 +48,12 @@ function ReaperClass:OnPieceKilled(piece)
     match:SendOthers(self.Side, "SoulAdded", soul.Id, soul.Type, soul.Column, soul.Row, true)
 end
 
+-- Absorbed souls fly into this Reaper's King on everyone's board
 function ReaperClass:RemoveSouls(ids, isAbsorbed)
+    local king = self.Side.King
+
     self.Side:Send("SoulsRemoved", ids, isAbsorbed)
-    self.Match:SendOthers(self.Side, "SoulsRemoved", ids)
+    self.Match:SendOthers(self.Side, "SoulsRemoved", ids, isAbsorbed, king.Column, king.Row)
 end
 
 -- payload.SoulId; the bonus move doesn't use up the king's own move, so it works before or after it
@@ -100,7 +103,7 @@ function ReaperClass:Ultimate()
 
     self:RemoveSouls(absorbed, true)
     side:Send("KingHealed", side.King.Health)
-    self.Match:ShowDamage(side.King, side)
+    self.Match:SendOthers(side, "PieceHealed", side.King.Id, side.King.Health)
 
     return true
 end

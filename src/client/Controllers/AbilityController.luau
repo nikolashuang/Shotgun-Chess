@@ -140,6 +140,11 @@ local function DrawUltimate(className)
     end
 end
 
+-- Picking the Ultimate before it can be used would leave it selected, and the next press would toggle it off
+function AbilityController.CanUseUltimate()
+    return board ~= nil and board.GetTurnState() ~= nil and CanUltimate()
+end
+
 -- Draws the clickable choices for the selected Special or Ultimate
 function AbilityController.DrawPreview(action)
     local state = board.GetTurnState()
@@ -296,7 +301,7 @@ function AbilityController.OnTileClicked(action, column, row)
     if not state or not state.Class then return false end
 
     if action == "Special" then
-        if not CanSpecial() then return true end
+        if not board.TryAct(ActionCost.Special, "Special") then return true end
 
         ClickSpecial(state.Class, column, row)
         return true
@@ -319,7 +324,7 @@ function AbilityController.OnSelected(action)
     if not state then return false end
 
     if action == "Special" then
-        if state.Class ~= "Monarch" or not CanSpecial() then return false end
+        if state.Class ~= "Monarch" or not board.TryAct(ActionCost.Special, "Special") then return false end
         if #PieceController.GetTeamPieces("White") == 0 then return false end
 
         Send("Special", {})

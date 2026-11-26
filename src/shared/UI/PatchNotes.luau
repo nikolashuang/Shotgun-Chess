@@ -8,12 +8,12 @@ local PatchNotes = {
         {
             Version = "0.5.6",
             Date = "Nov 25",
-            Title = "Enemy Index",
+            Title = "Smarter Enemies",
             Notes = {
-                "New Index tab in the Armory: every enemy you can meet, with its health, damage, where you find it and a diagram of how it moves and attacks.",
                 "Enemy pawns now march for promotion first and only attack when they can't step forward.",
                 "Enemy pieces no longer fall for pawns planted next to your King and keep pressing the attack until badly hurt (enemy Kings until half health); fleeing Rooks and Bishops can't dart from one side of the board to the other anymore.",
                 "The Monarch King now fights with his class: he shields his pieces with Morale when they're cornered, and calls Unyielding once he's down to half health.",
+                "New Index tab in the Armory: every enemy you can meet, with its health, damage, where you find it and a diagram of how it moves and attacks.",
             },
         },
         {

@@ -99,6 +99,64 @@ local function CanAct(cost, action)
     return turnState.Energy >= cost
 end
 
+-- Text over the top of the board: boss Kings calling out abilities, and red warnings for the player
+local BOSS_CALL_TIME = 1.6
+local BOSS_CALL_FONT = Font.new("rbxasset://fonts/families/Fondamento.json")
+local CALL_COLOR = Color3.fromHex("F1D4AC")
+local WARNING_COLOR = Color3.fromRGB(220, 60, 60)
+
+local warningLabel = nil
+
+local function ShowBoardCall(text, color)
+    local label = Instance.new("TextLabel")
+    label.Name = "BossCall"
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.Position = UDim2.fromScale(0.5, 0.12)
+    label.Size = UDim2.fromScale(0.8, 0.09)
+    label.BackgroundTransparency = 1
+    label.FontFace = BOSS_CALL_FONT
+    label.TextScaled = true
+    label.TextColor3 = color or CALL_COLOR
+    label.Text = text
+    label.ZIndex = 50
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromHex("1E1820")
+    stroke.Thickness = 3
+    stroke.Parent = label
+    label.Parent = board
+
+    local fade = TweenInfo.new(0.4)
+    task.delay(BOSS_CALL_TIME, function()
+        TweenService:Create(label, fade, {TextTransparency = 1}):Play()
+        TweenService:Create(stroke, fade, {Transparency = 1}):Play()
+        task.wait(0.4)
+        label:Destroy()
+    end)
+
+    return label
+end
+
+-- Repeated clicks replace the warning instead of stacking copies
+local function ShowWarning(text)
+    if warningLabel then
+        warningLabel:Destroy()
+    end
+
+    warningLabel = ShowBoardCall(text, WARNING_COLOR)
+end
+
+-- CanAct for an actual attempt: tells the player when energy is what's stopping them
+local function TryAct(cost, action)
+    if CanAct(cost, action) then return true end
+
+    if IsMyTurn() and not turnState.UsedActions[action] then
+        ShowWarning("Not Enough Energy")
+    end
+
+    return false
+end
+
 -- Assimilate's bonus move is still open after the king's own move
 local function CanMove()
     if not IsMyTurn() then return false end
@@ -541,13 +599,16 @@ local function OnTileClicked(column, row)
     local selectedAction = actionPanel.SelectedAction
 
     if selectedAction == "Fire" then
-        if not CanAct(ActionCost.Fire, "Fire") then return end
+        if not TryAct(ActionCost.Fire, "Fire") then return end
 
         local weapon = ShotgunController.GetWeapon()
         local mode = ShotgunController.GetMode()
         local targetX, targetY = ShotgunController.GetMouseBoardPosition()
 
-        if turnState.Ammo < ShotgunRules.GetAmmoCost(weapon, mode) then return end
+        if turnState.Ammo < ShotgunRules.GetAmmoCost(weapon, mode) then
+            ShowWarning("No Ammo")
+            return
+        end
 
         local _, hitTiles, shotType = ShotgunRules.GetFireResult(kingColumn, kingRow, targetX, targetY, weapon, mode, IsEnemyTile)
         if not hitTiles then return end
@@ -567,7 +628,7 @@ local function OnTileClicked(column, row)
         BoardRemote:FireServer("Fire", targetX, targetY, mode)
         actionPanel.ClearSelection()
     elseif selectedAction == "Special" and turnState.Class == "Gunslinger" then
-        if not CanAct(ActionCost.Special, "Special") then return end
+        if not TryAct(ActionCost.Special, "Special") then return end
 
         local targetX, targetY = ShotgunController.GetMouseBoardPosition()
         if not ShotgunRules.GetPreciseShot(kingColumn, kingRow, targetX, targetY, FanConfig.Range) then return end
@@ -580,14 +641,14 @@ local function OnTileClicked(column, row)
         local pieceType = SummonPanelController.SelectedPiece
 
         if not pieceType then return end
-        if not CanAct(SummonPanelController.GetCost(pieceType), "Summon") then return end
+        if not TryAct(SummonPanelController.GetCost(pieceType), "Summon") then return end
         if SummonPanelController.IsMaxed(pieceType) then return end
         if not IsSummonTile(column, row) then return end
 
         BoardRemote:FireServer("Summon", pieceType, column, row)
         actionPanel.ClearSelection()
     elseif selectedAction == "Command" then
-        if not CanAct(ActionCost.Command, "Command") then return end
+        if not TryAct(ActionCost.Command, "Command") then return end
 
         local clickedPiece = PieceController.GetAt(column, row)
 
@@ -781,13 +842,17 @@ local function OnKingAttacked(attackerId, health)
     end)
 end
 
+-- Reaper's High: the heal lands once the last soul reaches the King
 local function OnKingHealed(health)
-    if not kingRig then return end
+    task.delay(BoardEffectsController.GetAbsorbWait(), function()
+        if not kingRig then return end
 
-    kingRig:SetHealth(health)
-    CombatHudController.SetKingHealth(health)
-    kingRig:ShowHealth()
-    kingRig:HideHealth()
+        kingRig:SetHealth(health)
+        CombatHudController.SetKingHealth(health)
+        kingRig:ShowHealth()
+        kingRig:HideHealth()
+        kingRig:PlayHeal()
+    end)
 end
 
 -- Ambush: the king vanishes and reappears on its new tile without hopping
@@ -803,36 +868,8 @@ local function OnKingAmbushed(column, row)
     BoardController.RefreshPreview()
 end
 
--- A boss King calling out the ability he just used, over the top of the board
-local BOSS_CALL_TIME = 1.6
-local BOSS_CALL_FONT = Font.new("rbxasset://fonts/families/Fondamento.json")
-
 local function OnBossAbility(_, abilityName)
-    local label = Instance.new("TextLabel")
-    label.Name = "BossCall"
-    label.AnchorPoint = Vector2.new(0.5, 0.5)
-    label.Position = UDim2.fromScale(0.5, 0.12)
-    label.Size = UDim2.fromScale(0.8, 0.09)
-    label.BackgroundTransparency = 1
-    label.FontFace = BOSS_CALL_FONT
-    label.TextScaled = true
-    label.TextColor3 = Color3.fromHex("F1D4AC")
-    label.Text = abilityName .. "!"
-    label.ZIndex = 50
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromHex("1E1820")
-    stroke.Thickness = 3
-    stroke.Parent = label
-    label.Parent = board
-
-    local fade = TweenInfo.new(0.4)
-    task.delay(BOSS_CALL_TIME, function()
-        TweenService:Create(label, fade, {TextTransparency = 1}):Play()
-        TweenService:Create(stroke, fade, {Transparency = 1}):Play()
-        task.wait(0.4)
-        label:Destroy()
-    end)
+    ShowBoardCall(abilityName .. "!")
 end
 
 local function OnPieceStunned(id, isStunned, kind)
@@ -895,10 +932,15 @@ function BoardController.Init(actionPanelController)
     actionPanel.OnSelectionChanged = function()
         -- Reload happens on select instead of waiting for a tile click
         if actionPanel.SelectedAction == "Reload" then
-            if CanAct(ActionCost.Reload, "Reload") and turnState.Ammo < turnState.MaxAmmo then
+            if turnState.Ammo < turnState.MaxAmmo and TryAct(ActionCost.Reload, "Reload") then
                 BoardRemote:FireServer("Reload")
             end
 
+            actionPanel.ClearSelection()
+            return
+        end
+
+        if actionPanel.SelectedAction == "Ultimate" and not AbilityController.CanUseUltimate() then
             actionPanel.ClearSelection()
             return
         end
@@ -939,6 +981,7 @@ function BoardController.Init(actionPanelController)
             return actionPanel.SelectedAction == action
         end,
         CanAct = CanAct,
+        TryAct = TryAct,
         IsOccupied = IsOccupied,
         HighlightTile = HighlightTile,
         IsEnemyTile = IsEnemyTile,
@@ -1012,6 +1055,9 @@ function BoardController.Init(actionPanelController)
             BoardEffectsController.ShowEnergy(...)
         elseif action == "KingHealed" then
             OnKingHealed(...)
+        elseif action == "PieceHealed" then
+            -- A rival or boss Reaper healing, once his souls have reached him
+            task.delay(BoardEffectsController.GetAbsorbWait(), PieceController.Heal, ...)
         elseif action == "KingAmbushed" then
             OnKingAmbushed(...)
         elseif action == "PieceDamaged" then

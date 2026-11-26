@@ -43,6 +43,17 @@ function PieceController.ApplyDamage(id, health)
     piece.Rig:Die()
 end
 
+-- Healing raises the bar without the hit flash and plays the green burst
+function PieceController.Heal(id, health)
+    local piece = pieces[id]
+    if not piece then return end
+
+    piece.Rig:SetHealth(health)
+    piece.Rig:ShowHealth()
+    piece.Rig:HideHealth()
+    piece.Rig:PlayHeal()
+end
+
 -- The attacker lunges at the target and returns to its tile
 -- Survivors flash like any hit, killed pieces are knocked over and crumble
 -- isCapture: the attacker takes the killed piece's square instead of returning (summoned pieces)

@@ -11,10 +11,6 @@ local AIBoard = require(script.Parent.AIBoard)
 local BossConfig = AIConfig.Boss
 local GetKey = AIBoard.GetKey
 
--- Campaign boss Kings using their class on the enemy turn, with the same numbers as the player's version
--- Bosses have no energy or charge: the special comes back after a cooldown, the ultimate unlocks once at low health
--- Each class has a Decide (scores what to use once the pieces have planned) and Use (applies it) pair in Classes;
--- Timing says whether an ability goes off before the pieces act or after they've moved
 local BossAbilityService = {}
 
 local Classes = {}
@@ -214,8 +210,9 @@ function Classes.Reaper.Use(boss, kind, payload)
     king.Health = math.min(king.Health + math.min(high.HealPerSoul * #absorbed, high.MaxHeal), king.MaxHealth)
     boss.ShotBonus += high.DamagePerSoul * #absorbed
 
-    match:SendAll("SoulsRemoved", absorbed)
-    match:SendAll("PieceDamaged", king.Id, king.Health)
+    -- The souls fly into the boss, then he heals
+    match:SendAll("SoulsRemoved", absorbed, true, king.Column, king.Row)
+    match:SendAll("PieceHealed", king.Id, king.Health)
 
     return true
 end

@@ -23,7 +23,9 @@ local TRAP_SNAP_LIFT = 0.35
 
 -- In seconds
 local FADE_TIME = 0.35
-local ABSORB_TIME = 0.4
+-- Absorbed souls set off one after another, swing out on an arc and dive into their Reaper, speeding up as they go
+local ABSORB_TIME = 0.55
+local ABSORB_STAGGER = 0.09
 local BOLT_TIME = 0.8
 local BOLT_STAGGER = 0.15
 local BOLAS_FLIGHT_TIME = 0.35
@@ -31,6 +33,13 @@ local BOLAS_FLIGHT_TIME = 0.35
 local TRAP_SNAP_DELAY = 0.25
 local TRAP_HOLD_TIME = 0.15
 local TRAP_FADE_TIME = 1
+
+-- In tiles: how high and how far sideways an absorbed soul's arc swings
+local ABSORB_ARC = 1.1
+local ABSORB_SWING = 0.6
+-- An absorbed soul shrinks to this share of its size and fades over the last part of its flight
+local ABSORB_END_SCALE = 0.45
+local ABSORB_FADE_FROM = 0.7
 
 -- See-through enough that pieces inside still show
 local SMOKE_TRANSPARENCY = 0.4
@@ -41,6 +50,8 @@ local souls = {}
 local traps = {}
 local smoke = nil
 local getKingTile = nil
+-- When the last absorbed soul reaches its Reaper, so the heal can wait for it
+local absorbEndsAt = 0
 
 -- Board-level effects that aren't tied to one piece: souls, traps, smoke, energy pickups and bolas throws
 local BoardEffectsController = {}
@@ -144,9 +155,38 @@ function BoardEffectsController.AddSoul(id, pieceType, column, row, isRival)
     souls[id] = soul
 end
 
--- Absorbed souls fly into the king; used ones just fade
-function BoardEffectsController.RemoveSouls(ids, isAbsorbed)
-    local kingColumn, kingRow = getKingTile()
+-- Flies an absorbed soul along a curve through control into target, shrinking and fading at the end
+local function AbsorbSoul(effect, control, target, duration)
+    local from = effect.BasePosition
+    local baseSize = effect.Image.Size
+    local startTime = time()
+
+    task.spawn(function()
+        while time() - startTime < duration do
+            local alpha = (time() - startTime) / duration
+            local t = alpha ^ 1.6
+            local scale = 1 - (1 - ABSORB_END_SCALE) * alpha
+
+            effect.BasePosition = from:Lerp(control, t):Lerp(control:Lerp(target, t), t)
+            effect.Image.Size = UDim2.fromScale(baseSize.X.Scale * scale, baseSize.Y.Scale * scale)
+            effect.Image.ImageTransparency = math.clamp((alpha - ABSORB_FADE_FROM) / (1 - ABSORB_FADE_FROM), 0, 1)
+
+            task.wait()
+        end
+
+        effect:Destroy()
+    end)
+end
+
+-- Absorbed souls fly into the Reaper on that tile (your own King if none is given); used ones just fade
+function BoardEffectsController.RemoveSouls(ids, isAbsorbed, targetColumn, targetRow)
+    if not targetColumn then
+        targetColumn, targetRow = getKingTile()
+    end
+
+    local flight = SpeedController.Scale(ABSORB_TIME)
+    local stagger = SpeedController.Scale(ABSORB_STAGGER)
+    local count = 0
 
     for _, id in ipairs(ids) do
         local soul = souls[id]
@@ -155,14 +195,33 @@ function BoardEffectsController.RemoveSouls(ids, isAbsorbed)
             souls[id] = nil
             soul.Ghost:Destroy()
 
-            if isAbsorbed and kingColumn then
+            if isAbsorbed and targetColumn then
+                -- Into the Reaper's body rather than his feet
+                local target = ToBoardPosition(targetColumn, targetRow) - UDim2.fromScale(0, SOUL_LIFT / BoardConfig.SIZE)
+                local from = soul.Effect.BasePosition
+                -- Every other soul swings out the other way, so a handful fan out instead of sharing one path
+                local side = count % 2 == 0 and 1 or -1
+                local control = from:Lerp(target, 0.5)
+                    + UDim2.fromScale(side * ABSORB_SWING / BoardConfig.SIZE, -ABSORB_ARC / BoardConfig.SIZE)
+
                 soul.Effect.BobHeight = 0
-                FadeAndDestroy(soul.Effect, ToBoardPosition(kingColumn, kingRow), ABSORB_TIME)
+
+                task.delay(count * stagger, AbsorbSoul, soul.Effect, control, target, flight)
+                count += 1
             else
                 FadeAndDestroy(soul.Effect)
             end
         end
     end
+
+    if count > 0 then
+        absorbEndsAt = math.max(absorbEndsAt, time() + (count - 1) * stagger + flight)
+    end
+end
+
+-- Seconds until the last absorbed soul reaches its Reaper, 0 once they all have
+function BoardEffectsController.GetAbsorbWait()
+    return math.max(absorbEndsAt - time(), 0)
 end
 
 function BoardEffectsController.GetSouls()

@@ -48,6 +48,13 @@ local EMPTY_COLOR = Color3.fromHex("4A3D48")
 local PREVIEW_COLOR = Color3.new(1, 1, 1)
 -- Border of the health bar while a Morale shield is up
 local SHIELD_COLOR = Color3.fromHex("8CD3F2")
+-- The shield's wind bubble is see-through so the piece inside still reads; pawns are shorter, so theirs is smaller
+local SHIELD_TRANSPARENCY = 0.15
+local SHIELD_FADE_TIME = 0.25
+local SMALL_SHIELD_SCALE = 0.8
+local SMALL_PIECES = {Pawn = true, FallenPawn = true}
+-- The heal's ring sits this far above the bottom of its frame, so it lines up with the piece's feet
+local HEAL_RING_LIFT = 5 * PIXEL
 local PREVIEW_PULSE_TIME = 0.45
 
 -- Name shown above the health bar, fading in and out with it, in tiles
@@ -157,6 +164,7 @@ function PieceRigClass.new(board, pieceType, team, outfit)
     self.ArrowEffect = nil
     self.MarkEffect = nil
     self.AuraEffect = nil
+    self.ShieldEffect = nil
 
     -- The Fallen Knight and his pawns burn with a blue-green aura drawn behind their sprites
     if pieceType == "FallenKnight" or pieceType == "FallenPawn" then
@@ -436,16 +444,60 @@ function PieceRigClass:SetOutfit(outfit)
     self.Sprite:SetOutfit(outfit)
 end
 
--- A shielded piece keeps its bar up, bordered in blue, until the shield is gone
+-- A shielded piece keeps its bar up, bordered in blue, and sits in a bubble of wind until the shield is gone
 function PieceRigClass:SetShield(amount)
     self.Shield = amount
     self.HealthBar.BackgroundColor3 = amount > 0 and SHIELD_COLOR or OUTLINE_COLOR
 
     if amount > 0 then
         self:ShowHealth()
+        self:ShowShieldBubble()
     else
         self:HideHealth()
+        self:RemoveShieldBubble()
     end
+end
+
+function PieceRigClass:ShowShieldBubble()
+    if self.ShieldEffect then return end
+
+    local scale = SMALL_PIECES[self.PieceType] and SMALL_SHIELD_SCALE or 1
+    local bubble = EffectSpriteClass.new("Shield", self.Rig)
+    bubble.Image.Size = UDim2.fromScale(bubble.Width * scale, bubble.Height * scale)
+    bubble.Image.ZIndex = 4
+    bubble.Image.ImageTransparency = SHIELD_TRANSPARENCY
+    -- Centered on the body, between the top of the head and the feet
+    bubble.BasePosition = UDim2.fromScale(0.5, (GetHeadTop(self.PieceType) + BODY_BOTTOM) / 2)
+
+    self.ShieldEffect = bubble
+end
+
+-- The bubble fades away when the shield breaks or runs out
+function PieceRigClass:RemoveShieldBubble()
+    local bubble = self.ShieldEffect
+    if not bubble then return end
+
+    self.ShieldEffect = nil
+
+    local fade = TweenService:Create(bubble.Image, TweenInfo.new(SpeedController.Scale(SHIELD_FADE_TIME)), {ImageTransparency = 1})
+
+    fade.Completed:Connect(function()
+        bubble:Destroy()
+    end)
+
+    fade:Play()
+end
+
+-- Green ring and rising plus signs from the piece's feet (Reaper's High)
+function PieceRigClass:PlayHeal()
+    local heal = EffectSpriteClass.new("Heal", self.Rig)
+    heal.Image.Size = UDim2.fromScale(heal.Width, heal.Height)
+    heal.Image.ZIndex = 4
+    heal.BasePosition = UDim2.fromScale(0.5, BODY_BOTTOM + HEAL_RING_LIFT - heal.Height / 2)
+
+    heal:PlayOnce(function()
+        heal:Destroy()
+    end)
 end
 
 function PieceRigClass:ShowHealth()
@@ -629,6 +681,7 @@ function PieceRigClass:Die()
     self:SetArrow(false)
     self:SetMarked(false)
     self:RemoveAura()
+    self:RemoveShieldBubble()
     self.PreviewDamage = 0
 
     self.HideToken += 1
@@ -650,6 +703,11 @@ function PieceRigClass:Destroy()
     self:SetStunned(false)
     self:SetMarked(false)
     self:RemoveAura()
+
+    if self.ShieldEffect then
+        self.ShieldEffect:Destroy()
+        self.ShieldEffect = nil
+    end
 
     if self.ArrowEffect then
         self.ArrowEffect:Destroy()

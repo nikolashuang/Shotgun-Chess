@@ -129,7 +129,8 @@ function TurnController.Init()
 
     turnLabel = turnBar:WaitForChild("TurnLabel")
     endTurnButton = turnBar:WaitForChild("EndTurnButton")
-    clockLabel = hud.Root:WaitForChild("DuelClock")
+    -- Centered in the turn bar; the Duels place's HUD may still have it on the root
+    clockLabel = turnBar:FindFirstChild("DuelClock") or hud.Root:WaitForChild("DuelClock")
     moveLabel = hud.Root:WaitForChild("ActionPanel"):WaitForChild("MoveLabel")
     moveLabel.Visible = false
     movePulse = TweenService:Create(moveLabel:WaitForChild("UIScale"), MOVE_PULSE, {Scale = MOVE_PULSE_SCALE})
