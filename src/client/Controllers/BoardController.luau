@@ -347,7 +347,8 @@ local function ApplyDamagePreview()
         local piece = PieceController.Get(id)
 
         if piece then
-            piece.Rig:SetDamagePreview(damage)
+            -- A Morale shield soaks up the first hits before health, like on the server
+            piece.Rig:SetDamagePreview(math.max(damage - piece.Rig.Shield, 0))
         end
     end
 
