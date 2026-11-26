@@ -1,7 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 
 local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BoardRemote")
 
@@ -9,19 +8,11 @@ local PLAYER_COLOR = Color3.fromHex("E9E3D6")
 local ENEMY_COLOR = Color3.fromHex("C8644F")
 local READY_COLOR = Color3.fromHex("F1D4AC")
 local DISABLED_COLOR = Color3.fromHex("9C574B")
-local MUTED_COLOR = Color3.fromHex("8A8290")
 
 -- Duel clocks turn red below this many seconds
 local LOW_CLOCK = 30
 
--- Move Ready grows and shrinks while the King can still move
-local MOVE_PULSE = TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
-local MOVE_PULSE_SCALE = 1.12
-
 local turnLabel = nil
--- Beside the Actions header, so players see whether their King can still move this turn
-local moveLabel = nil
-local movePulse = nil
 local endTurnButton = nil
 local clockLabel = nil
 local isMyTurn = false
@@ -83,28 +74,6 @@ local function Update(state)
         turnLabel.TextColor3 = ENEMY_COLOR
     end
 
-    moveLabel.Visible = isMyTurn or state.Phase == "Stunned"
-
-    if state.Phase == "Stunned" then
-        moveLabel.Text = "Can't Move"
-        moveLabel.TextColor3 = ENEMY_COLOR
-    elseif state.HasMoved then
-        moveLabel.Text = "Moved"
-        moveLabel.TextColor3 = MUTED_COLOR
-    else
-        moveLabel.Text = "Move Ready"
-        moveLabel.TextColor3 = READY_COLOR
-    end
-
-    local isPulsing = isMyTurn and not state.HasMoved
-
-    if isPulsing and movePulse.PlaybackState ~= Enum.PlaybackState.Playing then
-        movePulse:Play()
-    elseif not isPulsing and movePulse.PlaybackState == Enum.PlaybackState.Playing then
-        movePulse:Cancel()
-        movePulse.Instance.Scale = 1
-    end
-
     endTurnButton.UIStroke.Color = isMyTurn and READY_COLOR or DISABLED_COLOR
     endTurnButton.Label.TextTransparency = isMyTurn and 0 or 0.6
 end
@@ -131,9 +100,6 @@ function TurnController.Init()
     endTurnButton = turnBar:WaitForChild("EndTurnButton")
     -- Centered in the turn bar; the Duels place's HUD may still have it on the root
     clockLabel = turnBar:FindFirstChild("DuelClock") or hud.Root:WaitForChild("DuelClock")
-    moveLabel = hud.Root:WaitForChild("ActionPanel"):WaitForChild("MoveLabel")
-    moveLabel.Visible = false
-    movePulse = TweenService:Create(moveLabel:WaitForChild("UIScale"), MOVE_PULSE, {Scale = MOVE_PULSE_SCALE})
 
     endTurnButton.Activated:Connect(TurnController.EndTurn)
     RunService.Heartbeat:Connect(UpdateClock)

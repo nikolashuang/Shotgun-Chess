@@ -73,13 +73,32 @@ end
 
 -- saved holds only the actions moved off their default key
 function InputController.LoadBindings(saved)
+    local savedActions = {}
+
     for action, keyName in pairs(KeybindConfig.Defaults) do
         local savedName = saved[action]
         local isKey, keyCode = pcall(function()
             return Enum.KeyCode[savedName]
         end)
 
-        bindings[action] = (savedName and isKey) and keyCode or Enum.KeyCode[keyName]
+        if savedName and isKey then
+            bindings[action] = keyCode
+            savedActions[action] = true
+        else
+            bindings[action] = Enum.KeyCode[keyName]
+        end
+    end
+
+    -- A changed default can land on a key the player already gave another action;
+    -- the default one then takes that action's old default key, like a swap in Settings
+    for action in pairs(KeybindConfig.Defaults) do
+        if savedActions[action] then continue end
+
+        for other in pairs(savedActions) do
+            if bindings[other] == bindings[action] then
+                bindings[action] = Enum.KeyCode[KeybindConfig.Defaults[other]]
+            end
+        end
     end
 
     RefreshLabels()

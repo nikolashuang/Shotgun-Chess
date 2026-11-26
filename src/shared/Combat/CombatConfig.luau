@@ -2,12 +2,14 @@ local CombatConfig = {
     Energy = {
         -- Energy is gained at the start of every player turn, including the first
         START_ENERGY = 0,
-        ENERGY_PER_TURN = 1,
+        ENERGY_PER_TURN = 2,
         MAX_ENERGY = 8,
     },
 
     -- Energy each action costs; summon costs live in PieceConfig.Cost
     ActionCost = {
+        -- The King's one step per turn; Assimilate's bonus moves are free
+        Move = 1,
         Fire = 1,
         Command = 1,
         Reload = 1,

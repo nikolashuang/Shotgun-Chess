@@ -1,7 +1,8 @@
 local KeybindConfig = {
-    ORDER = {"Fire", "Special", "Ultimate", "Summon", "Command", "Reload", "EndTurn"},
+    ORDER = {"Move", "Fire", "Special", "Ultimate", "Summon", "Command", "Reload", "EndTurn"},
 
     DisplayNames = {
+        Move = "Move",
         Fire = "Fire Shotgun",
         Special = "Special",
         Ultimate = "Ultimate",
@@ -13,13 +14,14 @@ local KeybindConfig = {
 
     -- Enum.KeyCode names
     Defaults = {
+        Move = "W",
         Fire = "Q",
         Special = "E",
         Ultimate = "F",
-        Summon = "W",
+        Summon = "S",
         Command = "A",
         Reload = "R",
-        EndTurn = "X",
+        EndTurn = "Space",
     },
 
     -- Short badge labels for keys whose names are too long

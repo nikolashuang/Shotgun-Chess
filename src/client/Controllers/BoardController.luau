@@ -158,10 +158,16 @@ local function TryAct(cost, action)
 end
 
 -- Assimilate's bonus move is still open after the king's own move
+local function IsAssimilating()
+    return turnState.Ability ~= nil and turnState.Ability.Assimilate ~= nil
+end
+
+-- The King's step costs energy like any action; Assimilate's bonus moves are free
 local function CanMove()
     if not IsMyTurn() then return false end
+    if IsAssimilating() then return true end
 
-    return not turnState.HasMoved or (turnState.Ability ~= nil and turnState.Ability.Assimilate ~= nil)
+    return not turnState.HasMoved and turnState.Energy >= ActionCost.Move
 end
 
 local function SetOverlay(tile, color, transparency)
@@ -520,7 +526,8 @@ local function DrawPreview()
 
     if not kingColumn then return end
 
-    if selectedAction == nil then
+    -- Picking Move does the same as having nothing picked: the King's steps show and a click moves him
+    if selectedAction == nil or selectedAction == "Move" then
         if not CanMove() then return end
 
         -- Assimilate (Reaper) swaps the king's step for another piece's movement
@@ -669,8 +676,7 @@ local function OnTileClicked(column, row)
                 return
             end
         end
-    elseif selectedAction == nil then
-        if not CanMove() then return end
+    elseif selectedAction == nil or selectedAction == "Move" then
         if IsOccupied(column, row) then return end
 
         local moveType = turnState.Ability and turnState.Ability.Assimilate
@@ -679,9 +685,16 @@ local function OnTileClicked(column, row)
             if not PieceRules.IsValidMove(moveType, "White", kingColumn, kingRow, column, row, IsOccupied) then return end
         elseif not BoardRules.IsValidKingMove(kingColumn, kingRow, column, row) then
             return
+        elseif turnState.HasMoved or not TryAct(ActionCost.Move, "Move") then
+            -- Only a click on a step the King could take warns about energy
+            return
         end
 
         BoardRemote:FireServer("Move", column, row)
+
+        if selectedAction == "Move" then
+            actionPanel.ClearSelection()
+        end
     end
 end
 

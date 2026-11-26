@@ -1,10 +1,22 @@
 -- Game version shown in the corner of every screen, and the patch notes on the main menu
 -- One release per day: bump the last number each day, and the middle one (resetting the last) only for a huge update
 local PatchNotes = {
-    VERSION = "0.5.6",
+    VERSION = "0.5.7",
 
     -- Newest first
     Releases = {
+        {
+            Version = "0.5.7",
+            Date = "Nov 26",
+            Title = "Moving Costs Energy",
+            Notes = {
+                "Moving your King now costs 1 energy, and it has its own Move button at the top of the Actions panel (default key W). Clicking a tile next to your King still moves him too. The Move Ready label is gone.",
+                "New default keys: Move is W, Summon is S, and End Turn is Space.",
+                "You now gain 2 energy at the start of every turn (was 1).",
+                "Reaper's Assimilate moves are still free.",
+                "Aiming at a piece with a Morale shield now marks only the damage that gets past the shield.",
+            },
+        },
         {
             Version = "0.5.6",
             Date = "Nov 25",
@@ -14,6 +26,10 @@ local PatchNotes = {
                 "Enemy pieces no longer fall for pawns planted next to your King and keep pressing the attack until badly hurt (enemy Kings until half health); fleeing Rooks and Bishops can't dart from one side of the board to the other anymore.",
                 "The Monarch King now fights with his class: he shields his pieces with Morale when they're cornered, and calls Unyielding once he's down to half health.",
                 "New Index tab in the Armory: every enemy you can meet, with its health, damage, where you find it and a diagram of how it moves and attacks.",
+                "Trying to shoot with no ammo or act without enough energy now says so in red above the board.",
+                "Duels: the clocks sit in the middle of the top bar, between your health and a new card showing the rival King's health.",
+                "Fallen Pawns no longer have eyes.",
+                "Fixed the Ultimate key sometimes needing two presses when it had been picked before it was charged.",
             },
         },
         {

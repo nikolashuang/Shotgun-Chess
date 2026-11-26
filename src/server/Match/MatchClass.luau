@@ -830,6 +830,7 @@ function MatchClass:Move(side, column, row)
     local king = side.King
     local moveType = self:CallAbility(side, "GetMoveType")
     if side.HasMoved and not moveType then return end
+    if not moveType and not self:CanAct(side, ActionCost.Move, "Move") then return end
 
     if moveType then
         local function IsBlocked(blockColumn, blockRow)
@@ -845,6 +846,7 @@ function MatchClass:Move(side, column, row)
 
     if not moveType then
         side.HasMoved = true
+        self:SpendEnergy(side, ActionCost.Move, "Move")
     end
 
     self:CallAbility(side, "OnKingMoved")

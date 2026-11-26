@@ -19,7 +19,7 @@ The game is fully turn-based. All durations (stuns, souls, crafted weapons, etc.
 
 Turns are energy-based:
 
-- **Movement** — the king gets 1 free move per turn, like a chess king: one tile in any of the 8 directions.
+- **Movement** — the king can move once per turn for **1 energy** (Nov 26 2026: was free), like a chess king: one tile in any of the 8 directions. It has its own Move button (default key W; Summon is S, End Turn is Space) at the top of the action panel; clicking a highlighted tile with nothing selected also moves. Assimilate's bonus moves stay free.
 - **Actions** — each action can be used **once per turn**, in any order, as long as there's energy to pay for it (prevents spam; used actions fade out in the action panel):
    - **Fire shotgun** — 1 energy
    - **Command a piece** — 1 energy per 2 tiles the piece travels, rounded up (min 1; a knight's jump counts as 2) — move or attack with one of your pieces using its normal chess movement
@@ -39,7 +39,7 @@ Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuni
 - **Rotating priority:** acting pieces plan in Id order, rotated by one each enemy turn.
 - **Planning (Nov 25 2026 revamp):** pieces plan one at a time on a shared board (`AI/AIBoard`). Each committed plan frees the piece's old tile and claims its new one, so later pieces see the lines it opens and the tiles it takes. Attacks then resolve first (checked against the board at the start of the turn) and moves run in plan order.
 - **Utility scoring:** every option is scored against every directive at once: the sum of directive weight × how well the option serves it, minus risk. Weights start from `AIConfig.Weights` and shift with the board: Defend grows when the enemy King is in danger, Attack grows as the player's king loses health. Profiles: Default Defend > Attack > Evade > Position > Teamwork > Advance; Queens put Attack above Defend until only their King and Queen are left; Rooks lean on Position, Bishops on Position at 3–5 tiles from the player's king, Knights on Attack and Teamwork. Enemy Kings: Evade > Attack > Ability > Teamwork > Position > Advance. Pawns and Fallen Pawns: Advance > Attack, where Advance means stepping toward the promotion row; they keep marching even into danger.
-   - Danger: only what the player can see. The player's king can step once and then blast (line of sight: non-piercing pellets never reach a tile behind an enemy piece) or slash with the Knife Shotty; it needs ammo, or energy to reload first, from next turn's energy. Only one white piece can be commanded per turn. Player class abilities aren't counted yet.
+   - Danger: only what the player can see. The player's king can step once (1 energy) and then blast (line of sight: non-piercing pellets never reach a tile behind an enemy piece) or slash with the Knife Shotty; it needs ammo, or energy to reload first, from next turn's energy. Only one white piece can be commanded per turn. Player class abilities aren't counted yet.
    - Risk: every option except a piece attack loses points for the damage the tile could take plus the piece's value (`AIConfig.PieceValue`) times its chance of dying there, and for allies within 1 tile the same blast could hit. Non-lethal risk is shared when several pieces are in reach, since the player's king only blasts one target a turn. Position, Teamwork and Advance only count as much as the piece is likely to survive the tile.
    - Defend: kill whatever threatens the enemy King, step into its line, or stand next to the King on the threat's side.
    - Evade: pieces press the attack until they're hurt: they only start actively retreating below 30% health, Kings below 50% (`AIConfig.EVADE_HEALTH`), and the pull grows as health drops. Above that they still avoid bad tiles through the risk cost. An evading Rook or Bishop slides at most 4 tiles (`AIConfig.SLIDE_CAP`, number is an assumption); attacks and normal moves use the full slide.
@@ -77,10 +77,10 @@ Campaign battles run the enemy AI (`ServerScriptService.AI.EnemyAIService`, tuni
 
 ### Energy
 
-- Each player gains 1 energy at the start of every turn (including the first), up to 8.
+- Each player gains 2 energy at the start of every turn (including the first), up to 8 (Nov 26 2026: was 1).
 - Starting energy is 0. *(Assumption — confirm.)*
 - Summon costs: Pawn 1, Knight 2, Bishop 2, Rook 3, Queen 6 (raised from 4 in Nov 2026 so the Queen is harder to get).
-- Action costs: Fire 1, Command 1+ (tiles ÷ 2, rounded up; `CombatConfig.COMMAND_TILES_PER_ENERGY`), Reload 1, Special 2, Ultimate 0. Only command tiles the player can afford are highlighted.
+- Action costs: Move 1, Fire 1, Command 1+ (tiles ÷ 2, rounded up; `CombatConfig.COMMAND_TILES_PER_ENERGY`), Reload 1, Special 2, Ultimate 0. Only command tiles the player can afford are highlighted.
 - Hovering an action button, or having an action selected, makes the energy it will spend flash between red and the empty-bar color on the energy bar; for a command, the hovered target sets the cost.
 - Only one active Queen per king.
 - Energy is also spent on fusion (cost undecided).

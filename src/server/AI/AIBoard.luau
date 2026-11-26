@@ -230,11 +230,15 @@ function AIBoard.GetKingDamage(context, column, row, ignorePiece)
 
     local best = 0
 
-    for _, tile in ipairs(context.PlayerReach) do
+    for i, tile in ipairs(context.PlayerReach) do
         local distance = BoardRules.GetDistance(tile.Column, tile.Row, column, row)
+        -- The first reach tile is where the King stands; any other costs a move first
+        local stepCost = i == 1 and 0 or ActionCost.Move
+        local canShoot = actions.ShotCost ~= nil and actions.Energy >= actions.ShotCost + stepCost
+        local canKnife = actions.canKnife and actions.Energy >= ActionCost.Fire + stepCost
 
         if distance >= 1 then
-            if actions.ShotCost and distance <= weapon.MaxRange then
+            if canShoot and distance <= weapon.MaxRange then
                 local originX, originY = ShotgunRules.GetKingOrigin(tile.Column, tile.Row)
                 local damage = ShotgunRules.GetDamage(distance, weapon) * weapon.Blasts + context.PlayerDamageBonus
 
@@ -248,7 +252,7 @@ function AIBoard.GetKingDamage(context, column, row, ignorePiece)
                 best = math.max(best, damage)
             end
 
-            if actions.canKnife and distance == 1 then
+            if canKnife and distance == 1 then
                 best = math.max(best, weapon.Knife.Damage + context.PlayerDamageBonus)
             end
         end

@@ -108,6 +108,7 @@ local function GetKingTiles(match, side)
     local tiles = {{Column = king.Column, Row = king.Row}}
 
     if side.HasMoved or king:IsStunned() then return tiles end
+    if not match:CanAct(side, ActionCost.Move, "Move") then return tiles end
 
     for columnStep = -1, 1 do
         for rowStep = -1, 1 do
@@ -128,9 +129,15 @@ local function PlanMove(match, side)
     local enemyKing = match:GetOpponent(side).King
     local options = {}
 
+    local king = side.King
+    -- Stepping spends energy too, so a step-and-shoot needs both
+    local canStepAndFire = canFire and side.Energy >= ActionCost.Move + ActionCost.Fire
+
     for _, tile in ipairs(GetKingTiles(match, side)) do
+        local isStep = tile.Column ~= king.Column or tile.Row ~= king.Row
+
         -- The king's own tile reads as occupied while it is checked from somewhere else, which is fine for aiming
-        local shot = canFire and GetBestShot(match, side, tile.Column, tile.Row)
+        local shot = (isStep and canStepAndFire or not isStep and canFire) and GetBestShot(match, side, tile.Column, tile.Row)
         local distance = BoardRules.GetDistance(tile.Column, tile.Row, enemyKing.Column, enemyKing.Row)
         local score = shot and shot.Value * 10 or 0
 

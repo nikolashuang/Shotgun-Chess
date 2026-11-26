@@ -15,9 +15,9 @@ local PieceConfig = {
     -- Damage a summoned piece deals when commanded onto an enemy
     Damage = {
         Pawn = 1,
-        Knight = 2,
-        Bishop = 2,
-        Rook = 3,
+        Knight = 3,
+        Bishop = 3,
+        Rook = 4,
         Queen = 5,
         FallenKnight = 4,
         FallenPawn = 1,

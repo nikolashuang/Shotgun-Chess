@@ -3,6 +3,8 @@ local Players = game:GetService("Players")
 
 local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
 local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
+local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
+local BoardRules = require(ReplicatedStorage.Shared.Board.BoardRules)
 
 local SELECTED_COLOR = Color3.fromHex("F1D4AC")
 local DEFAULT_COLOR = Color3.fromHex("9C574B")
@@ -41,8 +43,11 @@ local function GetCostText(action)
     local cost = CombatConfig.ActionCost[action]
     if not cost then return "" end
     if cost == 0 then return "Free" end
-    -- Longer commands cost more
-    if action == "Command" then return cost .. "+ Energy" end
+    -- Longer commands cost more, up to a slide from one corner of the board to the other
+    if action == "Command" then
+        local highest = BoardRules.GetCommandCost(1, 1, BoardConfig.SIZE, BoardConfig.SIZE)
+        return string.format("%d-%d Energy", cost, highest)
+    end
 
     return cost .. " Energy"
 end
