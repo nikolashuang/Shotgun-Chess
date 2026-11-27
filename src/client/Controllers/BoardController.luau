@@ -32,11 +32,10 @@ local REVOLVER_HOLD_TIME = 0.4
 -- Seconds between the blasts of a multi-blast shotgun
 local BLAST_INTERVAL = 0.18
 
-local MOVE_COLOR = Color3.fromHex("9C574B")
 local SUMMON_COLOR = Color3.fromHex("F1D4AC")
 local SELECT_COLOR = Color3.fromHex("F1D4AC")
 local ATTACK_COLOR = Color3.fromHex("C8644F")
--- Light fill so commanded moves stand out on both tile colors
+-- Light fill so moves stand out on both tile colors; the King's steps and commanded pieces look the same
 local COMMAND_MOVE_COLOR = Color3.fromHex("E9E3D6")
 local COMMAND_OUTLINE_COLOR = Color3.fromHex("332A35")
 local MOVE_OUTLINE_COLOR = Color3.fromHex("F1D4AC")
@@ -526,8 +525,8 @@ local function DrawPreview()
 
     if not kingColumn then return end
 
-    -- Picking Move does the same as having nothing picked: the King's steps show and a click moves him
-    if selectedAction == nil or selectedAction == "Move" then
+    -- Moving is an action like the rest: the King's steps only show once Move is picked
+    if selectedAction == "Move" then
         if not CanMove() then return end
 
         -- Assimilate (Reaper) swaps the king's step for another piece's movement
@@ -535,7 +534,7 @@ local function DrawPreview()
 
         if moveType then
             for _, move in pairs(PieceRules.GetMoves(moveType, "White", kingColumn, kingRow, IsOccupied)) do
-                HighlightTile(move.Column, move.Row, MOVE_COLOR, 0.45, true)
+                HighlightTile(move.Column, move.Row, COMMAND_MOVE_COLOR, 0.35, true, COMMAND_OUTLINE_COLOR)
             end
             return
         end
@@ -546,7 +545,7 @@ local function DrawPreview()
                 local row = kingRow + rowOffset
 
                 if BoardRules.IsValidKingMove(kingColumn, kingRow, column, row) and not IsOccupied(column, row) then
-                    HighlightTile(column, row, MOVE_COLOR, 0.45, true)
+                    HighlightTile(column, row, COMMAND_MOVE_COLOR, 0.35, true, COMMAND_OUTLINE_COLOR)
                 end
             end
         end
@@ -676,7 +675,7 @@ local function OnTileClicked(column, row)
                 return
             end
         end
-    elseif selectedAction == nil or selectedAction == "Move" then
+    elseif selectedAction == "Move" then
         if IsOccupied(column, row) then return end
 
         local moveType = turnState.Ability and turnState.Ability.Assimilate
@@ -691,10 +690,7 @@ local function OnTileClicked(column, row)
         end
 
         BoardRemote:FireServer("Move", column, row)
-
-        if selectedAction == "Move" then
-            actionPanel.ClearSelection()
-        end
+        actionPanel.ClearSelection()
     end
 end
 

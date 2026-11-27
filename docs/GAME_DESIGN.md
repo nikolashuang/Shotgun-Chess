@@ -19,7 +19,7 @@ The game is fully turn-based. All durations (stuns, souls, crafted weapons, etc.
 
 Turns are energy-based:
 
-- **Movement** — the king can move once per turn for **1 energy** (Nov 26 2026: was free), like a chess king: one tile in any of the 8 directions. It has its own Move button (default key W; Summon is S, End Turn is Space) at the top of the action panel; clicking a highlighted tile with nothing selected also moves. Assimilate's bonus moves stay free.
+- **Movement** — the king can move once per turn for **1 energy** (Nov 26 2026: was free), like a chess king: one tile in any of the 8 directions. It has its own Move button (default key W; Summon is S, End Turn is Space) at the top of the action panel; the king's steps only show, and a click only moves him, while Move is selected (same for Assimilate's bonus moves). Assimilate's bonus moves stay free.
 - **Actions** — each action can be used **once per turn**, in any order, as long as there's energy to pay for it (prevents spam; used actions fade out in the action panel):
    - **Fire shotgun** — 1 energy
    - **Command a piece** — 1 energy per 2 tiles the piece travels, rounded up (min 1; a knight's jump counts as 2) — move or attack with one of your pieces using its normal chess movement

@@ -10,10 +10,10 @@ local PatchNotes = {
             Date = "Nov 26",
             Title = "Moving Costs Energy",
             Notes = {
-                "Moving your King now costs 1 energy, and it has its own Move button at the top of the Actions panel (default key W). Clicking a tile next to your King still moves him too. The Move Ready label is gone.",
+                "Moving your King now costs 1 energy, and it has its own Move button at the top of the Actions panel (default key W). Pick Move first, then click where your King should go, like any other action. The Move Ready label is gone.",
                 "New default keys: Move is W, Summon is S, and End Turn is Space.",
                 "You now gain 2 energy at the start of every turn (was 1).",
-                "Reaper's Assimilate moves are still free.",
+                "Reaper's Assimilate moves are still free, and are made through the Move button too.",
                 "Aiming at a piece with a Morale shield now marks only the damage that gets past the shield.",
             },
         },
