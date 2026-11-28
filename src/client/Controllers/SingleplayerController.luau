@@ -1,7 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
-local CampaignArt = require(ReplicatedStorage.Shared.Campaign.CampaignArt)
+local ExpeditionArt = require(ReplicatedStorage.Shared.Expedition.ExpeditionArt)
 local ArmoryArt = require(ReplicatedStorage.Shared.UI.ArmoryArt)
 local PracticeController = require(script.Parent.PracticeController)
 
@@ -9,13 +9,13 @@ local LOCKED_COLOR = Color3.fromHex("8A8290")
 local HOVER_COLOR = Color3.fromHex("F1D4AC")
 local DEFAULT_COLOR = Color3.fromHex("9C574B")
 
--- Picks Campaign, Siege or Practice (a duel against the AI); Siege is locked until the mode is designed
+-- Picks Story, Expedition, Siege or Practice (a duel against the AI); Story and Siege are locked until they're designed
 local SingleplayerController = {}
 
 local function SetIsland(image, row, column)
-    local size = CampaignArt.ISLAND_SIZE
+    local size = ExpeditionArt.ISLAND_SIZE
 
-    image.Image = CampaignArt.ISLANDS
+    image.Image = ExpeditionArt.ISLANDS
     image.ImageRectOffset = Vector2.new(column, row) * size
     image.ImageRectSize = Vector2.new(size, size)
 end
@@ -30,9 +30,9 @@ local function BindHover(card)
     end)
 end
 
--- Drapes the campaign map's chain and padlock layers over a card's drawing
+-- Drapes the island art's chain and padlock layers over a card's drawing
 local function AddLock(art)
-    for name, column in pairs(CampaignArt.LockColumn) do
+    for name, column in pairs(ExpeditionArt.LockColumn) do
         local layer = art.Image:Clone()
         layer.Name = name
         layer.ZIndex = 2
@@ -52,11 +52,11 @@ function SingleplayerController.Init(openSettings)
     local playerGui = Players.LocalPlayer.PlayerGui
     local menu = playerGui:WaitForChild("MainMenu")
     local screen = playerGui:WaitForChild("SingleplayerScreen")
-    local campaign = playerGui:WaitForChild("CampaignScreen")
+    local expedition = playerGui:WaitForChild("ExpeditionScreen")
     local root = screen:WaitForChild("Root")
     local header = root:WaitForChild("Header")
     local practiceView = root:WaitForChild("PracticeView")
-    local cards = {root:WaitForChild("CampaignCard"), root:WaitForChild("PracticeCard"), root:WaitForChild("SiegeCard")}
+    local cards = {root:WaitForChild("StoryCard"), root:WaitForChild("ExpeditionCard"), root:WaitForChild("PracticeCard"), root:WaitForChild("SiegeCard")}
 
     -- Practice's Choose Difficulty panel replaces the cards on this screen
     local function ShowPractice(isShown)
@@ -68,13 +68,20 @@ function SingleplayerController.Init(openSettings)
         end
     end
 
-    local campaignCard = root:WaitForChild("CampaignCard")
-    SetIsland(campaignCard.Art.Image, 0, CampaignArt.IslandColumn.Training)
-    BindHover(campaignCard)
+    -- Story Mode is the old Campaign's future home; empty until it is written
+    local storyCard = root:WaitForChild("StoryCard")
+    SetIsland(storyCard.Art.Image, 0, ExpeditionArt.IslandColumn.KingsThrone)
+    storyCard.Art.Image.ImageColor3 = LOCKED_COLOR
+    storyCard.Label.TextTransparency = 0.5
+    AddLock(storyCard.Art)
 
-    campaignCard.Activated:Connect(function()
+    local expeditionCard = root:WaitForChild("ExpeditionCard")
+    SetIsland(expeditionCard.Art.Image, 0, ExpeditionArt.IslandColumn.Gravehollow)
+    BindHover(expeditionCard)
+
+    expeditionCard.Activated:Connect(function()
         screen.Enabled = false
-        campaign.Enabled = true
+        expedition.Enabled = true
     end)
 
     local practiceCard = root:WaitForChild("PracticeCard")

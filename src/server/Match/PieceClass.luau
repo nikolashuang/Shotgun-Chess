@@ -18,6 +18,8 @@ function PieceClass.new(id, pieceType, team, column, row)
 
     self.MaxHealth = PieceConfig.Health[pieceType]
     self.Health = self.MaxHealth
+    -- Added to the piece's base damage (Expedition Act scaling, summon upgrades)
+    self.DamageBonus = 0
 
     self.BleedDamage = 0
     self.BleedTurns = 0
@@ -26,6 +28,10 @@ function PieceClass.new(id, pieceType, team, column, row)
     self.isStunShown = false
 
     return self
+end
+
+function PieceClass:GetDamage()
+    return (PieceConfig.Damage[self.Type] or 0) + self.DamageBonus
 end
 
 -- Returns the health actually lost

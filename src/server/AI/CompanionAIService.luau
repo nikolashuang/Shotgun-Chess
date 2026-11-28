@@ -78,7 +78,7 @@ function CompanionAIService.Plan(match, piece)
         return target ~= nil and target.Team ~= piece.Team
     end
 
-    local damage = PieceConfig.Damage[piece.Type]
+    local damage = piece:GetDamage()
     local bestAttack, bestValue = nil, -math.huge
 
     for _, attack in pairs(PieceRules.GetAttacks(piece.Type, piece.Team, piece.Column, piece.Row, IsBlocked, IsEnemy)) do

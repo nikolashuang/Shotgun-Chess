@@ -1,6 +1,6 @@
 -- Enemies listed in the Armory's Index, in card order
 -- Health, damage and movement are read from PieceConfig, PieceRules and ShotgunConfig, so only the text lives here
--- Piece is the sprite and rules to use; Outfit dresses a King in a class; Region ties a King to the campaign region he rules
+-- Piece is the sprite and rules to use; Outfit dresses a King in a class; Region ties a King to the Expedition region he rules
 local IndexConfig = {
     -- Card slots shown in the grid; empty ones wait for enemies added later
     SLOTS = 20,
@@ -14,14 +14,16 @@ local IndexConfig = {
             Notes = "Slides any distance diagonally until something is in the way."},
         {Id = "Rook", Name = "Rook", Piece = "Rook", Where = "Every battle",
             Notes = "Slides any distance in straight lines until something is in the way."},
-        {Id = "Queen", Name = "Queen", Piece = "Queen", Where = "Queen and King fights",
-            Notes = "Slides any distance in any direction. Every region's Queen guards the road to its King."},
-        {Id = "FallenKnight", Name = "Fallen Knight", Piece = "FallenKnight", Where = "Mystery: Fallen Knight",
-            Notes = "Moves and strikes like both a King and a Knight. Still loyal to his fallen King."},
-        {Id = "FallenPawn", Name = "Fallen Pawn", Piece = "FallenPawn", Where = "Mystery: Fallen Knight",
-            Notes = "Guards the Fallen Knight's throne. Fights like a Pawn."},
-        {Id = "MonarchKing", Name = "Monarch King", Piece = "King", Outfit = "Monarch", Region = "Training"},
-        {Id = "HunterKing", Name = "Hunter King", Piece = "King", Outfit = "Hunter", Region = "Forest"},
+        {Id = "Queen", Name = "Queen", Piece = "Queen", Where = "Elite and Boss Battles",
+            Notes = "Slides any distance in any direction. Guards every Elite and Boss Battle."},
+        {Id = "Necromancer", Name = "Necromancer", Piece = "Necromancer", Where = "Gravehollow",
+            Notes = "Slides like a Rook. Raises a fallen ally within 3 tiles at half health instead of acting (3 turn cooldown, twice per battle). Can't raise Kings, Queens or other Necromancers."},
+        {Id = "FallenKnight", Name = "Fallen Knight", Piece = "FallenKnight", Where = "Gravehollow: Fallen Knight",
+            Notes = "Moves and strikes like both a King and a Knight. Beat him and he joins your Expedition."},
+        {Id = "FallenPawn", Name = "Fallen Pawn", Piece = "FallenPawn", Where = "Not in the Expedition yet",
+            Notes = "Guarded the Fallen Knight's throne. Fights like a Pawn."},
+        {Id = "MonarchKing", Name = "Monarch King", Piece = "King", Outfit = "Monarch", Region = "KingsThrone"},
+        {Id = "HunterKing", Name = "Hunter King", Piece = "King", Outfit = "Hunter", Region = "Overgrowth"},
         {Id = "BanditKing", Name = "Bandit King", Piece = "King", Outfit = "Outlaw", Region = "Cliffside"},
         {Id = "GunslingerKing", Name = "Gunslinger King", Piece = "King", Outfit = "Gunslinger", Region = "Outskirts"},
         {Id = "ReaperKing", Name = "Reaper King", Piece = "King", Outfit = "Reaper", Region = "Gravehollow"},

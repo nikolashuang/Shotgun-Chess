@@ -9,6 +9,8 @@ local KING = table.move(DIAGONAL, 1, #DIAGONAL, #ORTHOGONAL + 1, table.clone(ORT
 
 local SLIDES = {
     Rook = ORTHOGONAL,
+    -- Gravehollow's Rook variant
+    Necromancer = ORTHOGONAL,
     Bishop = DIAGONAL,
     Queen = table.move(DIAGONAL, 1, #DIAGONAL, #ORTHOGONAL + 1, table.clone(ORTHOGONAL)),
 }

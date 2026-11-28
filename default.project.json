@@ -17,7 +17,7 @@
         "ProfileRemote": {
           "$className": "RemoteEvent"
         },
-        "CampaignRemote": {
+        "ExpeditionRemote": {
           "$className": "RemoteEvent"
         },
         "DevRemote": {

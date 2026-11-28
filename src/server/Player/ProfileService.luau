@@ -7,8 +7,8 @@ local ProgressionRules = require(ReplicatedStorage.Shared.Player.ProgressionRule
 local SettingsConfig = require(ReplicatedStorage.Shared.Player.SettingsConfig)
 local KeybindConfig = require(ReplicatedStorage.Shared.Player.KeybindConfig)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
-local CampaignConfig = require(ReplicatedStorage.Shared.Campaign.CampaignConfig)
-local CampaignRules = require(ReplicatedStorage.Shared.Campaign.CampaignRules)
+local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
+local ExpeditionRules = require(ReplicatedStorage.Shared.Expedition.ExpeditionRules)
 local ShopConfig = require(ReplicatedStorage.Shared.Shop.ShopConfig)
 local SkinConfig = require(ReplicatedStorage.Shared.Skins.SkinConfig)
 
@@ -23,19 +23,29 @@ local MAX_RECEIPTS = 50
 local store = nil
 local Profiles = {}
 
--- Persistent player data: gold, exp, owned shotguns, unlocked classes, campaign progress and runs, and loadout
+-- Persistent player data: gold, exp, owned shotguns, unlocked classes, the Expedition in progress, and loadout
 -- Gold, Level and Exp are mirrored to player attributes; the rest is sent to the client as a snapshot
 local ProfileService = {}
+
+-- Every class is unlocked from the start
+local function GetAllClasses()
+    local classes = {}
+
+    for name in pairs(ClassConfig.Classes) do
+        classes[name] = true
+    end
+
+    return classes
+end
 
 local function NewData()
     return {
         Gold = ProgressionConfig.START_GOLD,
         Exp = 0,
         Shotguns = {[ShotgunConfig.STARTER] = true},
-        Classes = {},
-        Nodes = {},
-        -- Region -> the campaign run in progress there
-        Runs = {},
+        Classes = GetAllClasses(),
+        -- The Expedition run in progress (ExpeditionRules.NewRun), nil between runs
+        Expedition = nil,
         Equipped = {
             Shotgun = ShotgunConfig.STARTER,
             Class = nil,
@@ -87,12 +97,13 @@ local function Reconcile(data)
         end
     end
 
-    -- Classes added to a region after a player already beat it (King's Training -> Monarch) are granted here
-    for regionId, region in pairs(CampaignConfig.Regions) do
-        if region.Class and not region.DevOnly and CampaignRules.IsRegionComplete(data.Nodes, regionId) then
-            data.Classes[region.Class] = true
-        end
+    for name in pairs(ClassConfig.Classes) do
+        data.Classes[name] = true
     end
+
+    -- The old Campaign's progress and runs, replaced by the Expedition
+    data.Nodes = nil
+    data.Runs = nil
 
     return data
 end
@@ -126,28 +137,6 @@ local function ValidateKeybinds(keybinds)
     return saved
 end
 
--- Dev regions are for testing only: their runs and cleared nodes are never written to the DataStore
-local function StripDevRegions(data)
-    local stripped = table.clone(data)
-    stripped.Runs = table.clone(data.Runs)
-    stripped.Nodes = table.clone(data.Nodes)
-
-    for regionId, region in pairs(CampaignConfig.Regions) do
-        if not region.DevOnly then continue end
-
-        stripped.Runs[regionId] = nil
-        local prefix = regionId .. "."
-
-        for key in pairs(data.Nodes) do
-            if string.sub(key, 1, #prefix) == prefix then
-                stripped.Nodes[key] = nil
-            end
-        end
-    end
-
-    return stripped
-end
-
 local function LoadData(player)
     if not store then return nil end
 
@@ -156,8 +145,8 @@ local function LoadData(player)
             return store:GetAsync(tostring(player.UserId))
         end)
 
-        -- Runs are saved as they stand, so leaving mid-region picks up exactly where the player left
-        if ok then return StripDevRegions(Reconcile(result or NewData())) end
+        -- Runs are saved as they stand, so leaving mid-Expedition picks up exactly where the player left
+        if ok then return Reconcile(result or NewData()) end
 
         warn("[ProfileService] Load failed for " .. player.Name .. ": " .. tostring(result))
         task.wait(1)
@@ -191,8 +180,7 @@ function ProfileService.Sync(player)
     ProfileRemote:FireClient(player, "Profile", {
         Shotguns = data.Shotguns,
         Classes = data.Classes,
-        Nodes = data.Nodes,
-        Runs = CampaignRules.GetClientRuns(data.Runs),
+        Expedition = ExpeditionRules.GetClientRun(data.Expedition),
         Settings = data.Settings,
         Keybinds = data.Keybinds,
         Skins = data.Skins,
@@ -223,7 +211,7 @@ function ProfileService.AddExp(player, amount)
     profile.Data.Exp += amount
 end
 
--- Gold and Exp won by playing (campaign payouts and duels), doubled by any active boost
+-- Gold and Exp won by playing (Expedition payouts and duels), doubled by any active boost
 -- Returns what was actually added
 function ProfileService.AddEarned(player, gold, exp)
     local profile = Profiles[player]
@@ -288,14 +276,6 @@ function ProfileService.Reset(player)
     profile.Data = NewData()
 end
 
--- Throws away the player's dev region progress so the next visit starts fresh
-function ProfileService.ResetDevRegions(player)
-    local profile = Profiles[player]
-    if not profile then return end
-
-    profile.Data = StripDevRegions(profile.Data)
-end
-
 -- Returns true once the profile is safely written
 function ProfileService.Save(player)
     local profile = Profiles[player]
@@ -308,7 +288,7 @@ function ProfileService.Save(player)
 
     local ok, result = pcall(function()
         store:UpdateAsync(tostring(player.UserId), function()
-            return StripDevRegions(profile.Data)
+            return profile.Data
         end)
     end)
 

@@ -10,8 +10,7 @@ local ProfileController = {}
 ProfileController.Data = {
     Shotguns = {},
     Classes = {},
-    Nodes = {},
-    Runs = {},
+    Expedition = nil,
     Settings = {},
     Skins = {Board = {}, Shotgun = {}, Piece = {}},
 }

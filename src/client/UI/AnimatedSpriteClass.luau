@@ -3,6 +3,7 @@ local RunService = game:GetService("RunService")
 
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
 local ClassKingConfig = require(ReplicatedStorage.Shared.Sprites.ClassKingConfig)
+local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local SpeedController = require(script.Parent.Parent.Controllers.SpeedController)
 
 local activeSprites = {}
@@ -15,7 +16,10 @@ AnimatedSpriteClass.__index = AnimatedSpriteClass
 function AnimatedSpriteClass.new(pieceName, parent, team, outfit)
     local self = setmetatable({}, AnimatedSpriteClass)
 
-    self.PieceName = pieceName
+    -- Pieces without a sprite of their own yet borrow another's, tinted
+    local standIn = PieceConfig.SpriteStandIns[pieceName]
+
+    self.PieceName = standIn and standIn.Sprite or pieceName
     self.Team = team or "White"
 
     self.Image = Instance.new("ImageLabel")
@@ -24,6 +28,7 @@ function AnimatedSpriteClass.new(pieceName, parent, team, outfit)
     self.Image.ImageRectSize = Vector2.new(SpriteConfig.CELL, SpriteConfig.CELL)
     self.Image.ResampleMode = Enum.ResamplerMode.Pixelated
     self.Image.Interactable = false
+    self.Image.ImageColor3 = standIn and standIn.Tint or Color3.new(1, 1, 1)
     self.Image.Parent = parent
 
     self.Anim = nil

@@ -115,6 +115,8 @@ Classes.Reaper = {Timing = {Special = "After", Ultimate = "Before"}}
 -- Reap: every piece that dies leaves a soul, allies included (shown as red flames)
 function Classes.Reaper.OnPieceKilled(boss, piece)
     if ReaperConfig.NO_SOUL[piece.Type] then return end
+    -- Pieces a Necromancer raised don't drop a second soul
+    if piece.isRaised then return end
 
     local match = boss.Match
     local soul = {Id = match.NextSoulId, Type = piece.Type, Column = piece.Column, Row = piece.Row}

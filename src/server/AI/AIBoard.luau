@@ -74,7 +74,7 @@ end
 local function GetPlayerActions(match, king)
     local side = match.Sides.White
     local weapon = king.Shotgun
-    local energy = math.min(side.Energy + EnergyConfig.ENERGY_PER_TURN, EnergyConfig.MAX_ENERGY)
+    local energy = math.min(side.Energy + EnergyConfig.ENERGY_PER_TURN, side.MaxEnergy)
 
     local actions = {Energy = energy, ShotCost = nil, canKnife = false, canCommand = energy >= ActionCost.Command}
 
@@ -269,7 +269,7 @@ local function GetPieceDamage(context, key)
 
     for target, tiles in pairs(context.Threats) do
         if tiles[key] and context.Health[target] > 0 then
-            best = math.max(best, PieceConfig.Damage[target.Type] or 0)
+            best = math.max(best, target.GetDamage and target:GetDamage() or PieceConfig.Damage[target.Type] or 0)
         end
     end
 

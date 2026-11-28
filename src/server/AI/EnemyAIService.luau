@@ -48,6 +48,15 @@ local function AdjustWeights(context, piece)
         weights.Defend *= 1 + AIConfig.KING_DANGER_DEFEND * kingRisk
     end
 
+    -- Expedition regions lean on different directives
+    local region = context.Match.RegionAI
+
+    if region and region.AIWeights then
+        for directive, scale in pairs(region.AIWeights) do
+            weights[directive] *= scale
+        end
+    end
+
     local playerHealth = math.max(context.Health[context.PlayerKing], 0)
     weights.Attack *= 1 + AIConfig.LOW_KING_ATTACK * (1 - playerHealth / context.PlayerMaxHealth)
 
@@ -330,8 +339,16 @@ end
 local function GetAdvanceValue(context, piece, option)
     local value
 
+    -- A Necromancer with a raise ready walks toward the nearest fallen ally instead of the player
+    local fallen = piece.Type == "Necromancer" and context.Match:GetNearestFallen(piece)
+
     -- Pawns advance toward promotion: every row stepped forward counts fully, wherever the player is
-    if PAWNS[piece.Type] then
+    if fallen then
+        local before = BoardRules.GetDistance(piece.Column, piece.Row, fallen.Column, fallen.Row)
+        local after = BoardRules.GetDistance(option.Column, option.Row, fallen.Column, fallen.Row)
+
+        value = math.clamp((before - after) / AIConfig.ADVANCE_STEP, -1, 1)
+    elseif PAWNS[piece.Type] then
         local rowsGained = (option.Row - piece.Row) * PieceRules.GetForward(piece.Team)
         value = math.clamp(rowsGained, 0, 1)
     else
@@ -363,7 +380,12 @@ local function GetLoss(context, piece, column, row, danger, isBait)
         loss /= 1 + AIConfig.SHARED_TARGET * context.ExposedAllies
     end
 
-    return loss + AIConfig.CLUSTER_PENALTY * AIBoard.CountExposedNeighbors(context, piece, column, row)
+    loss += AIConfig.CLUSTER_PENALTY * AIBoard.CountExposedNeighbors(context, piece, column, row)
+
+    -- Expedition regions take more or fewer risks (Outskirts trades freely, King's Throne avoids bad trades)
+    local region = context.Match.RegionAI
+
+    return loss * (region and region.Risk or 1)
 end
 
 -- Danger on the option's tile once its kills are taken off the board
@@ -532,7 +554,7 @@ local function GetOptions(context, piece)
 
         for _, attack in pairs(PieceRules.GetAttacks(piece.Type, piece.Team, piece.Column, piece.Row, IsBlocked, IsTarget)) do
             local target = context.Targets[GetKey(attack.Column, attack.Row)]
-            local damage = PieceConfig.Damage[piece.Type]
+            local damage = piece:GetDamage()
 
             -- A kill on a summoned piece captures its square, so the attacker ends the turn there
             local isCapture = not target.isKing and damage >= context.Health[target]
@@ -642,7 +664,8 @@ function EnemyAIService.PlanTurn(match)
     local acting = {}
 
     for _, piece in pairs(match.Pieces) do
-        if piece.Team == "Black" and piece:TickStun() then
+        -- Raised pieces and the Necromancer who raised them sit this turn out
+        if piece.Team == "Black" and piece:TickStun() and not piece.isResting then
             table.insert(acting, piece)
         end
     end

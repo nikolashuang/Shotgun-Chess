@@ -425,6 +425,8 @@ local function UpdateCommandDamage()
                 if attack.Column == column and attack.Row == row then
                     -- Unyielding (Monarch) adds to every allied attack this turn
                     local bonus = turnState.Ability and turnState.Ability.AllyDamageBonus or 0
+                    -- Expedition summon upgrades
+                    bonus += turnState.SummonDamageBonus or 0
                     commandDamage[target.Id] = (PieceConfig.Damage[selectedPiece.Type] or 0) + bonus
                 end
             end
@@ -1115,9 +1117,9 @@ function BoardController.LeaveMatch()
     BoardController.RefreshPreview()
 end
 
--- mode is "Campaign" (with the region and node ids); duels are started by the server
-function BoardController.StartMatch(mode, regionId, nodeId)
-    BoardRemote:FireServer("StartMatch", mode, regionId, nodeId)
+-- mode is "Expedition" (with the node id); duels are started by the server
+function BoardController.StartMatch(mode, nodeId)
+    BoardRemote:FireServer("StartMatch", mode, nodeId)
 end
 
 return BoardController

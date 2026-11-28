@@ -26,8 +26,10 @@ function KingClass.new(player, column, row, shotgunName, className, team)
 
     self.ShotgunName = shotgunName
     self.Shotgun = ShotgunRules.GetWeapon(shotgunName, className)
+    -- Expedition Gun Maintenance; set with SetAmmoBonus so the King starts full
+    self.AmmoBonus = 0
     self.Ammo = self.Shotgun.MaxAmmo
-    -- Added to every shotgun hit (campaign Gun Maintenance)
+    -- Added to every shotgun hit (Expedition upgrades)
     self.DamageBonus = 0
 
     self.BleedDamage = 0
@@ -78,6 +80,15 @@ function KingClass:MoveTo(column, row)
     return true
 end
 
+function KingClass:GetMaxAmmo()
+    return self.Shotgun.MaxAmmo + self.AmmoBonus
+end
+
+function KingClass:SetAmmoBonus(amount)
+    self.AmmoBonus = amount
+    self.Ammo = self:GetMaxAmmo()
+end
+
 function KingClass:CanFire(mode)
     if mode == "Alt" and not self.Shotgun.AltMode then return false end
     if self.Ammo < ShotgunRules.GetAmmoCost(self.Shotgun, mode) then return false end
@@ -95,9 +106,9 @@ function KingClass:SpendAmmo(mode)
 end
 
 function KingClass:Reload()
-    if self.Ammo >= self.Shotgun.MaxAmmo then return false end
+    if self.Ammo >= self:GetMaxAmmo() then return false end
 
-    self.Ammo = self.Shotgun.MaxAmmo
+    self.Ammo = self:GetMaxAmmo()
 
     return true
 end

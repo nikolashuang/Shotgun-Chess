@@ -270,7 +270,7 @@ function MenuController.Init(openSettings, openPatchNotes)
     end
 
     -- Every screen keeps Settings beside its Menu button at the bottom right screen edge; Singleplayer wires its own
-    for _, name in ipairs({"MultiplayerScreen", "ArmoryScreen", "ShopScreen", "CampaignScreen"}) do
+    for _, name in ipairs({"MultiplayerScreen", "ArmoryScreen", "ShopScreen", "ExpeditionScreen"}) do
         playerGui:WaitForChild(name):WaitForChild("SettingsButton").Activated:Connect(openSettings)
     end
 

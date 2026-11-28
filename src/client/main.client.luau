@@ -4,7 +4,7 @@ local DuelConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild
 local ActionPanelController = require(script.Parent.Controllers.ActionPanelController)
 local ArmoryController = require(script.Parent.Controllers.ArmoryController)
 local BoardController = require(script.Parent.Controllers.BoardController)
-local CampaignController = require(script.Parent.Controllers.CampaignController)
+local ExpeditionController = require(script.Parent.Controllers.ExpeditionController)
 local PatchNotesController = require(script.Parent.Controllers.PatchNotesController)
 local CombatHudController = require(script.Parent.Controllers.CombatHudController)
 local CrtController = require(script.Parent.Controllers.CrtController)
@@ -24,7 +24,7 @@ local WorldLockController = require(script.Parent.Controllers.WorldLockControlle
 
 WorldLockController.Init()
 
--- The duel place has only the game board: no menus, campaign or shop
+-- The duel place has only the game board: no menus, Expedition or shop
 if game.PlaceId == DuelConfig.DUEL_PLACE_ID then
     ActionPanelController.Init()
     BoardController.Init(ActionPanelController)
@@ -54,7 +54,7 @@ ArmoryController.Init()
 ShopController.Init()
 CrtController.Init()
 SettingsController.Init(InputController)
-CampaignController.Init(BoardController.StartMatch, BoardController.LeaveMatch)
-GameMenuController.Init(BoardController.LeaveMatch, CampaignController.ReturnToMap, SettingsController.Open, SettingsController.Close)
+ExpeditionController.Init(BoardController.StartMatch, BoardController.LeaveMatch)
+GameMenuController.Init(BoardController.LeaveMatch, ExpeditionController.ReturnToMap, SettingsController.Open, SettingsController.Close)
 DevPanelController.Init()
 ProfileController.Init()

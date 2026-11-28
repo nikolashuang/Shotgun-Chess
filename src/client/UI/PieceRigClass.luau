@@ -4,6 +4,7 @@ local TweenService = game:GetService("TweenService")
 
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
+local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local AnimatedSpriteClass = require(script.Parent.AnimatedSpriteClass)
 local EffectSpriteClass = require(script.Parent.EffectSpriteClass)
 local SpeedController = require(script.Parent.Parent.Controllers.SpeedController)
@@ -116,7 +117,8 @@ end
 
 -- Height of the top of the sprite's head inside the rig, in tiles from the rig's top
 local function GetHeadTop(pieceType)
-    local headRow = SpriteConfig.HeadRows[pieceType]
+    local standIn = PieceConfig.SpriteStandIns[pieceType]
+    local headRow = SpriteConfig.HeadRows[standIn and standIn.Sprite or pieceType]
 
     return BODY_BOTTOM - SpriteConfig.CELL_TILES * (1 - headRow / SpriteConfig.CELL)
 end

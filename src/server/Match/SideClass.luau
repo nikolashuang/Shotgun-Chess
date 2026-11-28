@@ -5,7 +5,7 @@ local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
 local EnergyConfig = CombatConfig.Energy
 
 -- One player's half of a match: their king, energy, ultimate, class and turn usage
--- Campaign matches have a single White side; duels have a White and a Black side, 2v2 two of each
+-- Expedition matches have a single White side; duels have a White and a Black side, 2v2 two of each
 local SideClass = {}
 
 SideClass.__index = SideClass
@@ -31,6 +31,8 @@ function SideClass.new(match, player, team, king, className)
     self.UsedActions = {}
 
     self.Energy = EnergyConfig.START_ENERGY
+    -- Lowered by Expedition upgrades (Blessing of Power's cost)
+    self.MaxEnergy = EnergyConfig.MAX_ENERGY
     self.UltimateCharge = 0
     -- Extra damage on every hit of the next shot (Reaper's High, Ambush)
     self.NextShotBonus = 0
@@ -55,7 +57,7 @@ function SideClass.new(match, player, team, king, className)
 end
 
 function SideClass:AddEnergy(amount)
-    self.Energy = math.min(self.Energy + amount, EnergyConfig.MAX_ENERGY)
+    self.Energy = math.min(self.Energy + amount, self.MaxEnergy)
 end
 
 function SideClass:GainEnergy()

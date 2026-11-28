@@ -5,7 +5,7 @@ local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
-local CampaignConfig = require(ReplicatedStorage.Shared.Campaign.CampaignConfig)
+local ExpeditionConfig = require(ReplicatedStorage.Shared.Expedition.ExpeditionConfig)
 local AnimatedSpriteClass = require(script.Parent.Parent.UI.AnimatedSpriteClass)
 
 local SELECTED_COLOR = Color3.fromHex("F1D4AC")
@@ -47,17 +47,17 @@ local function GetNotes(entry)
     if entry.Notes then return entry.Notes end
 
     -- Regional Kings: everything comes from the region and the class they hand out
-    local region = CampaignConfig.Regions[entry.Region]
+    local region = ExpeditionConfig.Regions[entry.Region]
     local class = ClassConfig.Classes[entry.Outfit]
     local weapon = GetKingWeapon()
 
-    return string.format("Rules %s and steps one tile in any direction. Shoots with a %s. Beat him to unlock the %s class.",
+    return string.format("Rules %s and steps one tile in any direction. Shoots with a %s and fights with the %s class.",
         region.DisplayName, weapon.DisplayName, class.DisplayName)
 end
 
 local function GetWhere(entry)
     if entry.Region then
-        return "King fight: " .. CampaignConfig.Regions[entry.Region].DisplayName
+        return "Boss Battle: " .. ExpeditionConfig.Regions[entry.Region].DisplayName
     end
 
     return entry.Where

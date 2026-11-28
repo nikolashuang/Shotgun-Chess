@@ -85,7 +85,7 @@ local function ShowClass()
             ArmoryArt.SetIcon(row.IconBox.Icon, name .. kind)
         else
             row.Text.Title.Text = "Locked"
-            row.Text.Body.Text = "Defeat a regional King in the Campaign to unlock a class."
+            row.Text.Body.Text = "Pick a class from the class bar."
             ArmoryArt.SetIcon(row.IconBox.Icon, nil)
         end
     end

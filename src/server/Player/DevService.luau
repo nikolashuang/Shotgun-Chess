@@ -6,8 +6,6 @@ local ProgressionConfig = require(ReplicatedStorage.Shared.Player.ProgressionCon
 local ProgressionRules = require(ReplicatedStorage.Shared.Player.ProgressionRules)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
-local CampaignConfig = require(ReplicatedStorage.Shared.Campaign.CampaignConfig)
-local CampaignRules = require(ReplicatedStorage.Shared.Campaign.CampaignRules)
 local ProfileService = require(ServerScriptService.Player.ProfileService)
 
 local DevRemote = ReplicatedStorage.Remotes.DevRemote
@@ -25,7 +23,7 @@ local function GetExpForLevel(level)
     return total
 end
 
--- Owns every shotgun and class, clears every campaign node and raises the level to the Duels unlock
+-- Owns every shotgun and class and raises the level to the Duels unlock
 local function UnlockAll(data)
     for name in pairs(ShotgunConfig.Shotguns) do
         data.Shotguns[name] = true
@@ -33,12 +31,6 @@ local function UnlockAll(data)
 
     for name in pairs(ClassConfig.Classes) do
         data.Classes[name] = true
-    end
-
-    for regionId, region in pairs(CampaignConfig.Regions) do
-        for nodeId in pairs(region.Nodes) do
-            data.Nodes[CampaignRules.GetNodeKey(regionId, nodeId)] = true
-        end
     end
 
     data.Exp = math.max(data.Exp, GetExpForLevel(ProgressionConfig.DUELS_UNLOCK_LEVEL))

@@ -1,10 +1,25 @@
 -- Game version shown in the corner of every screen, and the patch notes on the main menu
 -- One release per day: bump the last number each day, and the middle one (resetting the last) only for a huge update
 local PatchNotes = {
-    VERSION = "0.5.7",
+    VERSION = "0.6.0",
 
     -- Newest first
     Releases = {
+        {
+            Version = "0.6.0",
+            Date = "Nov 27",
+            Title = "Expeditions",
+            Notes = {
+                "The Campaign is now the Expedition: a replayable three-Act run. Each Act rolls one of its regions, King's Throne or Thorned Forest, then Cliffside or Outskirts, then Gravehollow, and ends with a Boss Battle.",
+                "Every Act has a new branching map on a scrolling sheet of paper styled for its region, from the gold-trimmed King's Throne to the vine-wrapped Thorned Forest. New encounter icons and a legend sit beside it.",
+                "Battles, Elites, Mysteries, Regional Encounters, Shops and Rest Sites. Earn Silver to spend on the road; Gold and XP wait in your pouch until you beat Act III.",
+                "Your health, upgrades and Artifacts carry through the whole run. Rest Sites save a checkpoint before you choose to Rest or service your gun.",
+                "Enemies grow stronger every Act, and every region's army fights its own way. Gravehollow brings the Necromancer, who raises fallen pieces.",
+                "New Mysteries: the Abandoned Barracks, the Wandering Doctor, the Statue of a Holy Rook and the Gambler. The Fallen Knight now waits only in Gravehollow.",
+                "Elite Expeditions start harder and have no checkpoints.",
+                "Every class is now unlocked from the start. Story Mode is coming soon.",
+            },
+        },
         {
             Version = "0.5.7",
             Date = "Nov 26",

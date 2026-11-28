@@ -3,6 +3,7 @@ local TweenService = game:GetService("TweenService")
 
 local BoardConfig = require(ReplicatedStorage.Shared.Board.BoardConfig)
 local SpriteConfig = require(ReplicatedStorage.Shared.Sprites.SpriteConfig)
+local PieceConfig = require(ReplicatedStorage.Shared.Board.PieceConfig)
 local EffectSpriteClass = require(script.Parent.Parent.UI.EffectSpriteClass)
 local PieceController = require(script.Parent.PieceController)
 local SpeedController = require(script.Parent.SpeedController)
@@ -119,7 +120,9 @@ end
 
 -- A faint copy of the piece the soul came from, so players can tell what Assimilate would give them
 local function NewGhost(soul)
-    local rows = SpriteConfig.Pieces[soul.Type]
+    -- Pieces without their own sprite yet use the one they borrow on the board
+    local standIn = PieceConfig.SpriteStandIns[soul.Type]
+    local rows = SpriteConfig.Pieces[standIn and standIn.Sprite or soul.Type]
 
     local ghost = Instance.new("ImageLabel")
     ghost.Name = "SoulGhost"

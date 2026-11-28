@@ -17,6 +17,7 @@ local EnemyAIService = require(ServerScriptService.AI.EnemyAIService)
 local BossAbilityService = require(ServerScriptService.AI.BossAbilityService)
 local PracticeAIService = require(ServerScriptService.AI.PracticeAIService)
 local CompanionAIService = require(ServerScriptService.AI.CompanionAIService)
+local AIConfig = require(ServerScriptService.AI.AIConfig)
 
 -- Each class's passive, special and ultimate live in its own component
 local ClassComponents = {
@@ -29,6 +30,8 @@ local ClassComponents = {
 
 local BoardRemote = ReplicatedStorage.Remotes.BoardRemote
 
+local NecromancerConfig = PieceConfig.Necromancer
+
 local EnergyConfig = CombatConfig.Energy
 local UltimateConfig = CombatConfig.Ultimate
 local ActionCost = CombatConfig.ActionCost
@@ -37,7 +40,7 @@ local MatchClass = {}
 
 MatchClass.__index = MatchClass
 
--- enemies is a list of {Type, Column, Row}; without one the match uses the test dummies
+-- enemies is a list of {Type, Column, Row, Class, MaxHealth, DamageBonus}; without one the match uses the test dummies
 -- aiRating is a key of AIConfig.Ratings; without one the enemies never act
 function MatchClass.new(player, shotgunName, className, enemies, aiRating)
     local self = setmetatable({}, MatchClass)
@@ -48,9 +51,18 @@ function MatchClass.new(player, shotgunName, className, enemies, aiRating)
     self.OnEnd = nil
     self.HasEnemyKing = false
 
-    -- Campaign Fallen Knight: {Type, Column, Row, Health} set before Start; Companion is the piece once placed
+    -- Expedition Fallen Knight: {Type, Column, Row, Health} set before Start; Companion is the piece once placed
     self.CompanionStart = nil
     self.Companion = nil
+
+    -- Expedition: {Health, Damage} added to every summoned piece, a function giving a promoted enemy's
+    -- max health and damage bonus for the Act, and the region whose AI weights the enemies use
+    self.SummonBonus = nil
+    self.ScaleEnemy = nil
+    self.RegionAI = nil
+
+    -- Black pieces that died this battle, for Necromancers to raise: {Type, Column, Row, MaxHealth, DamageBonus}
+    self.Fallen = {}
 
     self.Pieces = {}
     self.NextPieceId = 1
@@ -288,9 +300,9 @@ function MatchClass:GetTurnState(side)
         Class = side.ClassName,
         Shotgun = side.King.ShotgunName,
         Ammo = side.King.Ammo,
-        MaxAmmo = side.King.Shotgun.MaxAmmo,
+        MaxAmmo = side.King:GetMaxAmmo(),
         Energy = side.Energy,
-        MaxEnergy = EnergyConfig.MAX_ENERGY,
+        MaxEnergy = side.MaxEnergy,
         UltimateCharge = side.UltimateCharge,
         MaxUltimateCharge = UltimateConfig.MAX_CHARGE,
         KingHealth = side.King.Health,
@@ -298,6 +310,7 @@ function MatchClass:GetTurnState(side)
         KingStunned = side.King:IsStunned(),
         NextShotBonus = side.NextShotBonus,
         DamageBonus = side.King.DamageBonus,
+        SummonDamageBonus = self.SummonBonus and self.SummonBonus.Damage or 0,
         Ability = self:CallAbility(side, "GetState"),
         Clock = self:GetClock(side),
         EnemyClock = self:GetRivalClock(side),
@@ -372,11 +385,11 @@ function MatchClass:Setup()
     end
 
     for _, enemy in ipairs(self.Enemies) do
-        self:AddPiece(enemy.Type, "Black", enemy.Column, enemy.Row, nil, nil, enemy.Class)
+        self:AddPiece(enemy.Type, "Black", enemy.Column, enemy.Row, nil, nil, enemy.Class, enemy)
     end
 
     self.HasEnemyKing = self:CountPieces("King", "Black") > 0
-    -- Campaign boss Kings fight with their class's abilities
+    -- Expedition boss Kings fight with their class's abilities
     self.Boss = self.AIRating and BossAbilityService.New(self) or nil
 
     local ally = self.CompanionStart
@@ -511,10 +524,23 @@ end
 
 -- health starts the piece hurt (a companion carrying its health between battles)
 -- owner is the side that summoned it; a 2v2 teammate is told the piece isn't theirs to command
--- className dresses a King in that class's outfit (campaign boss Kings wear their region's class)
-function MatchClass:AddPiece(pieceType, team, column, row, health, owner, className)
+-- className dresses a King in that class's outfit (Expedition boss Kings wear their region's class)
+-- stats overrides the piece's {MaxHealth, DamageBonus} (Expedition enemies scaled for the Act)
+function MatchClass:AddPiece(pieceType, team, column, row, health, owner, className, stats)
     local piece = PieceClass.new(self.NextPieceId, pieceType, team, column, row)
-    piece.Health = health or piece.Health
+
+    if stats then
+        piece.MaxHealth = stats.MaxHealth or piece.MaxHealth
+        piece.DamageBonus = stats.DamageBonus or 0
+    end
+
+    -- Summoned pieces carry the run's summon upgrades
+    if owner and self.SummonBonus then
+        piece.MaxHealth += self.SummonBonus.Health
+        piece.DamageBonus += self.SummonBonus.Damage
+    end
+
+    piece.Health = health or piece.MaxHealth
     piece.Owner = owner
     piece.ClassName = className
     self.NextPieceId += 1
@@ -562,6 +588,18 @@ function MatchClass:DamagePiece(piece, amount, attacker, isKingHit)
     if piece:IsAlive() then return false end
 
     self.Pieces[piece.Id] = nil
+
+    -- A raised piece stays down the second time
+    if piece.Team == "Black" and not piece.isRaised then
+        table.insert(self.Fallen, {
+            Type = piece.Type,
+            Column = piece.Column,
+            Row = piece.Row,
+            MaxHealth = piece.MaxHealth,
+            DamageBonus = piece.DamageBonus,
+            ClassName = piece.ClassName,
+        })
+    end
 
     if isEnemy then
         self:CallAbility(attacker, "OnEnemyKilled", piece)
@@ -1089,7 +1127,7 @@ function MatchClass:Command(side, pieceId, column, row)
             return
         end
 
-        local damage = PieceConfig.Damage[piece.Type] + (self:CallAbility(side, "GetAllyDamageBonus", piece) or 0)
+        local damage = piece:GetDamage() + (self:CallAbility(side, "GetAllyDamageBonus", piece) or 0)
         local isCapture = self:DamagePiece(target, damage, side)
 
         if isCapture then
@@ -1284,6 +1322,8 @@ function MatchClass:StartEnemyTurn()
         BossAbilityService.PrepareTurn(self.Boss)
     end
 
+    self:RaiseDead()
+
     local plans = EnemyAIService.PlanTurn(self)
 
     task.delay(MatchConfig.ENEMY_THINK_TIME, function()
@@ -1291,6 +1331,11 @@ function MatchClass:StartEnemyTurn()
         if self.Turn ~= turn then return end
 
         self:RunEnemyPlans(plans)
+
+        for _, piece in pairs(self.Pieces) do
+            piece.isResting = nil
+        end
+
         if self:CheckDefeat() then return end
         -- Traps can kill enemies on their own turn
         if self:CheckVictory() then return end
@@ -1323,7 +1368,7 @@ function MatchClass:RunCompanion()
         local target = self:GetPieceAt(plan.Column, plan.Row)
         if not target or target.Team == piece.Team then return end
 
-        local damage = PieceConfig.Damage[piece.Type] + (self:CallAbility(self.Sides.White, "GetAllyDamageBonus", piece) or 0)
+        local damage = piece:GetDamage() + (self:CallAbility(self.Sides.White, "GetAllyDamageBonus", piece) or 0)
         local isCapture = self:DamagePiece(target, damage, self.Sides.White)
 
         if isCapture then
@@ -1342,6 +1387,87 @@ function MatchClass:RunCompanion()
 
     self:SendAll("PieceMoved", piece.Id, plan.Column, plan.Row)
     self:OnUnitMoved(piece)
+end
+
+--NECROMANCY--
+
+-- Fallen allies a Necromancer could raise now: in range, on a free tile, and of a type that can be raised
+function MatchClass:GetRaiseOptions(necromancer)
+    local options = {}
+
+    for _, fallen in ipairs(self.Fallen) do
+        local isInRange = BoardRules.GetDistance(necromancer.Column, necromancer.Row, fallen.Column, fallen.Row) <= NecromancerConfig.RANGE
+
+        if not fallen.isRaised and not NecromancerConfig.NO_RAISE[fallen.Type] and isInRange
+            and not self:IsOccupied(fallen.Column, fallen.Row) then
+            table.insert(options, fallen)
+        end
+    end
+
+    return options
+end
+
+function MatchClass:CanRaise(necromancer)
+    if (necromancer.RaiseCooldown or 0) > 0 then return false end
+    if (necromancer.Raises or 0) >= NecromancerConfig.MAX_RAISES then return false end
+
+    return true
+end
+
+-- The nearest fallen piece a Necromancer with a raise ready could walk toward, ignoring range
+function MatchClass:GetNearestFallen(necromancer)
+    if not self:CanRaise(necromancer) then return nil end
+
+    local best, bestDistance = nil, math.huge
+
+    for _, fallen in ipairs(self.Fallen) do
+        if not fallen.isRaised and not NecromancerConfig.NO_RAISE[fallen.Type] then
+            local distance = BoardRules.GetDistance(necromancer.Column, necromancer.Row, fallen.Column, fallen.Row)
+
+            if distance < bestDistance then
+                best, bestDistance = fallen, distance
+            end
+        end
+    end
+
+    return best
+end
+
+-- Before the enemies plan, each ready Necromancer spends its action raising the most valuable fallen ally in range
+-- Raised pieces come back at part of their max health with their Act-scaled damage, and wait a turn before acting
+function MatchClass:RaiseDead()
+    for _, necromancer in pairs(self.Pieces) do
+        if necromancer.Type ~= "Necromancer" or necromancer.Team ~= "Black" then continue end
+
+        if (necromancer.RaiseCooldown or 0) > 0 then
+            necromancer.RaiseCooldown -= 1
+            continue
+        end
+
+        if necromancer:IsStunned() or not self:CanRaise(necromancer) then continue end
+
+        local options = self:GetRaiseOptions(necromancer)
+        if #options == 0 then continue end
+
+        table.sort(options, function(a, b)
+            return (AIConfig.PieceValue[a.Type] or 1) > (AIConfig.PieceValue[b.Type] or 1)
+        end)
+
+        local fallen = options[1]
+        fallen.isRaised = true
+
+        local health = math.ceil(fallen.MaxHealth * NecromancerConfig.HEALTH_SHARE)
+        local stats = {MaxHealth = fallen.MaxHealth, DamageBonus = fallen.DamageBonus}
+        local raised = self:AddPiece(fallen.Type, "Black", fallen.Column, fallen.Row, health, nil, fallen.ClassName, stats)
+        raised.isRaised = true
+        raised.isResting = true
+
+        necromancer.isResting = true
+        necromancer.Raises = (necromancer.Raises or 0) + 1
+        necromancer.RaiseCooldown = NecromancerConfig.COOLDOWN
+
+        self:SendAll("BossAbility", necromancer.Id, "Raise Dead")
+    end
 end
 
 --ENEMY ACTIONS--
@@ -1418,7 +1544,7 @@ function MatchClass:EnemyAttack(piece, column, row)
         return
     end
 
-    local damage = PieceConfig.Damage[piece.Type] + BossAbilityService.GetDamageBonus(self.Boss)
+    local damage = piece:GetDamage() + BossAbilityService.GetDamageBonus(self.Boss)
     local health, targetId = self:DamageWhiteTile(column, row, damage)
     if not health then return end
 
@@ -1469,6 +1595,11 @@ function MatchClass:TryPromote(piece)
 
     piece.Type = pieceType
     piece.MaxHealth = PieceConfig.Health[pieceType]
+
+    if self.ScaleEnemy then
+        piece.MaxHealth, piece.DamageBonus = self.ScaleEnemy(pieceType)
+    end
+
     piece.Health = piece.MaxHealth
 
     self:SendAll("PiecePromoted", piece.Id, pieceType, piece.Health, piece.MaxHealth)

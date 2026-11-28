@@ -176,95 +176,93 @@ Chosen in the Armory alongside the shotgun. All numbers live in `ClassConfig`; e
 
 Every health bar (pieces and kings) has a divider between each point of health, like the energy bar, so players can count the hits left.
 
-## Campaign
+## Story Mode
 
-World map, bottom to top: **King's Training** (tutorial, Monarch) → **Hunter Forest** (Hunter King) → **Cliffside** (Bandit King) → **Outskirts** (Gunslinger King) → **Gravehollow** (Reaper King). Each region needs the one before it.
+The old Campaign becomes Story Mode. Its card on the Singleplayer screen is locked ("Coming Soon") until the story is written.
 
-- The Campaign button opens its own screen. The world map scrolls vertically: King's Training at the bottom, Gravehollow at the top. It always opens scrolled to the bottom (King's Training) so players see where the campaign starts.
-- Each region is a floating pixel-art island that bobs gently, joined by dotted paths. Locked islands are gray, wrapped in two chains with a padlock.
-- When a region unlocks, the map scrolls to it, the padlock shakes and drops, the chains slide off, the island fades into color and the path to it lights up.
-- Clicking a region opens its area map: a branching route of 11–13 nodes to the King, inked on a torn parchment sheet. Nodes have no names; a legend of the five node icons sits in the info bar.
-- All map data lives in `CampaignConfig`; art asset ids live in `CampaignArt`.
-- Waterfalls (Forest, Cliffside) run from a stream on top over the island's front rim and down the rock face into a puff of mist.
-- Art pipeline: `art/tools/build_islands.py` (run inside Blender with the sprite file open) builds the islands, chains and padlock from primitives and renders them to `art/campaign/islands/`, saving the scene as `art/CampaignIslands.blend`. `art/tools/build_campaign_art.py` then outlines them, makes the gray versions and packs `Islands.png`, draws the parchment (`Paper.png`), and cuts the node icons and logo from `art/reference/`.
-- Node types (from the reference legend): **Battle**, **Rest Site**, **Treasure Hunt**, **Queen Fight** (the elite), **Boss Fight** (King).
-- Every route is 3 Battles → Rest Site and Treasure Hunt → 3 Battles → Rest Site and Treasure Hunt → Queen → King, so each run fights exactly 6 normal battles (`CampaignMap.FIGHTS`).
-- Every region ends Queen → King, and nothing else links to the King. `CampaignRules.Validate` errors at server start if this is broken.
+## Expedition (Nov 27 2026)
 
-### Region Runs
+A replayable roguelike run, separate from Story Mode. Spec: the Expedition design doc pasted Nov 27 2026. Tuning lives in `ExpeditionConfig`, rules in `ExpeditionRules`, map generation in `ExpeditionMap`, the server in `ExpeditionService`, armies in `Expedition/EncounterRules`, the screen in `ExpeditionController`, art ids in `ExpeditionArt`.
 
-- Each region is played as a **run**: the route only moves forward from the last node cleared, like Slay the Spire. Runs are saved per region in the profile (`Runs`).
-- **Health carries over** between battles. The King starts each run at 15/15.
-- **Rest Sites are checkpoints** with three choices: **Rest** (heal to full), **Train** (+2 max and current health), **Gun Maintenance** (+1 to every shotgun hit, fall-off included; a Double Barrel's two blasts get +1 each). Upgrades last for the region only.
-- **Dying** sends the run back to its last Rest Site, where the choice can be made again. Everything after it is lost. With no Rest Site reached yet, the run ends and the region starts over.
-- **Leaving mid-region** keeps the run exactly as it was: every finished node is saved to the DataStore a few seconds later, and again when the player leaves. A battle left unfinished just has to be fought again; a rolled Treasure Hunt or mystery encounter stays the same.
-- **The pouch:** Gold and XP from nodes collect in the run's pouch and are only paid when the region's King falls. Defeating a King completes the region and permanently unlocks its class (King's Training unlocks no class).
-- Completed regions can be replayed as a fresh run; the pouch then pays `REPLAY_REWARD_SCALE` (20%).
+### Structure
 
-### Encounters
+- Three Acts. When a run starts, one region is rolled from each Act's pool: Act I **King's Throne** or **Thorned Forest**, Act II **Cliffside** or **Outskirts**, Act III **Gravehollow**. More regions are added by putting them in a pool.
+- Each Act is a branching map laid out like the old Campaign map: 4 lanes with a node on every one of 10 layers (40 nodes) plus the Boss. Each node links straight up, 40% of the time also into a neighboring lane, and 35% of those branches replace the straight link when the node above still has another way in. Routes can cross, and at least 3 links cross between the two middle lanes so the map never splits down the middle. Every lane ends at the Act's Boss. The map is built from a seed kept in the run, so the server, the client and a restored checkpoint all get the same map.
+- One node per layer; only nodes linked from the current one can be entered. Skipped nodes stay behind.
+- Generation weights: Battle 25, Mystery 45 (the spec's 20% Regional is folded in), Elite 15, Shop 10, Rest 5. Layer 1 is always Battle. Rest Sites and Elites never sit next to their own kind on a route. Every Act gets at least one Rest Site and one Shop.
+- **Regional Encounters are Mysteries** (Nov 27 2026): there is no separate Regional node. A Mystery node rolls from the universal Mysteries plus the current region's Regional Encounters not yet met this run, so those can only appear in their own region. Mystery nodes show only the "?" badge; the encounter is rolled on entry and kept in the run so it can't be rerolled.
+- Beating the Boss opens the next Act. Beating Act III completes the Expedition. 33 encounters including the 3 Bosses.
 
-Enemy armies are rolled fresh every battle from a point budget (`CampaignConfig.Encounter`, generated by `EncounterRules`): Pawn 1, Knight/Bishop 3, Rook 5, Queen 9.
+### The Map Screen
 
-| Encounter | Training | Forest | Cliffside | Outskirts | Gravehollow |
-|---|---|---|---|---|---|
-| Normal 1 | 6 | 8 | 10 | 12 | 14 |
-| Normal 2–6 | +3 each | +3 each | +3 each | +3 each | +3 each |
-| Queen Battle | 30 | 32 | 34 | 36 | 38 |
-| King Battle | 36 | 38 | 40 | 42 | 44 |
+- Portrait paper map in a scroll frame that opens at the bottom (layer 1) and follows the King up. The legend is a paper slip on the right, the run panel (health, Silver, upgrades, Artifacts, pouch, Abandon) on the left, the node info and Fight/Enter button under the legend. The run panel shows the King's portrait beside his health and a bar with one segment per max health, Silver on its own highlighted row, the run's 5 Artifact slots, and the pouch. Battles show their Gold, Silver and XP rewards as icons on the play card. Currency icons are Nikolas's paintings (`art/expedition/currency_icons_source.png`), cut by `art/tools/build_currency_icons.py`.
+- Every map and the legend sit on Nikolas's painted parchment (`art/expedition/parchment_source.png`, cut by `art/tools/build_parchment.py`). On the map it's a tall sheet (the page with its middle stretch repeated) that scrolls with the routes: a run opens on the bottom of the paper, and the top edge only comes into view when scrolled up to the Boss. About a quarter of the sheet shows at once. Each region lays its own trim over the parchment's edges, drawn in Blender by `art/tools/build_expedition_art.py` (Nov 28 2026): King's Throne gold wire laced through eyelets with garnet clasps on the corners, Thorned Forest twisting vines, Cliffside boulders, Outskirts plain parchment, Gravehollow a ring of purple graveyard mist. Each region also has its own ink and route color (Gravehollow's walked route is a ghostly green); all Expedition text uses the game font (Nov 28 2026).
+- Encounter badges are Nikolas's painted pixel badges (`art/expedition/encounter_badges_source.png`), cut and packed by `art/tools/build_encounter_badges.py` into `encounter_badges.png`: crossed sword and shotgun (Battle), Queen with laurels (Elite), King between banners (Boss), question mark in mist (Mystery), market stall (Shop), campfire camp (Rest). Locked nodes are faded, visited ones dimmed with a check. (The earlier single-ink Blender icons are kept in `art/expedition/expedition_encounter_icons.*` but unused.)
 
-- Queen battle = Normal 6 + 9, King battle = Queen battle + 6. Both always include the Queen (her 9 points come out of the budget, the King is free). Only one Queen.
-- 2 points are reserved for Pawns; Rooks, Knights and Bishops are picked at random to spend the rest, then Pawns fill what's left (max 10). Exactly 10 Pawns form a wall across row 8.
-- Everything is placed randomly on rows 8–10. In boss battles the Queen starts on column 5 and the King on column 6 of row 10.
-- Bishops alternate square colors, so neither color is safe.
+### Progression Inside a Run
 
-### Mystery Encounters
+- **Silver** is the run's currency for every purchase. Battles pay Silver (Battle 15, Elite 30, Boss 50, encounter fights 10) and Treasure Hunts pay 5–60. It carries between Acts and is lost when the run ends.
+- **Gold and XP** collect in the pouch (Battle 100/50, Elite 200/100, Boss 500/250, encounter fights 100/50, other encounters 25 XP, Rest 20 XP; x1 / x1.5 / x2 by Act) and are only paid out when Act III is beaten. Abandoning forfeits them.
+- **Upgrades** last for the run only and never touch Campaign, PvP or the profile: King max health, shotgun damage, ammo capacity (Gun Maintenance), summon health and damage, starting Ultimate charge, heal after battles, max energy.
+- **Artifacts:** up to 5, no duplicates. Elites drop one, Shops sell them for Silver. Holding 5, a new one replaces a chosen slot or is left behind. Artifact designs and prices are not made yet (`ExpeditionConfig.Artifacts.Pool` is empty), so Elites drop nothing and Shops are empty for now.
 
-Some fight columns hold **Mystery** nodes instead of battles (`CampaignMap.MYSTERY_PLANS`). Each region deals the lane plans in its own order: one lane gets four mysteries (two early, two late), one lane is straight battles, and the others get one early and one late, so routes feel different and players branch out.
+### Health, Checkpoints and Failure
 
-Arriving rolls one of four encounters on the server (never the same one twice in a row, and no Fallen Knight once he has joined); it's kept in the run, so leaving can't reroll it. Numbers live in `CampaignConfig.Mystery`.
+- King health (current and max) carries between every encounter and Act.
+- **Rest Sites** (Normal only) save a checkpoint just before the choice: Rest (heal 70% of missing health; the Fallen Knight heals the same share) or Gun Maintenance (+1 ammo capacity, +2 on the Double Barrel). Dying restores the last checkpoint: same maps, same encounters, same Shop stock, and the Rest choice can be made again. Dying before any checkpoint ends the run.
+- **Battles** lost: Normal restores the checkpoint; Elite Expeditions end the run.
+- **Encounter penalties** that kill the King follow the same defeat rules.
+- Leaving mid-run saves it exactly where the player left.
 
-- **Wandering Gunsmith:** pay 50 Gold from the pouch for +1 shotgun damage (fall-off included), pay 25 to gamble (+1 or -1), or leave. Locked when the pouch can't cover it.
-- **Fallen Knight:** challenge him (a battle against him alone) or keep walking. Beating him makes him a companion for the rest of the run.
-- **Ambush:** take 3 damage (locked at 3 health or less) or fight an army rolled from the region's points (Training 6, Forest 7, Cliffside 8, Outskirts 8, Gravehollow 9) for a normal battle's reward.
-- **Queen's Altar:** Blood Offering (-4 health, +2 max health), Royal Sacrifice (-6 health, +2 shotgun damage), or walk away. Each needs more health than it costs.
+### Enemies
 
-### Fallen Knight
+- Point budgets: Act starting allocation 6 / 12 / 18 (Elite mode +5: 11 / 17 / 23). Normal Battle = allocation, Elite = +6, Boss = +12. Winning a Normal or Elite Battle raises the allocation by 3; encounter fights use it without raising it. A new Act resets it to that Act's start.
+- Costs: Pawn 1, Knight 3, Bishop 3, Rook 5, Queen 9, King 0, Necromancer 7. Elites and Bosses always field one Queen (her 9 comes out of the budget); Bosses add the region's King on his fixed tile (Queen column 5, King column 6 of the back row). 2 points are kept for Pawns, Knights/Bishops/Rooks (and Necromancers in Gravehollow) spend most of the rest with Rooks likelier as the budget grows, then Pawns fill (max 5). Max 1 Queen, 2 Necromancers. Bishops alternate square colors.
+- Enemies spawn on rows 7–10 (the back of the 10×10 board).
+- Armies with a King are beaten by killing the King, armies without one by clearing every enemy piece.
+- **Act scaling:** max health x1.25 per Act, compounded and rounded up; damage +1 per Act for Pawns, +2 for Knights, Bishops, Rooks and Queens. Enemy Kings get the health scaling only. The Necromancer and Fallen Knight keep their own stats. Player summons don't scale with Acts. Promoted pawns take the Act's stats for their new piece.
+- **Boss Kings** fight with their region's class: King's Throne Monarch, Thorned Forest Hunter, Cliffside Bandit, Outskirts Gunslinger, Gravehollow Reaper.
+- **Regional AI:** every region uses the same AI with its own directive multipliers and risk tolerance (`ExpeditionConfig.Regions[...].AIWeights` / `Risk`): King's Throne defends and avoids bad trades, Thorned Forest weights position (blocking escape tiles) and teamwork, Cliffside position and advance (confinement), Outskirts attack with low risk aversion, Gravehollow defends its Necromancers and trades freely.
 
-- 7 health, deals 2, moves and attacks like a King and a Knight combined (`PieceRules`). Dark teal armour, glowing blue eyes and a flickering blue-green aura (`Aura` effect behind his sprite).
-- As a companion he starts every battle one tile right of the King, acts on his own at the end of the player's turn (`CompanionAIService`: attack first, finishing pieces and the enemy King; otherwise close in while avoiding tiles enemies can hit) and can't be commanded.
-- His health carries between battles like the King's; Rest heals him too. If he dies he's gone for the run.
+### Necromancer (Gravehollow)
 
-### Rest Site Scene
+Rook variant: 12 health, 3 damage, 7 points, Rook movement. Before planning, a Necromancer whose raise is ready spends its action raising the most valuable fallen ally within 3 tiles onto its free death tile at half its max health (rounded up), with its Act-scaled damage; the raised piece can't act until the next enemy turn. 3-turn cooldown, 2 raises each. Can't raise Kings, Queens or Necromancers; a piece is raised once per battle; raised pieces drop no Reaper souls. The AI keeps it back (high Evade) and walks it toward fallen allies while a raise is ready. Until it has its own sprite it uses the Rook's, tinted green (`PieceConfig.SpriteStandIns`).
 
-The Rest Site panel shows `art/campaign/RestCamp.png` with an animated campfire layer on top: the King on the right log and either his party (two pawns, a knight and a bishop) or the Fallen Knight on the left log. Rendered in Blender by `art/tools/build_rest_camp.py`, packed by `build_rest_art.py`.
+### Universal Mystery Encounters
 
-### Treasure Hunt
+Rolled on entry, never the same one twice in a row (`ExpeditionConfig.Mystery`):
+- **Wandering Gunsmith:** 50 Silver for +1 shotgun damage (fall-off included), or leave.
+- **Ambush:** take 3 damage at once, then fight the current allocation with the King surrounded in the middle of the board.
+- **Queen's Altar:** Blood Offering (-4 health, +2 max health), Royal Sacrifice (-6 health, +2 shotgun damage), or leave. Neither can kill.
+- **Treasure Hunt:** 12×12 board in the region's colors, 5 digs, each uncovers 3×3. Silver 60/50/40/30/20 by dig, 5 if never found.
+- **Abandoned Barracks:** Reinforced Armor (+1 max health for summoned pieces) or Weapons Training (+1 damage for summoned pieces).
+- **Wandering Doctor:** Treatment (heal to full) or Vitality (+2 max health, +2 health).
+- **Statue of a Holy Rook:** Blessing of Power (start battles with 25 Ultimate charge, -2 max health) or Blessing of Vitality (heal 2 after each battle, -1 max energy).
+- **Gambler:** wager 25, 50 or 100 Silver on a 50/50 to double it, or leave.
 
-A 10×10 board in the region's colors with 5 digs; each dig uncovers a 3×3 square. The treasure's tile is rolled on the server when the hunt starts and kept in the run. Finding it on dig 1–5 pays 200 / 175 / 150 / 125 / 100 Gold to the pouch; not finding it pays 25.
-- **Win condition in campaign:** armies with a King are beaten by killing the King, armies without one by clearing every enemy piece.
+Barracks, Doctor, Holy Rook, Gambler and Treasure Hunt use the camp background until they get their own art.
 
-### Rewards
+### Regional Encounters (rolled from the Mystery pool, only in their region)
 
-Base rewards go into the pouch, multiplied by the region's `RewardScale` (Training 0.5, Forest 1, Cliffside 1.5, Outskirts 2, Gravehollow 2.5):
+- **Gravehollow — Fallen Knight:** fight him (10 health, King + Knight movement, his 3 points out of the allocation) and a supporting army bought with the rest (no Kings or Queens; +2 health, +1 damage on top of Act scaling), or keep walking. Win and he joins as a companion for the rest of the run: starts right of the King, acts on his own, health carries over, gone for good if he dies (unless a checkpoint brings him back).
+- **Cliffside — Deadman Walking**, **Outskirts — Dangerous Payload**, **Gravehollow — Haunted Mansion:** specified but not built yet (they need new board rules: a restricted 2×10 path with Sniper Bishops, an escorted payload, a maze with Ghost and Zombie pieces). They're in `ExpeditionConfig.Exclusives` with `Enabled = false`, so they stay out of the Mystery pool until they're made.
 
-| Node | Gold | XP |
-|---|---|---|
-| Battle | 100 | 50 |
-| Treasure Hunt | 25–200 (see above, not scaled) | 0 |
-| Rest Site | 0 | 0 |
-| Queen Fight | 400 | 200 |
-| Boss Fight | 750 | 350 |
+### Elite Expedition
 
-A first completion pays the whole pouch; replays of a completed region pay 20%. Nodes can override rewards with their own `Reward` table.
+Same structure, +5 to every Act's starting allocation, Rest Sites keep their choices but save no checkpoint, and any defeat ends the run (upgrades, Artifacts, companion and pouch are lost). Chosen when starting a run.
+
+### Developer Tools
+
+Dev accounts can send `ExpeditionRemote` `DevEncounter <name>` (pins the next Mystery roll, Regional Encounters included) and `DevAct <1-3>` (jumps to an Act's map) for testing. The Expedition screen also has a dev-only **Dev Maps** button: it shows any region's map from a fresh random seed without touching the real run (◀ ▶ change region, New Map rerolls, Exit returns to the run). Nodes can be inspected but not entered.
 
 ### Progression
 
 - Gold buys shotguns. XP raises the account level. Each level needs 100 more XP than the last: 100 for level 2, 200 for level 3, and so on (`ProgressionRules.GetExpToLevel`).
-- **Multiplayer opens at level 5** (`ProgressionConfig.MULTIPLAYER_UNLOCK_LEVEL`, 1,000 total XP), about where players finish Hunter Forest, so they can play co-op with friends sooner.
+- **Multiplayer opens at level 5** (`ProgressionConfig.MULTIPLAYER_UNLOCK_LEVEL`, 1,000 total XP), so players can play co-op with friends sooner.
 - **Duels unlock at level 10** (`ProgressionConfig.DUELS_UNLOCK_LEVEL`, 4,500 total XP), checked on the server. Below that the Duels card shows "Duels [Lv 10]" and can't be opened.
-- Back steps out one level at a time: area map → world map → main menu.
-- **Dev panel:** a Developer button on the main menu, shown only to the accounts in `DevConfig.USER_IDS` (Snoothe3rd). It can unlock everything (all shotguns, classes, campaign nodes and the Multiplayer unlock level), add 1000 Gold, or reset the profile. The server checks the account on every request.
-- Saved in a DataStore (`PlayerProfile_v1`): gold, XP, owned shotguns, unlocked classes, completed regions, region runs, equipped loadout, settings and keybinds. If the profile can't load (e.g. Studio API access off), a temporary profile is used and never saved.
+- Every class is unlocked from the start (Nov 27 2026; they used to come from beating Campaign Kings).
+- **Dev panel:** a Developer button on the main menu, shown only to the accounts in `DevConfig.USER_IDS` (Snoothe3rd). It can unlock everything (all shotguns, classes and the Multiplayer unlock level), add 1000 Gold, or reset the profile. The server checks the account on every request.
+- Saved in a DataStore (`PlayerProfile_v1`): gold, XP, owned shotguns, unlocked classes, the Expedition in progress, equipped loadout, settings and keybinds. If the profile can't load (e.g. Studio API access off), a temporary profile is used and never saved.
 
 ## Multiplayer (PvP Duels)
 
@@ -384,9 +382,7 @@ Not yet specified in the design doc. Do not implement guesses without confirming
 - Class placeholders: Collector energy amount, trap placement range, Deadeye cone/range numbers, what counts as an "isolated" piece
 - Enemy King shotgun ammo, and whether bosses use their class abilities
 - Regional King and Queen boss abilities (the class abilities now exist for them to use)
-- What Treasure Hunts find beyond gold (items, upgrades); Treasure Hunt board art per region (colors only for now)
-- Elite campaign: +5 to the starting budget, AI 1500–2000, death restarts the region (not implemented)
-- The replay reward fraction (20% placeholder)
+- Expedition: Artifact designs and prices, Shop stock size and prices, King's Throne and Thorned Forest Regional Encounters, Ghost and Zombie pieces, Deadman Walking and Dangerous Payload failure penalties and rewards, how often Treasure Hunts find Artifacts, Silver amounts (placeholders), whether Elite Expedition needs unlocking, whether Rest heals the Fallen Knight (currently the same 70%)
 - Exact ranges/arcs for Double Barrel and Long Barrel
 - Duel reward amounts and ranked play; whether bolas should skip 3 King turns or fewer
 - Duels with two Outlaws show only the most recent smoke cloud on each screen

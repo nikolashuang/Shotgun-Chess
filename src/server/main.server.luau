@@ -4,7 +4,7 @@ local Players = game:GetService("Players")
 
 local ProfileService = require(ServerScriptService.Player.ProfileService)
 local LoadoutService = require(ServerScriptService.Player.LoadoutService)
-local CampaignService = require(ServerScriptService.Campaign.CampaignService)
+local ExpeditionService = require(ServerScriptService.Expedition.ExpeditionService)
 local DuelService = require(ServerScriptService.Duel.DuelService)
 local DuelPlaceService = require(ServerScriptService.Duel.DuelPlaceService)
 local DuelConfig = require(ReplicatedStorage.Shared.Duel.DuelConfig)
@@ -45,7 +45,7 @@ PurchaseService.Init()
 if isDuelPlace then
     DuelPlaceService.Init(StartMatch)
 else
-    CampaignService.Init()
+    ExpeditionService.Init()
     DuelService.Init(StartMatch)
     DevService.Init()
     CrateService.Init()
@@ -64,9 +64,9 @@ end
 
 BoardRemote.OnServerEvent:Connect(function(player, action, first, second, third)
     if action == "StartMatch" then
-        if isDuelPlace or first ~= "Campaign" then return end
+        if isDuelPlace or first ~= "Expedition" then return end
 
-        local match = CampaignService.CreateMatch(player, second, third)
+        local match = ExpeditionService.CreateMatch(player, second)
         if not match then return end
 
         StartMatch(player, match)
