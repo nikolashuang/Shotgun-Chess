@@ -44,7 +44,7 @@ local ExpeditionArt = {
             },
         },
 
-        Overgrowth = {
+        ThornedForest = {
             Paper = Color3.fromHex("DDB07A"),
             Ink = Color3.fromHex("2C3519"),
             Faint = Color3.fromHex("8A8A62"),
@@ -98,7 +98,7 @@ local ExpeditionArt = {
     -- Still used for the Singleplayer cards and their locks
     ISLANDS = "rbxassetid://84139968706737",
     ISLAND_SIZE = 160,
-    IslandColumn = {KingsThrone = 0, Overgrowth = 1, Cliffside = 2, Outskirts = 3, Gravehollow = 4},
+    IslandColumn = {KingsThrone = 0, ThornedForest = 1, Cliffside = 2, Outskirts = 3, Gravehollow = 4},
     LockColumn = {ChainA = 0, ChainB = 1, Lock = 2},
 
     -- Rest Site campfire, built by art/tools/build_rest_camp.py and build_rest_art.py
@@ -118,6 +118,25 @@ local ExpeditionArt = {
     REST_CARD_SIZE = Vector2.new(96, 72),
     RestCardOrder = {Rest = 0, Train = 1, GunMaintenance = 2},
 
+    -- Treasure Hunt's shovel cursor, rendered by art/tools/build_shovel.py and outlined by build_shovel_cursor.py
+    -- A 32px drawing shown at SHOVEL_SIZE pixels; SHOVEL_TIP is where the blade's tip sits in it, which follows the mouse
+    SHOVEL_CURSOR = "rbxassetid://95543984004751",
+    SHOVEL_SIZE = 64,
+    SHOVEL_TIP = Vector2.new(0.203, 0.797),
+
+    -- Treasure Hunt dig sites per region and the sprites laid over dug tiles, rendered by
+    -- art/tools/build_treasure_board.py. Sprites sit side by side, one tile each, in the order of TREASURE_SPRITES
+    TREASURE_BOARDS = {
+        KingsThrone = "rbxassetid://106191898000012",
+        ThornedForest = "rbxassetid://131999741734107",
+        Cliffside = "rbxassetid://136841875780079",
+        Outskirts = "rbxassetid://132817391457666",
+        Gravehollow = "rbxassetid://111353971910356",
+    },
+    TREASURE_SPRITE_SHEET = "rbxassetid://95970306815842",
+    TREASURE_SPRITE_SIZE = 32,
+    TREASURE_SPRITES = {Dirt = 0, Hole = 1, Chest = 2},
+
     -- Mystery encounter screens, built by art/tools/build_mystery_art.py; every background is 1672x941 like the camp
     -- Encounters without their own art yet use FALLBACK_BACKGROUND
     MysteryBackgrounds = {
@@ -125,16 +144,34 @@ local ExpeditionArt = {
         Ambush = "rbxassetid://91466943784949",
         Gunsmith = "rbxassetid://132885799635283",
         FallenKnight = "rbxassetid://122636487856177",
+        Doctor = "rbxassetid://103715350194351",
+        Barracks = "rbxassetid://116877723573437",
     },
     FALLBACK_BACKGROUND = "rbxassetid://133730252181741",
     MYSTERY_ASPECT = 1672 / 941,
-    -- The bishop at the anvil, built by art/tools/build_gunsmith.py; plays over the Gunsmith background
-    GUNSMITH_SHEET = "rbxassetid://93677776912006",
-    GUNSMITH_FRAME = Vector2.new(100, 100),
-    GUNSMITH_FRAMES = 8,
-    GUNSMITH_COLUMNS = 4,
-    GUNSMITH_TIME = 0.11,
-    GUNSMITH_RECT = {520 / 1672, 220 / 941, 400 / 1672, 400 / 941},
+    -- Characters looping over their encounter's background, each packed by art/tools/build_mystery_art.py into a
+    -- sheet of Frames frames, Columns wide; Rect is x, y, width, height as fractions of the background
+    MysteryAnimations = {
+        -- The bishop at the anvil, built by art/tools/build_gunsmith.py
+        Gunsmith = {
+            Sheet = "rbxassetid://93677776912006",
+            Frame = Vector2.new(100, 100),
+            Frames = 8,
+            Columns = 4,
+            Time = 0.11,
+            Rect = {520 / 1672, 220 / 941, 400 / 1672, 400 / 941},
+        },
+        -- The rook in his coat beside a floating mortar that grinds medicine on its own, built by
+        -- art/tools/build_doctor.py
+        Doctor = {
+            Sheet = "rbxassetid://92946750753462",
+            Frame = Vector2.new(100, 72),
+            Frames = 8,
+            Columns = 4,
+            Time = 0.11,
+            Rect = {690 / 1672, 470 / 941, 400 / 1672, 288 / 941},
+        },
+    },
     -- The Fallen Knight's eye traced in teal, laid exactly over his eye on the background when he wakes
     -- Rect is x, y, width, height as fractions of the background; matches EYE_BOX in build_mystery_art.py
     EYE_WAKE = "rbxassetid://84506445068510",

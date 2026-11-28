@@ -28,6 +28,8 @@ local cardsByPiece = {}
 local spritesByPiece = {}
 -- Piece type -> true while its card shows as maxed out
 local maxedPieces = {}
+-- Piece type -> true when this fight doesn't allow summoning it (Deadman Walking only takes Rooks and Queens)
+local blockedPieces = {}
 local energyLeft = 0
 -- Piece type -> cost replacing PieceConfig.Cost, from the equipped class (Monarch's Loyalty)
 local costOverrides = {}
@@ -56,8 +58,11 @@ function SummonPanelController.ClearSelection()
     SummonPanelController.SelectedPiece = nil
 end
 
--- True when the player's side already has as many of this piece as it's allowed (the one Queen)
+-- True when the player's side already has as many of this piece as it's allowed (the one Queen), or the fight
+-- doesn't allow it at all
 function SummonPanelController.IsMaxed(pieceType)
+    if blockedPieces[pieceType] then return true end
+
     local maxActive = PieceConfig.MaxActive[pieceType]
     if not maxActive then return false end
 
@@ -105,7 +110,7 @@ local function SetMaxed(pieceType, isMaxed)
     card.PieceName.TextTransparency = transparency
     card.Health.TextTransparency = transparency
     card.Cost.TextTransparency = transparency
-    card.Cost.Text = isMaxed and "On Board" or SummonPanelController.GetCost(pieceType) .. " Energy"
+    card.Cost.Text = isMaxed and (blockedPieces[pieceType] and "Unavailable" or "On Board") or SummonPanelController.GetCost(pieceType) .. " Energy"
     spritesByPiece[pieceType].Image.ImageTransparency = transparency
 
     if isMaxed and SummonPanelController.SelectedPiece == pieceType then
@@ -123,6 +128,16 @@ local function UpdateLimits()
             SummonPanelController.SetEnergy(energyLeft)
         end
     end
+end
+
+-- allowed is the list of piece types this fight lets the player summon, or nil for all of them
+function SummonPanelController.SetAllowed(allowed)
+    for pieceType in pairs(cardsByPiece) do
+        blockedPieces[pieceType] = allowed ~= nil and not table.find(allowed, pieceType) or nil
+        SetMaxed(pieceType, SummonPanelController.IsMaxed(pieceType))
+    end
+
+    SummonPanelController.SetEnergy(energyLeft)
 end
 
 function SummonPanelController.SelectPiece(pieceType)

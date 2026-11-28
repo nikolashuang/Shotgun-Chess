@@ -23,7 +23,7 @@ local IndexConfig = {
         {Id = "FallenPawn", Name = "Fallen Pawn", Piece = "FallenPawn", Where = "Not in the Expedition yet",
             Notes = "Guarded the Fallen Knight's throne. Fights like a Pawn."},
         {Id = "MonarchKing", Name = "Monarch King", Piece = "King", Outfit = "Monarch", Region = "KingsThrone"},
-        {Id = "HunterKing", Name = "Hunter King", Piece = "King", Outfit = "Hunter", Region = "Overgrowth"},
+        {Id = "HunterKing", Name = "Hunter King", Piece = "King", Outfit = "Hunter", Region = "ThornedForest"},
         {Id = "BanditKing", Name = "Bandit King", Piece = "King", Outfit = "Outlaw", Region = "Cliffside"},
         {Id = "GunslingerKing", Name = "Gunslinger King", Piece = "King", Outfit = "Gunslinger", Region = "Outskirts"},
         {Id = "ReaperKing", Name = "Reaper King", Piece = "King", Outfit = "Reaper", Region = "Gravehollow"},

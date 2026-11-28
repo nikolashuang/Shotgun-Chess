@@ -9,6 +9,7 @@ local KeybindConfig = require(ReplicatedStorage.Shared.Player.KeybindConfig)
 local ShotgunConfig = require(ReplicatedStorage.Shared.Combat.ShotgunConfig)
 local ClassConfig = require(ReplicatedStorage.Shared.Combat.ClassConfig)
 local ExpeditionRules = require(ReplicatedStorage.Shared.Expedition.ExpeditionRules)
+local ExpeditionConfig = require(ReplicatedStorage.Shared.Expedition.ExpeditionConfig)
 local ShopConfig = require(ReplicatedStorage.Shared.Shop.ShopConfig)
 local SkinConfig = require(ReplicatedStorage.Shared.Skins.SkinConfig)
 
@@ -104,6 +105,17 @@ local function Reconcile(data)
     -- The old Campaign's progress and runs, replaced by the Expedition
     data.Nodes = nil
     data.Runs = nil
+
+    -- A run through a region that no longer exists (renamed during playtesting) can't be played, so it's dropped
+    local run = data.Expedition
+    if run then
+        for _, region in ipairs(run.Regions or {}) do
+            if not ExpeditionConfig.Regions[region] then
+                data.Expedition = nil
+                break
+            end
+        end
+    end
 
     return data
 end

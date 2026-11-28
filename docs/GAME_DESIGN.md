@@ -232,12 +232,12 @@ Rook variant: 12 health, 3 damage, 7 points, Rook movement. Before planning, a N
 
 Rolled on entry, never the same one twice in a row (`ExpeditionConfig.Mystery`):
 - **Wandering Gunsmith:** 50 Silver for +1 shotgun damage (fall-off included), or leave.
-- **Ambush:** take 3 damage at once, then fight the current allocation with the King surrounded in the middle of the board.
+- **Ambush:** either Fight (the current allocation, with the King surrounded in the middle of the board, no damage) or Break Through (take 3 damage and move on; not offered if it would kill the King).
 - **Queen's Altar:** Blood Offering (-4 health, +2 max health), Royal Sacrifice (-6 health, +2 shotgun damage), or leave. Neither can kill.
-- **Treasure Hunt:** 12×12 board in the region's colors, 5 digs, each uncovers 3×3. Silver 60/50/40/30/20 by dig, 5 if never found.
+- **Treasure Hunt:** 10×10 board in the region's colors, 5 digs, each uncovers 3×3. Over the board the cursor becomes a Blender-drawn shovel (`art/tools/build_shovel.py`). Silver 60/50/40/30/20 by dig, 5 if never found.
 - **Abandoned Barracks:** Reinforced Armor (+1 max health for summoned pieces) or Weapons Training (+1 damage for summoned pieces).
 - **Wandering Doctor:** Treatment (heal to full) or Vitality (+2 max health, +2 health).
-- **Statue of a Holy Rook:** Blessing of Power (start battles with 25 Ultimate charge, -2 max health) or Blessing of Vitality (heal 2 after each battle, -1 max energy).
+- **Statue of a Holy Rook:** Blessing of Power (start battles with 25 Ultimate charge, -2 max health) or Blessing of Vitality (heal 2 after each battle, -1 max energy), or leave.
 - **Gambler:** wager 25, 50 or 100 Silver on a 50/50 to double it, or leave.
 
 Barracks, Doctor, Holy Rook, Gambler and Treasure Hunt use the camp background until they get their own art.
@@ -245,7 +245,10 @@ Barracks, Doctor, Holy Rook, Gambler and Treasure Hunt use the camp background u
 ### Regional Encounters (rolled from the Mystery pool, only in their region)
 
 - **Gravehollow — Fallen Knight:** fight him (10 health, King + Knight movement, his 3 points out of the allocation) and a supporting army bought with the rest (no Kings or Queens; +2 health, +1 damage on top of Act scaling), or keep walking. Win and he joins as a companion for the rest of the run: starts right of the King, acts on his own, health carries over, gone for good if he dies (unless a checkpoint brings him back).
-- **Cliffside — Deadman Walking**, **Outskirts — Dangerous Payload**, **Gravehollow — Haunted Mansion:** specified but not built yet (they need new board rules: a restricted 2×10 path with Sniper Bishops, an escorted payload, a maze with Ghost and Zombie pieces). They're in `ExpeditionConfig.Exclusives` with `Enabled = false`, so they stay out of the Mystery pool until they're made.
+- **Regional Encounters with their own board** (Nov 28 2026) each have a module in `src/server/Expedition/Encounters/` that `MatchClass` runs through `match.Rules` (walls, King-only zones, allowed summons, a hook at the start of each enemy turn, and their own win/fail check). The client draws their board with `TerrainController`. Tuning lives in `ExpeditionConfig.Exclusives`. Winning pays the encounter-fight reward and never raises the allocation.
+- **Cliffside — Deadman Walking:** starts as soon as it's entered (after its rules panel). The King can only stand on the 2-wide path (columns E–F); everything else is cliff (pieces can still cross it). Two Sniper Bishops sit on the board's edges (A6, J4). They can't be hurt, don't move, and don't act through the normal AI. Every enemy turn each sniper marks 2 path tiles (red): the first sniper always marks the King's tile plus one near it, the second marks rows ahead. The marks are shot at the start of the next enemy turn for 3 damage to whatever white unit stands there. At least one tile the King can reach is always left unmarked. Only Rooks and Queens can be summoned. A summoned piece commanded onto a sniper stuns it for 1 turn instead of damaging it, which cancels its pending marks and its next aim. Reaching row 10 wins; the King dying is a normal defeat.
+- **Outskirts — Dangerous Payload:** starts as soon as it's entered (after its rules panel). The payload (30 HP, can't be commanded) starts on E1 with the King beside it on D1, and rolls one row up its track at the start of every second enemy turn (`ROLL_TURNS`), giving the player time to reposition. Anything standing in front of it holds it up until its next roll. It's delivered on the roll after it reaches row 10 (20 turns if it's never blocked). The army is only Rooks and Bishops, bought with the allocation, and they all hunt the payload: it's their top target, they move to tiles where they can hit it, and they ignore their own risk. Every 3 enemy turns (3, 6, 9 and so on) a new wave of Rooks and Bishops worth half the allocation arrives on the back rows, however many are still alive (they start acting the turn after). Delivering wins; losing the payload **fails** the encounter (no reward and no after-battle heal, but the run continues); the King dying is a normal defeat.
+- **Gravehollow — Haunted Mansion:** Enter the Mansion or keep walking. A fixed 10×10 maze (`HauntedMansion.LAYOUT`) of walls that block every unit. The King starts on A1, the exit is J10, and he can't squeeze diagonally between two walls. Everything more than 2 tiles from the King is pitch dark (pieces there are hidden); the exit always glows. **Ghosts** (4 HP, 3 damage) move and attack up to 2 tiles in a straight line, passing through walls and pieces. **Zombies** (8 HP, 4 damage) move and attack 1 tile like a King, but only every other turn. Neither scales with Acts. Chests: two of Gold (+50 pouch Gold each) and one Artifact (an Artifact, or 30 Silver while none are left to find). They're picked up by stepping on them and only paid out if the King reaches the exit.
 
 ### Elite Expedition
 
@@ -253,7 +256,7 @@ Same structure, +5 to every Act's starting allocation, Rest Sites keep their cho
 
 ### Developer Tools
 
-Dev accounts can send `ExpeditionRemote` `DevEncounter <name>` (pins the next Mystery roll, Regional Encounters included) and `DevAct <1-3>` (jumps to an Act's map) for testing. The Expedition screen also has a dev-only **Dev Maps** button: it shows any region's map from a fresh random seed without touching the real run (◀ ▶ change region, New Map rerolls, Exit returns to the run). Nodes can be inspected but not entered.
+Dev accounts can send `ExpeditionRemote` `DevEncounter <name>` (pins the next Mystery roll, Regional Encounters included), `DevOpen <name>` (opens that encounter right away on the next available node) and `DevAct <1-3>` (jumps to an Act's map) for testing. The Expedition screen has a dev-only **Dev Encounters** button listing every encounter (Battle, Elite, Boss, each Mystery, each Regional Encounter with its region, Rest Site, Shop); clicking one sends `DevOpen`, which opens it right away on the run's next node (dropping anything left open there), and battles use the run's current region and allocation. It also has a dev-only **Dev Maps** button: it shows any region's map from a fresh random seed without touching the real run (◀ ▶ change region, New Map rerolls, Exit returns to the run). Nodes can be inspected but not entered.
 
 ### Progression
 
@@ -393,7 +396,7 @@ Not yet specified in the design doc. Do not implement guesses without confirming
 - Class placeholders: Collector energy amount, trap placement range, Deadeye cone/range numbers, what counts as an "isolated" piece
 - Enemy King shotgun ammo, and whether bosses use their class abilities
 - Regional King and Queen boss abilities (the class abilities now exist for them to use)
-- Expedition: Artifact designs and prices, Shop stock size and prices, King's Throne and Thorned Forest Regional Encounters, Ghost and Zombie pieces, Deadman Walking and Dangerous Payload failure penalties and rewards, how often Treasure Hunts find Artifacts, Silver amounts (placeholders), whether Elite Expedition needs unlocking, whether Rest heals the Fallen Knight (currently the same 70%)
+- Expedition: Artifact designs and prices, Shop stock size and prices, King's Throne and Thorned Forest Regional Encounters, the Regional Encounter assumptions listed in the Expedition section (sniper patterns, payload waves, Ghost/Zombie stats, the Mansion layout and its chest rewards, failure penalties), how often Treasure Hunts find Artifacts, Silver amounts (placeholders), whether Elite Expedition needs unlocking, whether Rest heals the Fallen Knight (currently the same 70%)
 - Exact ranges/arcs for Double Barrel and Long Barrel
 - Duel reward amounts and ranked play; whether bolas should skip 3 King turns or fewer
 - Duels with two Outlaws show only the most recent smoke cloud on each screen

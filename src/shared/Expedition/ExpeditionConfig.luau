@@ -3,7 +3,7 @@ local ExpeditionConfig = {
     MODES = {"Normal", "Elite"},
 
     Acts = {
-        {Pool = {"KingsThrone", "Overgrowth"}, StartPoints = 6},
+        {Pool = {"KingsThrone", "ThornedForest"}, StartPoints = 6},
         {Pool = {"Cliffside", "Outskirts"}, StartPoints = 12},
         {Pool = {"Gravehollow"}, StartPoints = 18},
     },
@@ -96,7 +96,7 @@ local ExpeditionConfig = {
         HEALTH_PER_ACT = 0.25,
         DamagePerAct = {Pawn = 1, Knight = 2, Bishop = 2, Rook = 2, Queen = 2, King = 0},
         -- Variants with their own stats are never scaled
-        FIXED = {Necromancer = true, FallenKnight = true},
+        FIXED = {Necromancer = true, FallenKnight = true, SniperBishop = true, Ghost = true, Zombie = true},
     },
 
     -- Enemy AI rating for every Expedition battle (a key of AIConfig.Ratings)
@@ -136,7 +136,7 @@ local ExpeditionConfig = {
         },
         Altar = {BLOOD_COST = 4, BLOOD_HEALTH = 2, ROYAL_COST = 6, ROYAL_DAMAGE = 2},
         Treasure = {
-            SIZE = 12,
+            SIZE = 10,
             DIGS = 5,
             DIG_SIZE = 3,
             -- Silver for finding it on dig 1, 2, 3...
@@ -153,9 +153,41 @@ local ExpeditionConfig = {
 
     -- Exclusives are the region's Regional Encounters: Mysteries that can only roll in that region
     -- Enabled = false keeps an encounter out of the pool until its content is designed
+    -- Tiles are {column, row}; Rows and Columns are inclusive ranges
     Exclusives = {
-        DeadmanWalking = {Region = "Cliffside", Enabled = false},
-        DangerousPayload = {Region = "Outskirts", Enabled = false},
+        -- Cross a 2 wide cliff path to the far end while two Sniper Bishops on the board's edges shell it
+        DeadmanWalking = {
+            Region = "Cliffside",
+            Enabled = true,
+            -- The only columns the King can stand on; he starts at the near end and wins at the far one
+            PATH_COLUMNS = {5, 6},
+            KING_TILE = {5, 1},
+            SNIPER_TILES = {{1, 6}, {10, 4}},
+            -- Each sniper marks this many path tiles every enemy turn and fires on them the next one
+            MARKS_PER_SNIPER = 2,
+            -- Marks land on path rows from this far behind the King to this far ahead
+            MARK_BEHIND = 1,
+            MARK_AHEAD = 2,
+            SNIPER_DAMAGE = 3,
+            -- A sniper hit by a summoned piece skips this many turns instead of taking damage
+            STUN_TURNS = 1,
+            SUMMONABLE = {"Rook", "Queen"},
+        },
+        -- Escort a payload up the board while Rooks and Bishops throw themselves at it
+        DangerousPayload = {
+            Region = "Outskirts",
+            Enabled = true,
+            PAYLOAD_TILE = {5, 1},
+            KING_TILE = {4, 1},
+            -- It rolls one row every ROLL_TURNS enemy turns and is delivered on the roll after reaching the far row
+            ROLL_TURNS = 2,
+            -- The army is only Rooks and Bishops, bought with the allocation; a fresh wave worth WAVE_SHARE of it
+            -- arrives on the back rows every WAVE_TURNS enemy turns
+            POOL = {"Rook", "Bishop"},
+            WAVE_SHARE = 0.5,
+            WAVE_TURNS = 3,
+            HUNTERS = {Rook = true, Bishop = true},
+        },
         FallenKnight = {
             Region = "Gravehollow",
             Enabled = true,
@@ -166,7 +198,33 @@ local ExpeditionConfig = {
             -- No Kings or Queens in his army
             POOL = {"Pawn", "Knight", "Bishop", "Rook"},
         },
-        HauntedMansion = {Region = "Gravehollow", Enabled = false},
+        -- A dark maze of walls haunted by Ghosts and Zombies, with chests of Gold along the way
+        HauntedMansion = {
+            Region = "Gravehollow",
+            Enabled = true,
+            KING_TILE = {1, 1},
+            -- The King wins by stepping onto any of these
+            EXITS = {{10, 10}},
+            -- Rows of the maze from row 10 at the top down to row 1; # is a wall, G a Ghost, Z a Zombie,
+            -- $ a chest of Gold, A an Artifact chest, . empty
+            LAYOUT = {
+                "..#...Z#..",
+                ".G#.##.#.#",
+                ".##..#...#",
+                "...#.#.#G.",
+                "$#.#...#.#",
+                ".#..##Z#..",
+                ".##..#..#A",
+                "..Z#.G.##.",
+                "#.##.#....",
+                "....$#.##.",
+            },
+            -- Pouch Gold in a $ chest; an A chest gives an Artifact, or ARTIFACT_SILVER when none are left to find
+            CHEST_GOLD = 50,
+            ARTIFACT_SILVER = 30,
+            -- Tiles further than this from the King are dark
+            LIGHT_RANGE = 2,
+        },
     },
 
     -- AIWeights multiply the enemy AI's directive weights; Risk scales how much pieces fear losing health
@@ -181,7 +239,7 @@ local ExpeditionConfig = {
             Risk = 1.25,
         },
 
-        Overgrowth = {
+        ThornedForest = {
             DisplayName = "Thorned Forest",
             Act = 1,
             BossClass = "Hunter",

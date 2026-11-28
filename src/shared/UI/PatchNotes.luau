@@ -1,10 +1,24 @@
 -- Game version shown in the corner of every screen, and the patch notes on the main menu
 -- One release per day: bump the last number each day, and the middle one (resetting the last) only for a huge update
 local PatchNotes = {
-    VERSION = "0.6.0",
+    VERSION = "0.6.1",
 
     -- Newest first
     Releases = {
+        {
+            Version = "0.6.1",
+            Date = "Nov 27",
+            Title = "Regional Encounters",
+            Notes = {
+                "New Cliffside Regional Encounter, Deadman Walking: cross a narrow cliff path while two Sniper Bishops mark the tiles they'll shoot next turn. Summon Rooks and Queens to stun them.",
+                "New Outskirts Regional Encounter, Dangerous Payload: escort a payload up the board while Rooks and Bishops throw themselves at it.",
+                "The Statue of a Holy Rook can now be left without taking a blessing.",
+                "New Gravehollow Regional Encounter, the Haunted Mansion: find your way through a dark maze haunted by Ghosts and Zombies, grabbing treasure on the way out.",
+                "Hurt enemy Rooks, Bishops and Queens can't run as far: below two thirds health they move at most 3 tiles, and at a third or less just 1. They can still attack down a full line.",
+                "Ambush is now a choice: fight your way out, or break through and take 3 damage. Fighting no longer costs health up front.",
+                "Fixed Mystery choice descriptions overlapping each other.",
+            },
+        },
         {
             Version = "0.6.0",
             Date = "Nov 27",

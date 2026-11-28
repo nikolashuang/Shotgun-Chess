@@ -6,6 +6,16 @@ local DevConfig = require(ReplicatedStorage.Shared.Player.DevConfig)
 local ExpeditionConfig = require(ReplicatedStorage.Shared.Expedition.ExpeditionConfig)
 local ExpeditionRules = require(ReplicatedStorage.Shared.Expedition.ExpeditionRules)
 local EncounterRules = require(script.Parent.EncounterRules)
+
+-- Regional Encounters with their own board rules, each run by its own module
+local Encounters = {
+    DeadmanWalking = require(script.Parent.Encounters.DeadmanWalking),
+    DangerousPayload = require(script.Parent.Encounters.DangerousPayload),
+    HauntedMansion = require(script.Parent.Encounters.HauntedMansion),
+}
+
+-- Encounters whose fight starts as soon as they're entered, after showing their rules
+local FORCED_FIGHTS = {DeadmanWalking = true, DangerousPayload = true}
 local MatchClass = require(ServerScriptService.Match.MatchClass)
 local ProfileService = require(ServerScriptService.Player.ProfileService)
 local LoadoutService = require(ServerScriptService.Player.LoadoutService)
@@ -214,17 +224,6 @@ local function FailRun(player, nodeId)
     return summary
 end
 
--- HP penalties from encounters go through here, so one that kills the King counts as a defeat
-local function Hurt(player, run, amount, nodeId)
-    run.Health -= amount
-
-    if run.Health > 0 then return nil end
-
-    run.Health = 0
-
-    return FailRun(player, nodeId)
-end
-
 --BATTLES--
 
 -- Enemies get the Act's health and damage; extra is added on top (the Fallen Knight's army)
@@ -282,19 +281,54 @@ local function GetEncounterEnemies(run)
         })
 
         return enemies
+    elseif Encounters[encounter.Name] then
+        return ScaleEnemies(Encounters[encounter.Name].GetEnemies(run), run.Act)
     end
 
     return nil
 end
 
+-- Pays out what the King picked up during a Regional Encounter (the Haunted Mansion's chests)
+local function PayCollected(run, rules, summary)
+    for _, chest in ipairs(rules and rules.Collected or {}) do
+        if chest == "Gold" then
+            local gold = ExpeditionConfig.Exclusives.HauntedMansion.CHEST_GOLD
+            run.Gold += gold
+            summary.Gold += gold
+        elseif chest == "Artifact" then
+            local artifact = GiveArtifact(run)
+
+            -- No Artifacts left to find (or none made yet): Silver instead
+            if artifact then
+                summary.Artifact = artifact
+                summary.ArtifactPending = run.PendingArtifact ~= nil
+            else
+                local silver = ExpeditionConfig.Exclusives.HauntedMansion.ARTIFACT_SILVER
+                run.Silver += silver
+                summary.Silver += silver
+            end
+        end
+    end
+end
+
+-- A Regional Encounter lost without the King dying (the payload destroyed): no reward, the run goes on
+local function FailEncounter(player, run, nodeId, node)
+    local summary = NewSummary(run, nodeId, node.Type)
+    summary.Encounter = run.Encounter.Name
+    summary.Failed = true
+
+    return CompleteNode(player, run, nodeId, summary)
+end
+
 -- What winning gives: battles raise the allocation (Elites also drop an Artifact), encounter fights pay out
 -- and never raise it, and the Fallen Knight joins the run
-local function CompleteFight(player, run, nodeId, node, isEncounter)
+local function CompleteFight(player, run, nodeId, node, isEncounter, rules)
     local summary = NewSummary(run, nodeId, node.Type)
 
     if isEncounter then
         summary.Encounter = run.Encounter.Name
         AddReward(run, "EncounterFight", summary)
+        PayCollected(run, rules, summary)
 
         if run.Encounter.Name == "FallenKnight" then
             local health = PieceConfig.Health.FallenKnight
@@ -333,8 +367,16 @@ function ExpeditionService.CreateMatch(player, nodeId)
 
     if isEncounter then
         enemies = GetEncounterEnemies(run)
-    elseif ExpeditionRules.IsBattle(node.Type) and ExpeditionRules.GetNodeState(run, nodeId) == "Available" then
-        enemies = GetBattleEnemies(run, node)
+    elseif ExpeditionRules.GetNodeState(run, nodeId) == "Available" then
+        -- The dev panel can start any kind of battle on whatever node comes next
+        if run.DevBattle then
+            node = {Type = run.DevBattle}
+            run.DevBattle = nil
+        end
+
+        if ExpeditionRules.IsBattle(node.Type) then
+            enemies = GetBattleEnemies(run, node)
+        end
     end
 
     if not enemies then return nil end
@@ -343,6 +385,11 @@ function ExpeditionService.CreateMatch(player, nodeId)
     local upgrades = run.Upgrades
     local shotgun, class = LoadoutService.GetLoadout(player)
     local match = MatchClass.new(player, shotgun, class, enemies, ExpeditionConfig.AI_RATING)
+
+    local encounterModule = isEncounter and Encounters[run.Encounter.Name]
+    if encounterModule then
+        match.Rules = encounterModule.new(run)
+    end
 
     match.RegionAI = ExpeditionRules.GetRegion(run)
     match.SummonBonus = {Health = upgrades.SummonHealth, Damage = upgrades.SummonDamage}
@@ -367,6 +414,11 @@ function ExpeditionService.CreateMatch(player, nodeId)
         king.Column, king.Row = MysteryConfig.Ambush.KING_TILE[1], MysteryConfig.Ambush.KING_TILE[2]
     end
 
+    -- Regional Encounters start the King where their board needs him
+    if match.Rules and match.Rules.KingTile then
+        king.Column, king.Row = match.Rules.KingTile[1], match.Rules.KingTile[2]
+    end
+
     -- So does the Fallen Knight, who starts beside the King
     if run.Companion then
         match.CompanionStart = {
@@ -383,8 +435,10 @@ function ExpeditionService.CreateMatch(player, nodeId)
 
         local summary = nil
 
-        if result == "Victory" then
-            run.Health = math.min(king.Health + upgrades.HealAfterBattle, run.MaxHealth)
+        if result == "Victory" or result == "Failed" then
+            -- A failed encounter still ends with the King alive, but without the after-battle heal
+            local heal = result == "Victory" and upgrades.HealAfterBattle or 0
+            run.Health = math.min(king.Health + heal, run.MaxHealth)
 
             if run.Companion then
                 local companion = match.Companion
@@ -395,7 +449,11 @@ function ExpeditionService.CreateMatch(player, nodeId)
                 end
             end
 
-            summary = CompleteFight(player, run, nodeId, node, isEncounter)
+            if result == "Victory" then
+                summary = CompleteFight(player, run, nodeId, node, isEncounter, match.Rules)
+            else
+                summary = FailEncounter(player, run, nodeId, node)
+            end
         else
             summary = FailRun(player, nodeId)
         end
@@ -416,7 +474,6 @@ local function SendEncounter(player, run)
         Kind = encounter.Kind,
         Name = encounter.Name,
         Fight = encounter.Fight,
-        Damage = encounter.Damage,
     }
 
     if encounter.Treasure then
@@ -487,16 +544,9 @@ local function OpenEncounter(player, run, nodeId, node)
 
     run.Encounter = encounter
 
-    -- An ambush hits the King the moment it springs, then the fight starts
-    if encounter.Name == "Ambush" then
+    -- Some encounters go straight to their fight once their rules are shown
+    if FORCED_FIGHTS[encounter.Name] then
         encounter.Fight = true
-        encounter.Damage = MysteryConfig.Ambush.DAMAGE
-
-        local failed = Hurt(player, run, MysteryConfig.Ambush.DAMAGE, nodeId)
-        if failed then
-            SendResult(player, failed)
-            return
-        end
     end
 
     Changed(player)
@@ -607,6 +657,8 @@ local function ApplyChoice(player, run, encounter, choice, extra, summary)
             upgrades.HealAfterBattle += holyRook.VITALITY_HEAL
             upgrades.Energy -= holyRook.VITALITY_ENERGY
         end
+    elseif name == "Ambush" and choice == "Endure" then
+        run.Health -= MysteryConfig.Ambush.DAMAGE
     elseif name == "Gambler" and choice == "Wager" then
         local wager = MysteryConfig.Gambler.WAGERS[extra]
         local isWin = Random.new():NextNumber() < MysteryConfig.Gambler.WIN_CHANCE
@@ -761,16 +813,57 @@ local function Abandon(player)
     ExpeditionRemote:FireClient(player, "Abandoned")
 end
 
--- Developer shortcuts for testing: pin the next encounter, or jump to an Act's map
+-- Node types the dev panel can open besides the Mysteries and Regional Encounters
+local DEV_NODE_TYPES = {Battle = true, Elite = true, Boss = true, Rest = true, Shop = true}
+
+local function IsMysteryName(name)
+    return table.find(MysteryConfig.ENCOUNTERS, name) ~= nil or ExpeditionConfig.Exclusives[name] ~= nil
+end
+
+-- Dev panel: opens any encounter right away on the next node, dropping whatever was left open
+local function DevOpen(player, run, value)
+    local isMystery = IsMysteryName(value)
+    if not isMystery and not DEV_NODE_TYPES[value] then return end
+
+    run.Encounter = nil
+    run.DevBattle = nil
+
+    local nodeId = nil
+
+    for id in pairs(ExpeditionRules.GetMap(run).Nodes) do
+        if ExpeditionRules.GetNodeState(run, id) == "Available" then
+            nodeId = id
+            break
+        end
+    end
+
+    if not nodeId then return end
+
+    if ExpeditionRules.IsBattle(value) then
+        run.DevBattle = value
+        Changed(player)
+        ExpeditionRemote:FireClient(player, "EncounterFight", {Node = nodeId})
+    elseif isMystery then
+        run.DevEncounter = value
+        OpenEncounter(player, run, nodeId, {Type = "Mystery"})
+    else
+        OpenEncounter(player, run, nodeId, {Type = value})
+    end
+end
+
+-- Developer shortcuts for testing: pin the next encounter, open one right away on the next node, or jump to an
+-- Act's map
 local function DevAction(player, action, value)
     if not DevConfig.IsDev(player) then return end
 
     local run = GetRun(player)
     if not run then return end
 
-    if action == "DevEncounter" then
-        local isKnown = table.find(MysteryConfig.ENCOUNTERS, value) or ExpeditionConfig.Exclusives[value]
-        if not isKnown then return end
+    if action == "DevOpen" then
+        DevOpen(player, run, value)
+        return
+    elseif action == "DevEncounter" then
+        if not IsMysteryName(value) then return end
 
         run.DevEncounter = value
     elseif action == "DevAct" then
@@ -807,7 +900,7 @@ function ExpeditionService.Init()
             LeaveShop(player, first)
         elseif action == "Artifact" then
             ResolveArtifact(player, first, second)
-        elseif action == "DevEncounter" or action == "DevAct" then
+        elseif action == "DevEncounter" or action == "DevOpen" or action == "DevAct" then
             DevAction(player, action, first)
         end
     end)

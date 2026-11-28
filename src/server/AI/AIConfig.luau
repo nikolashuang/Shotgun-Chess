@@ -88,6 +88,10 @@ local AIConfig = {
 
     -- Extra attack value for hitting the player's king
     KING_TARGET_BONUS = 0.25,
+    -- Extra attack value for hitting Dangerous Payload's cart, enough to beat any other target
+    PRIORITY_TARGET_VALUE = 3,
+    -- Ending a move where a hunter can hit the payload next turn, worth more than hitting the player's king
+    HUNT_LINE_VALUE = 1.5,
     -- Killing the player's king wins the fight
     KING_KILL_SCORE = 10000,
     -- Extra attack value per point of a killed piece's value

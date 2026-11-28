@@ -7,6 +7,19 @@ local DIAGONAL = {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}}
 local KNIGHT = {{1, 2}, {2, 1}, {2, -1}, {1, -2}, {-1, -2}, {-2, -1}, {-2, 1}, {-1, 2}}
 local KING = table.move(DIAGONAL, 1, #DIAGONAL, #ORTHOGONAL + 1, table.clone(ORTHOGONAL))
 
+-- Haunted Mansion: Ghosts drift up to 2 tiles in a straight line, passing through walls and pieces on the way;
+-- Zombies shamble one tile like a King (every other turn, see HauntedMansion)
+local GHOST = {}
+for _, direction in ipairs(KING) do
+    table.insert(GHOST, direction)
+    table.insert(GHOST, {direction[1] * 2, direction[2] * 2})
+end
+
+local STEPS = {
+    Ghost = GHOST,
+    Zombie = KING,
+}
+
 local SLIDES = {
     Rook = ORTHOGONAL,
     -- Gravehollow's Rook variant
@@ -51,6 +64,10 @@ function PieceRules.GetMoves(pieceType, team, column, row, isBlocked)
         for _, offset in pairs(KING) do
             TryAdd(column + offset[1], row + offset[2])
         end
+    elseif STEPS[pieceType] then
+        for _, offset in pairs(STEPS[pieceType]) do
+            TryAdd(column + offset[1], row + offset[2])
+        end
     elseif SLIDES[pieceType] then
         for _, direction in pairs(SLIDES[pieceType]) do
             local toColumn = column + direction[1]
@@ -92,6 +109,10 @@ function PieceRules.GetAttacks(pieceType, team, column, row, isBlocked, isEnemy)
         end
 
         for _, offset in pairs(KING) do
+            TryAttack(column + offset[1], row + offset[2])
+        end
+    elseif STEPS[pieceType] then
+        for _, offset in pairs(STEPS[pieceType]) do
             TryAttack(column + offset[1], row + offset[2])
         end
     elseif SLIDES[pieceType] then

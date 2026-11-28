@@ -61,6 +61,12 @@ function MatchClass.new(player, shotgunName, className, enemies, aiRating)
     self.ScaleEnemy = nil
     self.RegionAI = nil
 
+    -- Expedition Regional Encounters change the board and how the fight is won; any of these is optional:
+    -- Walls (tile key -> true, blocks everyone), CanKingEnter(match, column, row), Summonable (piece types),
+    -- Setup(match), OnKingMoved(match), OnEnemyTurn(match) before the enemies plan, CheckResult(match) returning
+    -- "Victory", "Failed" or nil in place of the usual win check, and GetTerrain() for the client's board
+    self.Rules = nil
+
     -- Black pieces that died this battle, for Necromancers to raise: {Type, Column, Row, MaxHealth, DamageBonus}
     self.Fallen = {}
 
@@ -392,11 +398,44 @@ function MatchClass:Setup()
     -- Expedition boss Kings fight with their class's abilities
     self.Boss = self.AIRating and BossAbilityService.New(self) or nil
 
-    local ally = self.CompanionStart
-    if ally and not self:IsOccupied(ally.Column, ally.Row) then
-        self.Companion = self:AddPiece(ally.Type, "White", ally.Column, ally.Row, ally.Health)
-        self.Companion.isCompanion = true
+    if self.Rules and self.Rules.Setup then
+        self.Rules:Setup(self)
     end
+
+    -- The Fallen Knight takes his tile beside the King, or the nearest free one
+    local ally = self.CompanionStart
+    if ally then
+        local column, row = self:GetNearestFreeTile(ally.Column, ally.Row)
+
+        if column then
+            self.Companion = self:AddPiece(ally.Type, "White", column, row, ally.Health)
+            self.Companion.isCompanion = true
+        end
+    end
+
+    self:SendTerrain()
+end
+
+function MatchClass:GetNearestFreeTile(column, row)
+    for distance = 0, BoardConfig.SIZE do
+        for checkRow = row - distance, row + distance do
+            for checkColumn = column - distance, column + distance do
+                local isRing = BoardRules.GetDistance(column, row, checkColumn, checkRow) == distance
+
+                if isRing and BoardRules.IsOnBoard(checkColumn, checkRow) and not self:IsOccupied(checkColumn, checkRow) then
+                    return checkColumn, checkRow
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+-- The Regional Encounter's board (walls, path, marks...) for the client to draw; an empty one clears it
+function MatchClass:SendTerrain()
+    local terrain = self.Rules and self.Rules.GetTerrain and self.Rules:GetTerrain() or {}
+    self:SendAll("Terrain", terrain)
 end
 
 function MatchClass:Begin()
@@ -509,8 +548,16 @@ function MatchClass:GetPieceAt(column, row)
     return nil
 end
 
+function MatchClass:IsWall(column, row)
+    local walls = self.Rules and self.Rules.Walls
+
+    return walls ~= nil and walls[column * 100 + row] == true
+end
+
+-- Walls count as occupied, so nothing can stand on or slide through them
 function MatchClass:IsOccupied(column, row)
     if self.King.Column == column and self.King.Row == row then return true end
+    if self:IsWall(column, row) then return true end
 
     return self:GetPieceAt(column, row) ~= nil
 end
@@ -570,6 +617,9 @@ end
 -- (shotgun, knife, bleed, revolver), the only damage that builds ultimate charge
 -- Returns true when the piece dies
 function MatchClass:DamagePiece(piece, amount, attacker, isKingHit)
+    -- Deadman Walking's snipers can't be hurt
+    if piece.isImmune then return false end
+
     -- A Morale shield soaks up damage before health
     if (piece.Shield or 0) > 0 and amount > 0 then
         local absorbed = math.min(piece.Shield, amount)
@@ -721,9 +771,18 @@ end
 --RESULTS--
 
 -- Armies with a King are beaten by killing it, armies without one by clearing the board
+-- A Regional Encounter decides for itself (reaching the far end, delivering the payload)
 function MatchClass:CheckVictory()
     if self.isDuel then return self:CheckDuelOver() end
     if not self.OnEnd then return false end
+
+    if self.Rules and self.Rules.CheckResult then
+        local result = self.Rules:CheckResult(self)
+        if not result then return false end
+
+        self:End(result)
+        return true
+    end
 
     local isWon = false
 
@@ -876,10 +935,12 @@ function MatchClass:Move(side, column, row)
         end
 
         if not PieceRules.IsValidMove(moveType, side.Team, king.Column, king.Row, column, row, IsBlocked) then return end
+        if self.Rules and self.Rules.CanKingEnter and not self.Rules:CanKingEnter(self, column, row) then return end
 
         king:SetTile(column, row)
-    elseif not king:MoveTo(column, row) then
-        return
+    else
+        if self.Rules and self.Rules.CanKingEnter and not self.Rules:CanKingEnter(self, column, row) then return end
+        if not king:MoveTo(column, row) then return end
     end
 
     if not moveType then
@@ -890,6 +951,11 @@ function MatchClass:Move(side, column, row)
     self:CallAbility(side, "OnKingMoved")
     self:SendKingMoved(side, "KingMoved")
     self:OnUnitMoved(king)
+
+    if self.Rules and self.Rules.OnKingMoved then
+        self.Rules:OnKingMoved(self)
+    end
+
     self:FinishEvent()
 end
 
@@ -1060,6 +1126,7 @@ end
 
 function MatchClass:Summon(side, pieceType, column, row)
     if not table.find(PieceConfig.SUMMONABLE, pieceType) then return end
+    if self.Rules and self.Rules.Summonable and not table.find(self.Rules.Summonable, pieceType) then return end
 
     local cost = self:CallAbility(side, "GetSummonCost", pieceType) or PieceConfig.Cost[pieceType]
     if not self:CanAct(side, cost, "Summon") then return end
@@ -1089,7 +1156,7 @@ function MatchClass:Command(side, pieceId, column, row)
     -- 2v2: each player commands their own summons, and their teammate's once that teammate is out
     if piece.Owner and piece.Owner ~= side and not piece.Owner.isOut then return end
     -- The Fallen Knight acts on his own
-    if piece.isCompanion then return end
+    if piece.isCompanion or piece.isEscorted then return end
     if piece:IsStunned() then return end
 
     local function IsBlocked(blockColumn, blockRow)
@@ -1113,6 +1180,15 @@ function MatchClass:Command(side, pieceId, column, row)
         if side.Energy < cost then return end
 
         self:SpendEnergy(side, cost, "Command")
+
+        -- Deadman Walking's snipers are knocked off their aim instead of hurt
+        if target.StunOnHit then
+            self:SendAttack(piece, target, false)
+            self:StunPiece(target, target.StunOnHit)
+            self:SendTerrain()
+            self:FinishEvent()
+            return
+        end
 
         -- The other team's traps on the way stop the attack
         if self:InterceptPath(side, piece, column, row) then
@@ -1301,6 +1377,13 @@ function MatchClass:StartEnemyTurn()
     -- The Fallen Knight moves at the end of the player's turn, before the enemies plan
     self:RunCompanion()
     if self:CheckVictory() then return end
+
+    -- Regional Encounters act first: snipers fire, the payload rolls on, new waves arrive
+    if self.Rules and self.Rules.OnEnemyTurn then
+        self.Rules:OnEnemyTurn(self)
+        if self:CheckDefeat() then return end
+        if self:CheckVictory() then return end
+    end
 
     self:SendTurnState()
 

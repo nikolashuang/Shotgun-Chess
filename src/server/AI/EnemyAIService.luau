@@ -110,6 +110,11 @@ local function GetAttackValue(context, option)
             elseif hit.Damage >= health then
                 value += AIConfig.KILL_VALUE * AIBoard.GetValue(hit.Target.Type)
             end
+
+            -- Dangerous Payload: the cart comes before anything else
+            if hit.Target.Piece and hit.Target.Piece.isPriorityTarget then
+                value += AIConfig.PRIORITY_TARGET_VALUE
+            end
         end
     end
 
@@ -339,8 +344,14 @@ end
 local function GetAdvanceValue(context, piece, option)
     local value
 
-    -- A Necromancer with a raise ready walks toward the nearest fallen ally instead of the player
+    -- A Necromancer with a raise ready walks toward the nearest fallen ally instead of the player, and Dangerous
+    -- Payload's hunters toward the payload
     local fallen = piece.Type == "Necromancer" and context.Match:GetNearestFallen(piece)
+
+    local hunted = piece.HuntTarget
+    if hunted and context.Match.Pieces[hunted.Id] then
+        fallen = hunted
+    end
 
     -- Pawns advance toward promotion: every row stepped forward counts fully, wherever the player is
     if fallen then
@@ -441,6 +452,11 @@ local function ScoreOption(context, piece, weights, option)
 
     parts.Risk = -GetLoss(context, piece, option.Column, option.Row, dangerAfter, isBait)
 
+    -- Dangerous Payload's hunters disregard their own survival
+    if piece.isReckless then
+        parts.Risk = 0
+    end
+
     -- What the tile sets up for next turn only counts if the piece is still around to use it
     local survival = 1 - AIBoard.GetDeathChance(piece, dangerAfter)
 
@@ -456,6 +472,12 @@ local function ScoreOption(context, piece, weights, option)
     -- Position, Teamwork and Advance come from the tile the option ends on: its own, or the captured one
     local controlled = AIBoard.GetControlledTiles(context, piece.Type, piece.Team, option.Column, option.Row, GetKey(piece.Column, piece.Row))
     local covered, fresh = CountCovered(context, piece, controlled)
+
+    -- Dangerous Payload's hunters line up on the payload so they can hit it next turn
+    local hunted = piece.HuntTarget
+    if hunted and context.Match.Pieces[hunted.Id] and controlled[GetKey(hunted.Column, hunted.Row)] then
+        parts.Hunt = weights.Attack * AIConfig.HUNT_LINE_VALUE
+    end
 
     if weights.Position > 0 then
         parts.Position = weights.Position * GetPositionValue(context, piece, controlled, covered, option) * survival
@@ -669,8 +691,9 @@ function EnemyAIService.PlanTurn(match)
     local acting = {}
 
     for _, piece in pairs(match.Pieces) do
-        -- Raised pieces and the Necromancer who raised them sit this turn out
-        if piece.Team == "Black" and piece:TickStun() and not piece.isResting then
+        -- Raised pieces and the Necromancer who raised them sit this turn out; Regional Encounter pieces like the
+        -- snipers act through their encounter's rules instead
+        if piece.Team == "Black" and piece:TickStun() and not piece.isResting and not piece.isStatic then
             table.insert(acting, piece)
         end
     end

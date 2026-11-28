@@ -18,6 +18,7 @@ local ShotgunController = require(script.Parent.ShotgunController)
 local SummonPanelController = require(script.Parent.SummonPanelController)
 local CombatHudController = require(script.Parent.CombatHudController)
 local SpeedController = require(script.Parent.SpeedController)
+local TerrainController = require(script.Parent.TerrainController)
 
 local BoardRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BoardRemote")
 
@@ -76,10 +77,19 @@ local function GetTile(column, row)
     return board:FindFirstChild(BoardRules.GetTileName(column, row))
 end
 
+-- Regional Encounter walls block like pieces
 local function IsOccupied(column, row)
     if column == kingColumn and row == kingRow then return true end
+    if TerrainController.IsWall(column, row) then return true end
 
     return PieceController.GetAt(column, row) ~= nil
+end
+
+local function CanKingStep(column, row)
+    if not BoardRules.IsValidKingMove(kingColumn, kingRow, column, row) then return false end
+    if IsOccupied(column, row) then return false end
+
+    return TerrainController.CanKingEnter(kingColumn, kingRow, column, row)
 end
 
 local function IsEnemyTile(column, row)
@@ -313,10 +323,11 @@ end
 -- 2v2: ids of the teammate's summons, which only the teammate can command while they're still in
 local teammatePieces = {}
 
--- The campaign's Fallen Knight fights on his own, so only summoned pieces take commands
+-- The campaign's Fallen Knight fights on his own and Dangerous Payload's cart rolls on its own, so only summoned
+-- pieces take commands
 local function IsCommandable(piece)
     if piece.Team ~= "White" then return false end
-    if piece.Type == "FallenKnight" or piece.Type == "King" then return false end
+    if piece.Type == "FallenKnight" or piece.Type == "King" or piece.Type == "Payload" then return false end
 
     return not teammatePieces[piece.Id]
 end
@@ -536,7 +547,9 @@ local function DrawPreview()
 
         if moveType then
             for _, move in pairs(PieceRules.GetMoves(moveType, "White", kingColumn, kingRow, IsOccupied)) do
-                HighlightTile(move.Column, move.Row, COMMAND_MOVE_COLOR, 0.35, true, COMMAND_OUTLINE_COLOR)
+                if TerrainController.CanKingEnter(kingColumn, kingRow, move.Column, move.Row) then
+                    HighlightTile(move.Column, move.Row, COMMAND_MOVE_COLOR, 0.35, true, COMMAND_OUTLINE_COLOR)
+                end
             end
             return
         end
@@ -546,7 +559,7 @@ local function DrawPreview()
                 local column = kingColumn + columnOffset
                 local row = kingRow + rowOffset
 
-                if BoardRules.IsValidKingMove(kingColumn, kingRow, column, row) and not IsOccupied(column, row) then
+                if CanKingStep(column, row) then
                     HighlightTile(column, row, COMMAND_MOVE_COLOR, 0.35, true, COMMAND_OUTLINE_COLOR)
                 end
             end
@@ -684,7 +697,8 @@ local function OnTileClicked(column, row)
 
         if moveType then
             if not PieceRules.IsValidMove(moveType, "White", kingColumn, kingRow, column, row, IsOccupied) then return end
-        elseif not BoardRules.IsValidKingMove(kingColumn, kingRow, column, row) then
+            if not TerrainController.CanKingEnter(kingColumn, kingRow, column, row) then return end
+        elseif not CanKingStep(column, row) then
             return
         elseif turnState.HasMoved or not TryAct(ActionCost.Move, "Move") then
             -- Only a click on a step the King could take warns about energy
@@ -753,6 +767,7 @@ end
 local function PlaceKing(column, row)
     kingColumn = column
     kingRow = row
+    TerrainController.SetKingTile(column, row)
 
     if not kingRig then
         kingRig = PieceRigClass.new(board, "King", "White", turnState and turnState.Class)
@@ -1012,11 +1027,15 @@ function BoardController.Init(actionPanelController)
         BindTile(tile)
     end
 
+    TerrainController.Init(board)
+
     BoardRemote.OnClientEvent:Connect(function(action, ...)
         if action == "MatchStarted" then
             teammatePieces = {}
             PieceController.Clear()
             BoardEffectsController.Clear()
+            TerrainController.Clear()
+            SummonPanelController.SetAllowed(nil)
 
             -- The king rig carries over between matches, so a stun from the last one comes off
             if kingRig then
@@ -1024,6 +1043,11 @@ function BoardController.Init(actionPanelController)
             end
         elseif action == "KingMoved" then
             PlaceKing(...)
+        elseif action == "Terrain" then
+            local terrain = ...
+            TerrainController.Set(terrain)
+            SummonPanelController.SetAllowed(terrain.Summonable)
+            BoardController.RefreshPreview()
         elseif action == "PieceAdded" then
             PieceController.Add(...)
             OnPieceAdded(...)
@@ -1114,6 +1138,8 @@ function BoardController.LeaveMatch()
     actionPanel.ClearSelection()
     PieceController.Clear()
     BoardEffectsController.Clear()
+    TerrainController.Clear()
+    SummonPanelController.SetAllowed(nil)
     BoardController.RefreshPreview()
 end
 

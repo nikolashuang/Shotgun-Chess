@@ -1,6 +1,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
 
 local ExpeditionConfig = require(ReplicatedStorage.Shared.Expedition.ExpeditionConfig)
 local ExpeditionRules = require(ReplicatedStorage.Shared.Expedition.ExpeditionRules)
@@ -49,16 +52,9 @@ local PATH_THICKNESS = 3
 local WALKED_THICKNESS = 5
 local PATH_GAP = 3
 
--- Treasure Hunt board colors per region: light tiles, dark tiles
-local TREASURE_COLORS = {
-    KingsThrone = {Color3.fromHex("E6DFCF"), Color3.fromHex("C9BFA6")},
-    Overgrowth = {Color3.fromHex("7E9A5C"), Color3.fromHex("5E7A44")},
-    Cliffside = {Color3.fromHex("C99A6B"), Color3.fromHex("A67A50")},
-    Outskirts = {Color3.fromHex("C2A878"), Color3.fromHex("9E8558")},
-    Gravehollow = {Color3.fromHex("6E6378"), Color3.fromHex("534A5E")},
-}
-local DUG_COLOR = Color3.fromHex("4A3B33")
-local TREASURE_COLOR = Color3.fromHex("F1D4AC")
+-- Treasure Hunt: tiles the next dig would uncover light up under the shovel
+local DIG_PREVIEW_COLOR = Color3.fromHex("F1D4AC")
+local DIG_PREVIEW_TRANSPARENCY = 0.55
 
 local REST_TEXT = {
     Rest = "You rest by the fire and recover %d health.",
@@ -77,9 +73,10 @@ local ENCOUNTER_TEXT = {
     },
     Ambush = {
         Title = "Ambush!",
-        Body = string.format("Enemy pieces burst out of hiding. You take %d damage before you can react.", MysteryConfig.Ambush.DAMAGE),
+        Body = "Enemy pieces burst out of hiding and surround you.",
         Choices = {
-            {"Fight", "Fight", "Start surrounded in the middle of the board"},
+            {"Challenge", "Fight", "Start surrounded in the middle of the board"},
+            {"Endure", "Break Through", string.format("Take %d damage and keep walking", MysteryConfig.Ambush.DAMAGE)},
         },
     },
     Altar = {
@@ -113,6 +110,7 @@ local ENCOUNTER_TEXT = {
         Choices = {
             {"Power", "Blessing of Power", string.format("Start battles with %d Ultimate charge, -%d max health", MysteryConfig.HolyRook.POWER_CHARGE, MysteryConfig.HolyRook.POWER_HEALTH)},
             {"Vitality", "Blessing of Vitality", string.format("Heal %d after every battle, -%d max energy", MysteryConfig.HolyRook.VITALITY_HEAL, MysteryConfig.HolyRook.VITALITY_ENERGY)},
+            {"Leave", "Leave", ""},
         },
     },
     Gambler = {
@@ -123,6 +121,28 @@ local ENCOUNTER_TEXT = {
             {"Wager", string.format("Wager %d", MysteryConfig.Gambler.WAGERS[2]), "50% double, 50% lose", 2},
             {"Wager", string.format("Wager %d", MysteryConfig.Gambler.WAGERS[3]), "50% double, 50% lose", 3},
             {"Leave", "Leave", ""},
+        },
+    },
+    DeadmanWalking = {
+        Title = "Deadman Walking",
+        Body = "Two Sniper Bishops watch the cliff path. Reach the far end, and stay off the red tiles: they're shot next turn.",
+        Choices = {
+            {"Fight", "Cross the Cliff", "Summoned Rooks and Queens can stun a sniper"},
+        },
+    },
+    DangerousPayload = {
+        Title = "Dangerous Payload",
+        Body = "Escort the payload up the board. It rolls one row every 2 turns while Rooks and Bishops hunt it.",
+        Choices = {
+            {"Fight", "Escort the Payload", "Lose the payload and the reward is lost"},
+        },
+    },
+    HauntedMansion = {
+        Title = "Haunted Mansion",
+        Body = "A dark mansion haunted by Ghosts and Zombies. Treasure waits in its halls for anyone who reaches the far door.",
+        Choices = {
+            {"Challenge", "Enter the Mansion", "Ghosts drift through walls, Zombies are slow"},
+            {"Leave", "Continue walking", ""},
         },
     },
     FallenKnight = {
@@ -136,6 +156,8 @@ local ENCOUNTER_TEXT = {
 }
 
 local MAX_CHOICES = 4
+-- Fights that start on entering, but show their panel (the ambush, or the encounter's rules) before the board
+local SHOWS_BEFORE_FIGHT = {DeadmanWalking = true, DangerousPayload = true}
 -- Every choice's note shares one text size, this share of a choice button's height, and wraps onto two lines
 local NOTE_TEXT_SCALE = 0.3
 
@@ -177,13 +199,15 @@ local restPanel = nil
 local restFire = nil
 local mysteryPanel = nil
 local mysteryBackground = nil
-local gunsmith = nil
+-- Each animated encounter character's image, by encounter name
+local mysteryAnimations = {}
 local eyeGlow = nil
 local mysteryFade = nil
 local treasurePanel = nil
 local treasureGrid = nil
 local tileTemplate = nil
 local treasureTiles = {}
+local previewTiles = {}
 
 local nodeTemplate = nil
 local dotTemplate = nil
@@ -211,6 +235,7 @@ local drawnAct = nil
 -- Dev map browser: a stand-in run that shows one region's map without touching the real run
 local devBar = nil
 local devMapsButton = nil
+local devEncountersButton = nil
 local previewRun = nil
 local previewRegions = {}
 local previewIndex = 1
@@ -794,9 +819,37 @@ end
 
 --TREASURE--
 
+local function SetSprite(tile, name)
+    local size = ExpeditionArt.TREASURE_SPRITE_SIZE
+    tile.Sprite.ImageRectOffset = Vector2.new(ExpeditionArt.TREASURE_SPRITES[name] * size, 0)
+    tile.Sprite.Visible = true
+end
+
+-- The dug tile is left a hole; the rest of the area is turned soil. A hole stays a hole if a later dig overlaps it
 local function MarkDug(column, row)
-    for _, tile in ipairs(ExpeditionRules.GetDigTiles(column, row)) do
-        treasureTiles[tile[1] .. "," .. tile[2]].BackgroundColor3 = DUG_COLOR
+    for _, position in ipairs(ExpeditionRules.GetDigTiles(column, row)) do
+        local tile = treasureTiles[position[1] .. "," .. position[2]]
+
+        if not tile.Sprite.Visible then
+            SetSprite(tile, "Dirt")
+        end
+    end
+
+    SetSprite(treasureTiles[column .. "," .. row], "Hole")
+end
+
+local function SetDigPreview(column, row)
+    for _, tile in ipairs(previewTiles) do
+        tile.BackgroundTransparency = 1
+    end
+    previewTiles = {}
+
+    if not column then return end
+
+    for _, position in ipairs(ExpeditionRules.GetDigTiles(column, row)) do
+        local tile = treasureTiles[position[1] .. "," .. position[2]]
+        tile.BackgroundTransparency = DIG_PREVIEW_TRANSPARENCY
+        table.insert(previewTiles, tile)
     end
 end
 
@@ -809,9 +862,18 @@ local function ShowTreasure(run, nodeId, digs)
     encounterNode = nodeId
     ClearChildren(treasureGrid)
     treasureTiles = {}
+    previewTiles = {}
 
     local size = TreasureConfig.SIZE
-    local colors = TREASURE_COLORS[run.Regions[run.Act]]
+
+    local ground = Instance.new("ImageLabel")
+    ground.Name = "Ground"
+    ground.Image = ExpeditionArt.TREASURE_BOARDS[run.Regions[run.Act]]
+    ground.ResampleMode = Enum.ResamplerMode.Pixelated
+    ground.BackgroundTransparency = 1
+    ground.Size = UDim2.fromScale(1, 1)
+    ground.ZIndex = tileTemplate.ZIndex - 1
+    ground.Parent = treasureGrid
 
     for column = 1, size do
         for row = 1, size do
@@ -819,8 +881,22 @@ local function ShowTreasure(run, nodeId, digs)
             tile.Name = column .. "," .. row
             tile.Position = UDim2.fromScale((column - 1) / size, (size - row) / size)
             tile.Size = UDim2.fromScale(1 / size, 1 / size)
-            tile.BackgroundColor3 = colors[(column + row) % 2 + 1]
+            tile.BackgroundColor3 = DIG_PREVIEW_COLOR
+            tile.BackgroundTransparency = 1
+            tile.BorderSizePixel = 0
             tile.Visible = true
+
+            local sprite = Instance.new("ImageLabel")
+            sprite.Name = "Sprite"
+            sprite.Image = ExpeditionArt.TREASURE_SPRITE_SHEET
+            sprite.ImageRectSize = Vector2.one * ExpeditionArt.TREASURE_SPRITE_SIZE
+            sprite.ResampleMode = Enum.ResamplerMode.Pixelated
+            sprite.BackgroundTransparency = 1
+            sprite.Size = UDim2.fromScale(1, 1)
+            sprite.ZIndex = tile.ZIndex
+            sprite.Interactable = false
+            sprite.Visible = false
+            sprite.Parent = tile
             tile.Parent = treasureGrid
 
             tile.Activated:Connect(function()
@@ -855,10 +931,8 @@ local function ShowDig(result)
         return
     end
 
-    local treasureTile = treasureTiles[result.TreasureColumn .. "," .. result.TreasureRow]
-    treasureTile.BackgroundColor3 = TREASURE_COLOR
-    treasureTile.Mark.Text = "$"
-    treasureTile.Mark.TextColor3 = DUG_COLOR
+    SetDigPreview(nil)
+    SetSprite(treasureTiles[result.TreasureColumn .. "," .. result.TreasureRow], "Chest")
 end
 
 --SHOP--
@@ -929,7 +1003,9 @@ local function ShowEncounter(run, data)
     mysteryPanel.Choices.Visible = true
     mysteryFade.BackgroundTransparency = 1
     eyeGlow.ImageTransparency = 1
-    gunsmith.Visible = data.Name == "Gunsmith"
+    for name, label in pairs(mysteryAnimations) do
+        label.Visible = name == data.Name
+    end
 
     for i = 1, MAX_CHOICES do
         local button = mysteryPanel.Choices["Choice" .. i]
@@ -956,15 +1032,19 @@ local function ShowEncounter(run, data)
 
     mysteryPanel.Visible = true
 
-    if data.Name == "Gunsmith" then
+    local animation = ExpeditionArt.MysteryAnimations[data.Name]
+
+    if animation then
+        local label = mysteryAnimations[data.Name]
+
         task.spawn(function()
             local frame = 0
-            local size = ExpeditionArt.GUNSMITH_FRAME
+            local size = animation.Frame
 
-            while mysteryPanel.Visible and encounterName == "Gunsmith" do
-                gunsmith.ImageRectOffset = Vector2.new(frame % ExpeditionArt.GUNSMITH_COLUMNS * size.X, frame // ExpeditionArt.GUNSMITH_COLUMNS * size.Y)
-                frame = (frame + 1) % ExpeditionArt.GUNSMITH_FRAMES
-                task.wait(ExpeditionArt.GUNSMITH_TIME)
+            while mysteryPanel.Visible and encounterName == data.Name do
+                label.ImageRectOffset = Vector2.new(frame % animation.Columns * size.X, frame // animation.Columns * size.Y)
+                frame = (frame + 1) % animation.Frames
+                task.wait(animation.Time)
             end
         end)
     end
@@ -985,7 +1065,11 @@ local function ChooseEncounter(index)
     if choice == "Challenge" then
         isEncounterBusy = true
         mysteryPanel.Choices.Visible = false
-        PlayEyeGlow()
+
+        -- The Fallen Knight wakes before his fight
+        if encounterName == "FallenKnight" then
+            PlayEyeGlow()
+        end
     end
 
     ExpeditionRemote:FireServer("Choose", encounterNode, choice, button:GetAttribute("Extra"))
@@ -1007,6 +1091,7 @@ local function DescribeEncounter(summary)
     elseif name == "Doctor" then
         return choice == "Treatment" and "The doctor patches you up. Health restored." or "The doctor's tonic leaves you stronger."
     elseif name == "HolyRook" then
+        if choice == "Leave" then return "You leave the statue untouched." end
         return choice == "Power" and "Power surges through you, at a cost." or "A calm settles over you, at a cost."
     elseif name == "Gambler" then
         if choice == "Wager" then
@@ -1015,6 +1100,10 @@ local function DescribeEncounter(summary)
         return "You keep your Silver to yourself."
     elseif name == "FallenKnight" then
         return "You walk on, leaving the Knight to his throne."
+    elseif name == "HauntedMansion" then
+        return "You leave the mansion to its ghosts."
+    elseif name == "Ambush" then
+        return string.format("You break through the ambush. -%d health.", MysteryConfig.Ambush.DAMAGE)
     end
 
     return ""
@@ -1025,7 +1114,9 @@ end
 local function GetRewardLines(summary)
     local lines = {}
 
-    if summary.Victory then
+    if summary.Failed then
+        table.insert(lines, "The payload was destroyed. No reward.")
+    elseif summary.Victory then
         if summary.Gold > 0 or summary.Exp > 0 or summary.Silver > 0 then
             table.insert(lines, string.format("+%d Gold  +%d XP  +%d Silver", summary.Gold, summary.Exp, summary.Silver))
         end
@@ -1064,7 +1155,7 @@ local function ShowResult(summary)
 
     -- Battle results show over the board
     if hud.Enabled then
-        resultTitle.Text = summary.Victory and "Victory!" or "Defeat"
+        resultTitle.Text = summary.Failed and "Payload Lost" or summary.Victory and "Victory!" or "Defeat"
         resultRewards.Text = table.concat(lines, "\n")
         resultOverlay.Visible = true
         return
@@ -1108,7 +1199,7 @@ local function OnEncounter(data)
         ShowShop(run, data.Node, data.Stock)
     elseif data.Name == "Treasure" then
         ShowTreasure(run, data.Node, data.Digs or {})
-    elseif data.Fight and data.Name ~= "Ambush" then
+    elseif data.Fight and not SHOWS_BEFORE_FIGHT[data.Name] then
         -- Coming back to a fight already picked goes straight into it
         StartBattle(data.Node)
     else
@@ -1129,6 +1220,7 @@ local function ShowPreview(seed)
     devBar.Region.Text = ExpeditionConfig.Regions[region].DisplayName
     devBar.Visible = true
     devMapsButton.Visible = false
+    devEncountersButton.Visible = false
     runPanel.AbandonButton.Visible = false
 
     drawnAct = nil
@@ -1142,6 +1234,7 @@ local function ExitPreview()
     previewRun = nil
     devBar.Visible = false
     devMapsButton.Visible = true
+    devEncountersButton.Visible = true
     runPanel.AbandonButton.Visible = true
 
     drawnAct = nil
@@ -1192,6 +1285,137 @@ local function InitDevMaps(root)
     end)
 
     devBar.ExitButton.Activated:Connect(ExitPreview)
+end
+
+-- Every encounter the dev panel can open, in order: {name sent to the server, label, what kind it is}
+local function GetDevEncounters()
+    local encounters = {
+        {"Battle", "Battle", "Battle"},
+        {"Elite", "Elite Battle", "Battle"},
+        {"Boss", "Boss Battle", "Battle (region's Boss)"},
+    }
+
+    for _, name in ipairs(MysteryConfig.ENCOUNTERS) do
+        local text = ENCOUNTER_TEXT[name]
+        table.insert(encounters, {name, text and text.Title or "Treasure Hunt", "Mystery"})
+    end
+
+    local regional = {}
+
+    for name, exclusive in pairs(ExpeditionConfig.Exclusives) do
+        local region = ExpeditionConfig.Regions[exclusive.Region]
+        table.insert(regional, {name, ENCOUNTER_TEXT[name].Title, "Regional: " .. region.DisplayName, region.Act})
+    end
+
+    table.sort(regional, function(a, b)
+        if a[4] ~= b[4] then return a[4] < b[4] end
+        return a[2] < b[2]
+    end)
+
+    table.move(regional, 1, #regional, #encounters + 1, encounters)
+    table.insert(encounters, {"Rest", "Rest Site", "Rest"})
+    table.insert(encounters, {"Shop", "Shop", "Shop"})
+
+    return encounters
+end
+
+-- Dev only: opens any encounter straight away on the run's next node, for playtesting
+local function InitDevEncounters(root)
+    devEncountersButton = root:WaitForChild("DevEncountersButton")
+    local panel = root:WaitForChild("DevEncountersPanel")
+
+    if not DevConfig.IsDev(Players.LocalPlayer) then
+        devEncountersButton:Destroy()
+        panel:Destroy()
+        devEncountersButton = nil
+        return
+    end
+
+    local list = panel:WaitForChild("List")
+    local template = panel:WaitForChild("EncounterTemplate")
+
+    for order, encounter in ipairs(GetDevEncounters()) do
+        local button = template:Clone()
+        button.Name = encounter[1]
+        button.LayoutOrder = order
+        button.Label.Text = encounter[2]
+        button.Kind.Text = encounter[3]
+        button.Visible = true
+        button.Parent = list
+
+        button.Activated:Connect(function()
+            panel.Visible = false
+
+            if not GetRun() then
+                ShowNotice("Dev Encounters", "Start an Expedition first.")
+                return
+            end
+
+            ExpeditionRemote:FireServer("DevOpen", encounter[1])
+        end)
+    end
+
+    devEncountersButton.Visible = true
+
+    devEncountersButton.Activated:Connect(function()
+        panel.Visible = not panel.Visible
+    end)
+
+    panel:WaitForChild("CloseButton").Activated:Connect(function()
+        panel.Visible = false
+    end)
+end
+
+-- Treasure Hunt: a shovel follows the mouse over the dig board in place of the system cursor
+local function InitShovelCursor(screen)
+    local shovel = Instance.new("ImageLabel")
+    shovel.Name = "ShovelCursor"
+    shovel.Image = ExpeditionArt.SHOVEL_CURSOR
+    shovel.ResampleMode = Enum.ResamplerMode.Pixelated
+    shovel.BackgroundTransparency = 1
+    shovel.Size = UDim2.fromOffset(ExpeditionArt.SHOVEL_SIZE, ExpeditionArt.SHOVEL_SIZE)
+    shovel.AnchorPoint = ExpeditionArt.SHOVEL_TIP
+    shovel.ZIndex = 100
+    shovel.Interactable = false
+    shovel.Visible = false
+    shovel.Parent = screen
+
+    local hoveredDig = nil
+
+    RunService.RenderStepped:Connect(function()
+        local inset = screen.IgnoreGuiInset and Vector2.zero or GuiService:GetGuiInset()
+        local mouse = UserInputService:GetMouseLocation() - inset
+        local corner = treasureGrid.AbsolutePosition
+        local size = treasureGrid.AbsoluteSize
+
+        local isOver = screen.Enabled and treasurePanel.Visible
+            and mouse.X >= corner.X and mouse.X <= corner.X + size.X
+            and mouse.Y >= corner.Y and mouse.Y <= corner.Y + size.Y
+
+        if isOver ~= shovel.Visible then
+            shovel.Visible = isOver
+            UserInputService.MouseIconEnabled = not isOver
+        end
+
+        local column, row = nil, nil
+
+        if isOver then
+            shovel.Position = UDim2.fromOffset(mouse.X, mouse.Y)
+
+            if not isDigging and not treasurePanel.CloseButton.Visible then
+                local size = TreasureConfig.SIZE
+                local scale = (mouse - corner) / treasureGrid.AbsoluteSize
+                column = math.clamp(math.floor(scale.X * size) + 1, 1, size)
+                row = math.clamp(size - math.floor(scale.Y * size), 1, size)
+            end
+        end
+
+        local hovered = column and (column .. "," .. row)
+        if hovered ~= hoveredDig then
+            hoveredDig = hovered
+            SetDigPreview(column, row)
+        end
+    end)
 end
 
 function ExpeditionController.Play()
@@ -1328,6 +1552,8 @@ function ExpeditionController.Init(startMatchCallback, leaveMatchCallback)
         treasurePanel.Visible = false
     end)
 
+    InitShovelCursor(root.Parent)
+
     nodeTemplate = root:WaitForChild("NodeTemplate")
     dotTemplate = root:WaitForChild("LineTemplate")
 
@@ -1396,12 +1622,14 @@ function ExpeditionController.Init(startMatchCallback, leaveMatchCallback)
     FitMysteryScene()
 
     mysteryBackground = mysteryScene:WaitForChild("Background")
-    gunsmith = mysteryScene:WaitForChild("Gunsmith")
-    gunsmith.Image = ExpeditionArt.GUNSMITH_SHEET
-    gunsmith.ImageRectSize = ExpeditionArt.GUNSMITH_FRAME
-    local smithRect = ExpeditionArt.GUNSMITH_RECT
-    gunsmith.Position = UDim2.fromScale(smithRect[1], smithRect[2])
-    gunsmith.Size = UDim2.fromScale(smithRect[3], smithRect[4])
+    for name, animation in pairs(ExpeditionArt.MysteryAnimations) do
+        local label = mysteryScene:WaitForChild(name)
+        label.Image = animation.Sheet
+        label.ImageRectSize = animation.Frame
+        label.Position = UDim2.fromScale(animation.Rect[1], animation.Rect[2])
+        label.Size = UDim2.fromScale(animation.Rect[3], animation.Rect[4])
+        mysteryAnimations[name] = label
+    end
 
     eyeGlow = mysteryScene:WaitForChild("EyeGlow")
     eyeGlow.Image = ExpeditionArt.EYE_WAKE
@@ -1484,6 +1712,7 @@ function ExpeditionController.Init(startMatchCallback, leaveMatchCallback)
     end)
 
     InitDevMaps(root)
+    InitDevEncounters(root)
 
     canvas:GetPropertyChangedSignal("AbsoluteSize"):Connect(Redraw)
     ProfileController.OnChanged(Redraw)

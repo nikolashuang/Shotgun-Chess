@@ -275,7 +275,7 @@ function ExpeditionRules.CanChoose(run, name, choice, extra)
     elseif name == "HolyRook" then
         -- Losing max health can't take the King below 1
         if choice == "Power" then return run.MaxHealth > MysteryConfig.HolyRook.POWER_HEALTH, "Too weak" end
-        return choice == "Vitality"
+        return choice == "Vitality" or choice == "Leave"
     elseif name == "Gambler" then
         if choice == "Wager" then
             local wager = MysteryConfig.Gambler.WAGERS[extra]
@@ -283,9 +283,13 @@ function ExpeditionRules.CanChoose(run, name, choice, extra)
             return run.Silver >= wager, "Not enough Silver"
         end
         return choice == "Leave"
-    elseif name == "FallenKnight" then
+    elseif name == "FallenKnight" or name == "HauntedMansion" then
         return choice == "Challenge" or choice == "Leave"
     elseif name == "Ambush" then
+        -- Taking the hit can't kill the King; too hurt and he has to fight
+        if choice == "Endure" then return run.Health > MysteryConfig.Ambush.DAMAGE, "Too hurt" end
+        return choice == "Challenge"
+    elseif name == "DeadmanWalking" or name == "DangerousPayload" then
         return choice == "Fight"
     end
 

@@ -154,6 +154,15 @@ function AIBoard.BuildContext(match)
 
     context.Health[context.PlayerKing] = king.Health
     context.Occupied[GetKey(king.Column, king.Row)] = true
+
+    -- Regional Encounter walls block everyone, like a piece that never moves
+    local walls = match.Rules and match.Rules.Walls
+
+    if walls then
+        for key in pairs(walls) do
+            context.Occupied[key] = true
+        end
+    end
     context.Targets[GetKey(king.Column, king.Row)] = context.PlayerKing
     table.insert(context.Whites, context.PlayerKing)
 
