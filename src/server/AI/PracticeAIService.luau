@@ -8,6 +8,7 @@ local PieceRules = require(ReplicatedStorage.Shared.Board.PieceRules)
 local ShotgunRules = require(ReplicatedStorage.Shared.Combat.ShotgunRules)
 local CombatConfig = require(ReplicatedStorage.Shared.Combat.CombatConfig)
 local AIConfig = require(ServerScriptService.AI.AIConfig)
+local AIBoard = require(ServerScriptService.AI.AIBoard)
 
 local ActionCost = CombatConfig.ActionCost
 
@@ -203,12 +204,14 @@ local function PlanAdvance(match, side, budget)
     for _, piece in pairs(match.Pieces) do
         if piece.Team == side.Team and piece.Type ~= "King" and not piece:IsStunned() then
             local current = BoardRules.GetDistance(piece.Column, piece.Row, enemyKing.Column, enemyKing.Row)
+            local range = AIBoard.GetLowHealthRange(piece)
 
             for _, tile in ipairs(PieceRules.GetMoves(piece.Type, piece.Team, piece.Column, piece.Row, IsBlocked)) do
                 local gain = current - BoardRules.GetDistance(tile.Column, tile.Row, enemyKing.Column, enemyKing.Row)
                 local cost = BoardRules.GetCommandCost(piece.Column, piece.Row, tile.Column, tile.Row)
+                local inRange = not range or BoardRules.GetDistance(piece.Column, piece.Row, tile.Column, tile.Row) <= range
 
-                if gain > 0 and cost <= budget and (not best or gain > best.Gain) then
+                if gain > 0 and cost <= budget and inRange and (not best or gain > best.Gain) then
                     best = {PieceId = piece.Id, Column = tile.Column, Row = tile.Row, Gain = gain}
                 end
             end

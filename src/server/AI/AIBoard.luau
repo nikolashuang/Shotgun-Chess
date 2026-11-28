@@ -27,6 +27,19 @@ function AIBoard.GetValue(pieceType)
     return AIConfig.PieceValue[pieceType] or 1
 end
 
+-- Furthest a hurt slider can move, or nil for a full slide
+function AIBoard.GetLowHealthRange(piece)
+    if not AIConfig.LOW_HEALTH_SLIDERS[piece.Type] then return nil end
+
+    local share = piece.Health / piece.MaxHealth
+
+    for _, tier in ipairs(AIConfig.LOW_HEALTH_RANGE) do
+        if share <= tier.Health then return tier.Range end
+    end
+
+    return nil
+end
+
 -- Tiles a piece standing on column, row could hit next turn; ignoreKey is the piece's own current tile
 function AIBoard.GetControlledTiles(context, pieceType, team, column, row, ignoreKey)
     local tiles = {}

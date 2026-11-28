@@ -69,6 +69,13 @@ local AIConfig = {
     -- Furthest an evading Rook or Bishop will slide to get away, so the player isn't chasing it from side to side
     -- Attacks and normal moves still use the full slide
     SLIDE_CAP = {Rook = 4, Bishop = 4, Necromancer = 4},
+    -- Hurt sliders lose range on every move: at or below each health share they slide at most Range tiles
+    -- Attacks keep the full slide; pawns and knights are never affected
+    LOW_HEALTH_SLIDERS = {Rook = true, Bishop = true, Queen = true, Necromancer = true},
+    LOW_HEALTH_RANGE = {
+        {Health = 0.33, Range = 1},
+        {Health = 0.66, Range = 3},
+    },
     -- Evade grows from 1x at the threshold to this at 0 health
     EVADE_MAX_URGENCY = 2,
 

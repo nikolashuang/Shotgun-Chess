@@ -136,6 +136,8 @@ local ENCOUNTER_TEXT = {
 }
 
 local MAX_CHOICES = 4
+-- Every choice's note shares one text size, this share of a choice button's height, and wraps onto two lines
+local NOTE_TEXT_SCALE = 0.3
 
 -- The King's face from the sprite atlas, as on the combat HUD's health card
 local PORTRAIT_SIZE = 12
@@ -1408,11 +1410,24 @@ function ExpeditionController.Init(startMatchCallback, leaveMatchCallback)
     eyeGlow.Size = UDim2.fromScale(eyeRect[3], eyeRect[4])
     mysteryFade = mysteryPanel:WaitForChild("Fade")
 
+    local choices = mysteryPanel:WaitForChild("Choices")
+
     for i = 1, MAX_CHOICES do
-        mysteryPanel:WaitForChild("Choices"):WaitForChild("Choice" .. i).Activated:Connect(function()
+        choices:WaitForChild("Choice" .. i).Activated:Connect(function()
             ChooseEncounter(i)
         end)
     end
+
+    local function SizeNotes()
+        local textSize = math.floor(choices.Choice1.AbsoluteSize.Y * NOTE_TEXT_SCALE)
+
+        for i = 1, MAX_CHOICES do
+            choices["Choice" .. i].Note.TextSize = textSize
+        end
+    end
+
+    choices:GetPropertyChangedSignal("AbsoluteSize"):Connect(SizeNotes)
+    SizeNotes()
 
     mysteryPanel:WaitForChild("CloseButton").Activated:Connect(function()
         mysteryPanel.Visible = false

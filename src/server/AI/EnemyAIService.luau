@@ -575,8 +575,13 @@ local function GetOptions(context, piece)
         return context.Occupied[GetKey(column, row)] == true
     end
 
-    -- Evading sliders don't flee across the whole board
+    -- Evading sliders don't flee across the whole board, and hurt sliders can't move as far
     local moveCap = IsEvading(piece) and AIConfig.SLIDE_CAP[piece.Type] or nil
+    local lowHealthRange = AIBoard.GetLowHealthRange(piece)
+
+    if lowHealthRange then
+        moveCap = math.min(moveCap or lowHealthRange, lowHealthRange)
+    end
 
     for _, move in pairs(PieceRules.GetMoves(piece.Type, piece.Team, piece.Column, piece.Row, IsMoveBlocked)) do
         if not moveCap or BoardRules.GetDistance(piece.Column, piece.Row, move.Column, move.Row) <= moveCap then

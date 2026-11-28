@@ -300,6 +300,17 @@ Unlocks at level 10 (the Multiplayer screen itself opens at level 5). Uses the s
 | Rook   | 7      | 2             |
 | Queen  | 9      | 4             |
 
+### Low-Health Movement (enemy AI)
+Hurt enemy Rooks, Bishops, Queens and Necromancers lose movement range so the player isn't chasing them across the board (`AIConfig.LOW_HEALTH_RANGE`). Applies to AI-controlled pieces only (singleplayer and Practice); the player's summons and human rivals' pieces keep full range. Pawns, Knights and Kings are unaffected.
+
+| Health | Max slide |
+|---|---|
+| Above 66% | Full |
+| 34–66% | 3 tiles |
+| 33% or less | 1 tile |
+
+Moves only — attacks still reach the first piece down a line at any distance. Stacks with the evade cap (`AIConfig.SLIDE_CAP`); the shorter cap wins.
+
 ## Settings
 
 - **CRT filter** (on by default): scanlines, a vignette and a soft band rolling down the screen, drawn over every screen. Toggled with the CRT Filter button in Settings (main menu and pause menu) and saved in the profile (`Settings.CRT`, defaults in `SettingsConfig`).
